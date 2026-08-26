@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Sub2ApiReport.Api/Sub2ApiReport.Api.csproj" />
+    <Project Path="src/Sub2ApiReport.Cli/Sub2ApiReport.Cli.csproj" />
+    <Project Path="src/Sub2ApiReport.Application/Sub2ApiReport.Application.csproj" />
+    <Project Path="src/Sub2ApiReport.Domain/Sub2ApiReport.Domain.csproj" />
+    <Project Path="src/Sub2ApiReport.Infrastructure/Sub2ApiReport.Infrastructure.csproj" />
+    <Project Path="src/Sub2ApiReport.Migrator/Sub2ApiReport.Migrator.csproj" />
+    <Project Path="src/Sub2ApiReport.UpdateContracts/Sub2ApiReport.UpdateContracts.csproj" />
+    <Project Path="src/Sub2ApiReport.Updater/Sub2ApiReport.Updater.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Sub2ApiReport.ArchitectureTests/Sub2ApiReport.ArchitectureTests.csproj" />
+    <Project Path="tests/Sub2ApiReport.IntegrationTests/Sub2ApiReport.IntegrationTests.csproj" />
+    <Project Path="tests/Sub2ApiReport.UnitTests/Sub2ApiReport.UnitTests.csproj" />
+  </Folder>
+</Solution>

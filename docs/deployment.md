@@ -127,21 +127,18 @@ Updater 状态卷：
 └─ rejected-releases.json
 ```
 
-## 5. 环境变量
+## 5. 启动配置与动态配置
 
-`.env.example` 只包含非秘密部署参数：
+`.env.example` 只包含容器启动前必须确定的宿主机端口参数：
 
 ```dotenv
 APP_PORT=8080
 BIND_ADDRESS=0.0.0.0
-APP_TIMEZONE=Asia/Shanghai
-APP_RELEASE_CHANNEL=stable
-APP_LOG_LEVEL=Information
-REPORT_RETENTION_MONTHS=12
-BACKUP_RETENTION_COUNT=10
 ```
 
-Sub2API、SMTP、钉钉和飞书凭证不写入 `.env`，而是在初始化后通过页面录入并加密保存。
+Compose 内部固定数据库路径、运行环境、Updater 地址和 token 文件路径。这些值属于启动闭环，不提供业务页面修改。
+
+时区、Release 通道、日志级别、报告保留月数和备份保留数量保存在 `SystemSettings`，通过页面修改并在运行期生效。Sub2API、SMTP、钉钉和飞书配置同样不写入 `.env`，而是在初始化后通过页面录入；其中凭证加密保存。Sub2API Admin API Key 使用持久化 Data Protection key ring 加密，读取接口只返回掩码；修改密钥要求 step-up。完整边界见 [配置管理策略](configuration.md)。
 
 Updater 内部 token 由安装脚本生成到：
 
@@ -191,7 +188,8 @@ Internet/Intranet
 
 要求反向代理：
 
-- 正确传递 `X-Forwarded-Proto` 和客户端地址；
+- 正确传递 `X-Forwarded-Proto`；应用默认只处理一跳该 header，以便签发 Secure Cookie；
+- 客户端地址默认不从转发 header 读取，避免未配置可信代理时伪造限流分区；
 - 限制请求体大小；
 - 配置 TLS 1.2+；
 - 不缓存认证 API；
@@ -214,6 +212,18 @@ Internet/Intranet
 8. 管理员登录并在配置清单中录入业务凭证。
 
 安装脚本不能生成默认管理员密码，也不能把初始化码写入公开终端历史命令。
+
+### 8.1 管理员密码恢复
+
+在部署主机生成 15 分钟有效的一次性恢复码：
+
+```bash
+docker compose --env-file .env -f compose.yaml exec app appctl admin create-reset-code
+```
+
+恢复码只输出到当前终端并以哈希形式保存到 SQLite；再次生成会使旧码失效。管理员在 `/recover` 输入用户名、恢复码和新密码。连续失败会触发短时锁定，成功后恢复码立即失效并更新 Identity security stamp。
+
+不要把恢复码写入 `.env`、Compose、Issue 或聊天记录。该流程不会发送邮件，也不会开放无需主机权限的“忘记密码”。
 
 ## 9. 健康检查
 

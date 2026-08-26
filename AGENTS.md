@@ -13,6 +13,8 @@ Sub2API Codex 用量，并定时发送报告。
 - 使用 SQLite 持久化数据，使用 Quartz.NET 执行计划任务
 - 使用 Docker Compose 部署，目标平台为 linux/amd64
 - 使用独立的内部 Updater 实现签名在线升级和失败回滚
+- 可在运行期修改的业务和运维配置必须存入 SQLite 并动态生效；环境变量和
+  配置文件只允许承载数据库连接、监听端口、进程间 Secret 等启动闭环配置
 
 进行架构变更前必须先阅读 `docs/README.md`。文档存在冲突时，按照其中定义的
 文档权威顺序执行。
@@ -34,6 +36,13 @@ Sub2API Codex 用量，并定时发送报告。
 必须遵守 `docs/public-repository-policy.md`。Secret、SQLite 文件、生成的报告、
 备份、日志、浏览器追踪文件和 Backpass 证据不得提交到 Git。
 
+启动 API、Migrator 或测试做验证前，必须显式指定仓库内的 SQLite 与 Data
+Protection 路径，不得依赖 IDE Content Root 或当前目录。
+
+运行开发、构建、测试或诊断工具时，临时目录和日志目录必须指向系统临时目录；
+完成后扫描仓库根目录及父目录，清理误生成的 `data/`、数据库、key ring、时间戳
+目录、binlog、trace、截图和其他非预期产物。
+
 ## Agent Memory
 
 - `AGENTS.md` 是本仓库唯一的 Agent Memory 文件
@@ -43,8 +52,10 @@ Sub2API Codex 用量，并定时发送报告。
 
 ## 当前开发状态
 
-项目目前处于架构设计和初始化阶段。在实现与验证完成之前，不得声称已经存在
-可运行的正式版本。
+项目目前处于 0.3.0 Sub2API Key 清单与人员归属阶段，已实现安全初始化、单一
+Sub2API 加密连接、分页 Key 同步、人员档案和带有效期的唯一归属。用量报告、发送
+渠道和在线升级尚未实现，不得声称已经存在可运行的正式版本。前端依赖统一使用
+pnpm，禁止生成 npm 或 Yarn 锁文件。
 
 ## 文件维护
 

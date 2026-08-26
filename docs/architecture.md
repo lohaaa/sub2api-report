@@ -29,6 +29,7 @@ Sub2API Report 是一个单管理员、单实例的内部运营工具，用于�
 | 首次初始化 | Docker 日志一次性初始化码 | 防止公网首访者抢注管理员 |
 | 部署 | Docker Compose | 一条命令启动主应用和内部 updater |
 | 在线升级 | 页面触发 updater sidecar | 主应用不接触 Docker Socket，可健康检查和回滚 |
+| 配置管理 | SQLite typed settings + 运行期刷新 | 可变配置通过页面修改并动态生效，部署配置只负责启动闭环 |
 | 镜像架构 | linux/amd64 | 用户确认当前只需要 amd64 |
 | 发布 | GitHub Release + GHCR | 代码、发行说明、镜像和校验信息统一管理 |
 
@@ -220,6 +221,14 @@ Pending -> Sending -> Succeeded
 - 内部使用 UTC `Instant` 保存时间，业务窗口使用时区和 `DateOnly` 计算。
 - 展示和 API 参数统一带明确时区，禁止依赖容器本地时区推断。
 
+### 5.6 配置管理
+
+遵循 [配置管理策略](configuration.md)：时区、发布通道、日志级别、数据保留、外部连接、通知渠道、计划任务和升级策略均写入 SQLite，并通过受认证管理 API 在运行期更新。业务模块在操作开始时读取 typed settings snapshot，不直接从 `IConfiguration` 读取业务配置。
+
+数据库连接字符串、监听地址、运行环境、Updater 内部 token 文件和外部主密钥入口属于启动闭环例外。新增部署配置必须说明为什么无法在数据库加载后动态管理。
+
+配置更新使用 revision 乐观并发并写审计；秘密字段加密存储。进行中的报告使用启动时快照，后续任务使用新 revision，避免同一运行中途改变统计和投递语义。
+
 ## 6. 数据设计
 
 ### 6.1 SQLite 配置
@@ -235,7 +244,7 @@ Pending -> Sending -> Succeeded
 | 表 | 关键字段 | 说明 |
 | --- | --- | --- |
 | `AdminUsers` + Identity tables | `Id`, `UserName`, `PasswordHash` | 唯一管理员；数据库约束只允许一个活动管理员 |
-| `SystemSettings` | `InitializedAt`, `Timezone`, `ReleaseChannel` | 单例系统设置 |
+| `SystemSettings` | `InitializedAt`, `Timezone`, `ReleaseChannel`, `LogLevel`, retention fields, `Revision` | 可动态更新的单例系统设置 |
 | `SetupChallenges` | `CodeHash`, `ExpiresAt`, `ConsumedAt` | 只保存初始化码哈希 |
 | `Sub2ApiConnections` | `BaseUrl`, `AdminKeyCiphertext`, `UserId`, `CodexGroupId` | 当前只允许一个活动连接 |
 | `People` | `Id`, `Code`, `DisplayName`, `Active` | 人员档案 |
@@ -317,7 +326,7 @@ Open: http://<host>:8080/setup
 docker compose exec app appctl admin create-reset-code
 ```
 
-命令生成短时一次性恢复码并写入容器日志，管理员在恢复页面设置新密码。该操作写入审计日志。
+命令生成短时一次性恢复码并只写入当前终端，管理员在恢复页面设置新密码。该操作写入审计日志。
 
 ## 8. API 设计
 
@@ -326,6 +335,7 @@ docker compose exec app appctl admin create-reset-code
 主要端点：
 
 ```text
+GET  /api/v1/security/antiforgery
 GET  /api/v1/setup/status
 POST /api/v1/setup/initialize
 
@@ -333,15 +343,19 @@ POST /api/v1/auth/login
 POST /api/v1/auth/logout
 GET  /api/v1/auth/me
 POST /api/v1/auth/change-password
+POST /api/v1/auth/step-up
+POST /api/v1/auth/recover
 
 GET  /api/v1/sub2api/connection
 PUT  /api/v1/sub2api/connection
-POST /api/v1/sub2api/test
-POST /api/v1/sub2api/sync-keys
+POST /api/v1/sub2api/connection/test
+GET  /api/v1/sub2api/keys
+POST /api/v1/sub2api/keys/sync
 
-GET/POST/PUT/DELETE /api/v1/people
-PUT  /api/v1/people/{id}/api-keys
-GET  /api/v1/api-keys/unmapped
+GET/POST /api/v1/people
+GET/PUT/DELETE /api/v1/people/{id}
+GET/PUT/DELETE /api/v1/people/assignments/{id}
+POST /api/v1/people/{id}/assignments
 
 GET/PUT /api/v1/schedule
 
@@ -355,6 +369,8 @@ POST /api/v1/reports/run
 POST /api/v1/reports/{id}/deliveries/{channelId}/retry
 
 GET  /api/v1/system/version
+GET  /api/v1/system/settings
+PUT  /api/v1/system/settings
 GET  /api/v1/updates/check
 POST /api/v1/updates/install
 GET  /api/v1/updates/status

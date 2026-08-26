@@ -1,0 +1,14 @@
+{
+  "name": "sub2api-report",
+  "private": true,
+  "version": "0.3.0",
+  "packageManager": "pnpm@11.17.0",
+  "scripts": {
+    "dev:web": "pnpm --dir web run dev",
+    "build:web": "pnpm --dir web run build",
+    "lint:web": "pnpm --dir web run lint",
+    "test:web": "pnpm --dir web run test",
+    "typecheck:web": "pnpm --dir web run typecheck",
+    "e2e:web": "pnpm --dir web run e2e"
+  }
+}

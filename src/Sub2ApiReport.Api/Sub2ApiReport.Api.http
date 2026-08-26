@@ -1,0 +1,119 @@
+@baseUrl = http://localhost:5080
+@setupCode = REPLACE-WITH-STARTUP-CODE
+@username = synthetic-admin
+@password = ValidPassword1!
+@sub2ApiBaseUrl = https://sub2api.example.com
+@sub2ApiAdminKey = REPLACE-WITH-SUB2API-ADMIN-KEY
+@sub2ApiUserId = 42
+@sub2ApiGroupId = 7
+
+### Liveness
+GET {{baseUrl}}/health/live
+
+### Readiness
+GET {{baseUrl}}/health/ready
+
+### System version
+GET {{baseUrl}}/api/v1/system/version
+
+### Setup status
+GET {{baseUrl}}/api/v1/setup/status
+
+### Get antiforgery token and cookie
+# @name antiforgery
+GET {{baseUrl}}/api/v1/security/antiforgery
+
+### Initialize the only administrator
+POST {{baseUrl}}/api/v1/setup/initialize
+Content-Type: application/json
+X-CSRF-TOKEN: {{antiforgery.response.body.$.token}}
+
+{
+  "code": "{{setupCode}}",
+  "username": "{{username}}",
+  "password": "{{password}}"
+}
+
+### Refresh antiforgery token after initialization
+# @name authenticatedAntiforgery
+GET {{baseUrl}}/api/v1/security/antiforgery
+
+### Login
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+X-CSRF-TOKEN: {{authenticatedAntiforgery.response.body.$.token}}
+
+{
+  "username": "{{username}}",
+  "password": "{{password}}"
+}
+
+### Current administrator
+GET {{baseUrl}}/api/v1/auth/me
+
+### Dynamic system settings
+GET {{baseUrl}}/api/v1/system/settings
+
+### Create a short step-up authorization
+POST {{baseUrl}}/api/v1/auth/step-up
+Content-Type: application/json
+X-CSRF-TOKEN: {{authenticatedAntiforgery.response.body.$.token}}
+
+{
+  "password": "{{password}}"
+}
+
+### Save the encrypted Sub2API connection after step-up
+PUT {{baseUrl}}/api/v1/sub2api/connection
+Content-Type: application/json
+X-CSRF-TOKEN: {{authenticatedAntiforgery.response.body.$.token}}
+
+{
+  "baseUrl": "{{sub2ApiBaseUrl}}",
+  "adminApiKey": "{{sub2ApiAdminKey}}",
+  "clearAdminApiKey": false,
+  "userId": "{{sub2ApiUserId}}",
+  "codexGroupId": "{{sub2ApiGroupId}}",
+  "revision": 0
+}
+
+### Test the saved Sub2API connection
+POST {{baseUrl}}/api/v1/sub2api/connection/test
+X-CSRF-TOKEN: {{authenticatedAntiforgery.response.body.$.token}}
+
+### Synchronize all upstream Key pages
+POST {{baseUrl}}/api/v1/sub2api/keys/sync
+X-CSRF-TOKEN: {{authenticatedAntiforgery.response.body.$.token}}
+
+### Read the local masked Key inventory
+# @name keys
+GET {{baseUrl}}/api/v1/sub2api/keys?page=1&pageSize=50&unmappedOnly=true
+
+### Create a person
+# @name createPerson
+POST {{baseUrl}}/api/v1/people
+Content-Type: application/json
+X-CSRF-TOKEN: {{authenticatedAntiforgery.response.body.$.token}}
+
+{
+  "code": "synthetic-person",
+  "displayName": "Synthetic Person"
+}
+
+### Assign the first synchronized Key to the person
+POST {{baseUrl}}/api/v1/people/{{createPerson.response.body.$.id}}/assignments
+Content-Type: application/json
+X-CSRF-TOKEN: {{authenticatedAntiforgery.response.body.$.token}}
+
+{
+  "externalApiKeyId": "{{keys.response.body.$.items[0].id}}",
+  "validFrom": "2026-08-01",
+  "validTo": null
+}
+
+### Logout
+POST {{baseUrl}}/api/v1/auth/logout
+X-CSRF-TOKEN: {{authenticatedAntiforgery.response.body.$.token}}
+
+### Unknown API route returns Problem Details, not the SPA
+GET {{baseUrl}}/api/v1/unknown

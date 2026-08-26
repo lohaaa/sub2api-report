@@ -1,0 +1,22 @@
+# syntax=docker/dockerfile:1.7
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+COPY global.json Directory.Build.props Directory.Packages.props Sub2ApiReport.slnx ./
+COPY src ./src
+RUN dotnet restore src/Sub2ApiReport.Updater/Sub2ApiReport.Updater.csproj
+RUN dotnet publish src/Sub2ApiReport.Updater/Sub2ApiReport.Updater.csproj \
+    --configuration Release --no-restore --output /out /p:UseAppHost=false
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble AS runtime
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /app /update-state \
+    && chown -R app:app /app /update-state
+WORKDIR /app
+COPY --from=build --chown=app:app /out ./
+USER app
+ENV ASPNETCORE_HTTP_PORTS=8081 \
+    DOTNET_EnableDiagnostics=0
+EXPOSE 8081
+ENTRYPOINT ["dotnet", "Sub2ApiReport.Updater.dll"]

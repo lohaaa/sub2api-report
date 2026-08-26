@@ -27,6 +27,7 @@ appsettings.*.local.json
 .vs/
 TestResults/
 coverage/
+*.binlog
 *.user
 *.suo
 
@@ -34,6 +35,7 @@ coverage/
 node_modules/
 dist/
 .vite/
+.pnpm-store/
 /src/Sub2ApiReport.Api/wwwroot/
 
 # Browser tests

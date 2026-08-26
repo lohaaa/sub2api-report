@@ -71,6 +71,7 @@ M5 的三个渠道可以并行实现，但必须共用同一 Sender contract 和
 - 创建 Domain/Application/Infrastructure/Api/Migrator 项目；
 - 依赖方向测试；
 - SQLite DbContext 和第一版 migration；
+- 数据库优先的 typed settings service、revision 并发控制和运行期日志级别刷新；
 - Problem Details、correlation ID、Serilog；
 - `/health/live`、`/health/ready`；
 - OpenAPI；
@@ -98,9 +99,12 @@ M5 的三个渠道可以并行实现，但必须共用同一 Sender contract 和
 - App 同源提供 API 和 SPA；
 - 刷新任意前端路由不会 404；
 - API 路由不会被 SPA fallback 吞掉；
+- 修改数据库设置后，读取方和日志级别无需重启即可使用新 revision；
 - 桌面和移动视口无水平溢出。
 
 ## 5. M2：首次初始化和认证
+
+- 状态：已实现（0.2.0）
 
 ### 交付
 
@@ -113,7 +117,9 @@ M5 的三个渠道可以并行实现，但必须共用同一 Sender contract 和
 - 登录、登出、修改密码；
 - step-up 授权；
 - 主机侧密码恢复码 CLI；
-- 初始化页、登录页和安全设置页。
+- 初始化页、登录页和安全设置页；
+- 受认证的系统设置查询/更新 API 和页面，不暴露业务配置环境变量；
+- 配置更新 revision 冲突响应和审计记录。
 
 ### 安全测试
 
@@ -128,6 +134,8 @@ M5 的三个渠道可以并行实现，但必须共用同一 Sender contract 和
 全新数据卷可以完成初始化，重建容器后管理员仍能登录；删除 App 容器不会重新开放初始化。
 
 ## 6. M3：Sub2API 和人员-Key 映射
+
+- 状态：已实现（0.3.0）
 
 ### 交付
 

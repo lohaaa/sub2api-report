@@ -2,7 +2,7 @@
 
 Sub2API Report 是一个面向单管理员部署的 Codex API Key 用量报告工具。它从 Sub2API 读取按 Key 聚合的用量，将 Key 映射到人员，并按计划通过邮箱、钉钉和飞书发送 7 天与 30 天报告。
 
-> 项目当前处于架构设计阶段，尚未发布可运行版本。
+> 项目当前处于 0.3.0 Sub2API Key 清单与人员归属阶段，尚未实现用量报告和发送闭环，也未发布正式版本。
 
 ## 设计目标
 
@@ -11,6 +11,7 @@ Sub2API Report 是一个面向单管理员部署的 Codex API Key 用量报告�
 - React、TypeScript、Vite 和 shadcn/ui 前端
 - 前后端同源、一体化 App 容器
 - SQLite 零依赖持久化
+- 可变配置通过管理页面写入 SQLite 并在运行期动态生效
 - 单管理员账户
 - 首次启动使用 Docker 日志一次性初始化码创建管理员
 - 邮箱、钉钉、飞书任意组合发送
@@ -20,7 +21,9 @@ Sub2API Report 是一个面向单管理员部署的 Codex API Key 用量报告�
 
 ## 文档
 
+- [本地开发](docs/development.md)
 - [系统架构与技术方案](docs/architecture.md)
+- [配置管理策略](docs/configuration.md)
 - [Docker 部署与运维方案](docs/deployment.md)
 - [在线升级架构](docs/online-update.md)
 - [实施计划](docs/implementation-plan.md)

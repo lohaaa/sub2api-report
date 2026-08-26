@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Sub2ApiReport.Api</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" />
+    <PackageReference Include="Serilog.AspNetCore" />
+    <PackageReference Include="Serilog.Formatting.Compact" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Sub2ApiReport.Application\Sub2ApiReport.Application.csproj" />
+    <ProjectReference Include="..\Sub2ApiReport.Infrastructure\Sub2ApiReport.Infrastructure.csproj" />
+    <ProjectReference Include="..\Sub2ApiReport.UpdateContracts\Sub2ApiReport.UpdateContracts.csproj" />
+  </ItemGroup>
+</Project>

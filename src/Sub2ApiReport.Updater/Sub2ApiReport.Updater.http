@@ -1,0 +1,6 @@
+@Sub2ApiReport.Updater_HostAddress = http://localhost:5055
+
+GET {{Sub2ApiReport.Updater_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

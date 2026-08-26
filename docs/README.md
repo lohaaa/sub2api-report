@@ -2,7 +2,9 @@
 
 ## Architecture
 
+- [本地开发](development.md)：工具链、启动命令、质量检查和本地数据约束。
 - [系统架构与技术方案](architecture.md)：产品边界、技术栈、模块、数据模型、API、前端和安全基线。
+- [配置管理策略](configuration.md)：数据库动态配置、启动配置例外、生效语义和代码约束。
 - [在线升级架构](online-update.md)：Release manifest、Updater、升级事务和自动回滚。
 - [Docker 部署与运维方案](deployment.md)：Compose 拓扑、数据卷、初始化、备份和运行约束。
 - [实施计划](implementation-plan.md)：里程碑、发布门槛、CI 矩阵和 Definition of Done。
@@ -19,7 +21,7 @@
 
 发生冲突时按以下顺序执行：
 
-1. `architecture.md`
+1. `architecture.md` 和 `configuration.md`
 2. `online-update.md` 和 `deployment.md`
 3. `technical-investigation.md`
 

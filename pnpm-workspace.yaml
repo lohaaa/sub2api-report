@@ -1,0 +1,9 @@
+packages:
+  - web
+
+allowBuilds:
+  msw: true
+
+minimumReleaseAgeExclude:
+  - '@tanstack/query-core@5.102.5'
+  - '@tanstack/react-query@5.102.5'

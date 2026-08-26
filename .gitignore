@@ -1,0 +1,55 @@
+# Backpass local evidence and proposals
+.backpass/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+secrets/
+*.local
+appsettings.Local.json
+appsettings.*.local.json
+
+# Runtime data
+/data/
+/reports/
+/backups/
+/logs/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# .NET
+**/bin/
+**/obj/
+.vs/
+TestResults/
+coverage/
+*.user
+*.suo
+
+# Frontend
+node_modules/
+dist/
+.vite/
+/src/Sub2ApiReport.Api/wwwroot/
+
+# Browser tests
+playwright-report/
+test-results/
+blob-report/
+*.har
+*.trace.zip
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.bak

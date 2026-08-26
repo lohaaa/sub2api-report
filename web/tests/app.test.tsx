@@ -32,7 +32,7 @@ function useAuthenticatedHandlers() {
       stepUpExpiresAt: null,
     })),
     http.get('/api/v1/system/version', () =>
-      HttpResponse.json({ version: '0.3.0', environment: 'Test', releaseChannel: 'stable' }),
+      HttpResponse.json({ version: '0.4.0', environment: 'Test', releaseChannel: 'stable' }),
     ),
   )
 }
@@ -75,7 +75,7 @@ describe('application authentication gate', () => {
     renderApp()
 
     expect(await screen.findByRole('heading', { level: 1, name: '工作台' })).toBeInTheDocument()
-    expect(await screen.findByText('v0.3.0')).toBeInTheDocument()
+    expect(await screen.findByText('v0.4.0')).toBeInTheDocument()
   })
 
   it('renders synchronized people and Key diagnostics', async () => {
@@ -118,6 +118,44 @@ describe('application authentication gate', () => {
     expect(screen.getByRole('checkbox', { name: '仅看未映射' })).toBeInTheDocument()
   })
 
+  it('renders immutable report snapshots and generation controls', async () => {
+    useAuthenticatedHandlers()
+    server.use(
+      http.get('/api/v1/reports', () => HttpResponse.json({
+        items: [{
+          id: '11111111-1111-1111-1111-111111111111',
+          schemaVersion: 1,
+          status: 'Complete',
+          trigger: 'ManualDryRun',
+          cutoffDate: '2026-08-25',
+          timezone: 'Asia/Shanghai',
+          generatedAt: '2026-08-26T12:00:00Z',
+          personCount: 2,
+          keyCount: 3,
+          failedSegmentCount: 0,
+          unassignedSegmentCount: 0,
+          sevenDayActualCost: 1.25,
+          thirtyDayActualCost: 3.25,
+        }],
+        total: 1,
+        page: 1,
+        pageSize: 25,
+        pages: 1,
+      })),
+    )
+
+    renderApp('/reports')
+
+    expect(await screen.findByRole('heading', { level: 1, name: '报告记录' })).toBeInTheDocument()
+    expect(screen.getByLabelText('统计截止日')).toHaveAttribute('type', 'date')
+    expect(screen.getByRole('button', { name: '生成报告' })).toBeInTheDocument()
+    expect(await screen.findByText('完整')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '查看' })).toHaveAttribute(
+      'href',
+      '/reports/11111111-1111-1111-1111-111111111111',
+    )
+  })
+
   it('renders database and security settings for the administrator', async () => {
     useAuthenticatedHandlers()
     server.use(
@@ -125,6 +163,7 @@ describe('application authentication gate', () => {
         timezone: 'Asia/Shanghai',
         releaseChannel: 'stable',
         logLevel: 'Information',
+        reportConcurrency: 4,
         reportRetentionMonths: 12,
         backupRetentionCount: 10,
         revision: 1,

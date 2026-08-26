@@ -8,7 +8,7 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations;
 /// <inheritdoc />
 public partial class AddIdentityAndSetup : Migration
 {
-    private static readonly string[] recoveryChallengeIndexColumns =
+    private static readonly string[] RecoveryChallengeIndexColumns =
         ["AdministratorId", "ExpiresAt"];
 
     /// <inheritdoc />
@@ -199,7 +199,7 @@ public partial class AddIdentityAndSetup : Migration
         migrationBuilder.CreateIndex(
             name: "IX_RecoveryChallenges_AdministratorId_ExpiresAt",
             table: "RecoveryChallenges",
-            columns: recoveryChallengeIndexColumns);
+            columns: RecoveryChallengeIndexColumns);
 
         migrationBuilder.CreateIndex(
             name: "IX_SetupChallenges_ExpiresAt",

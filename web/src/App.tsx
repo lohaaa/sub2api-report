@@ -1,6 +1,5 @@
 import {
   CalendarClockIcon,
-  FileChartColumnIcon,
   MegaphoneIcon,
   ScrollTextIcon,
 } from 'lucide-react'
@@ -17,6 +16,8 @@ import { EmptySectionPage } from '@/features/shared/empty-section-page'
 import { ApiError, getCurrentAdministrator, getSetupStatus } from '@/lib/api-client'
 
 const PeoplePage = lazy(() => import('@/features/people/people-page').then((module) => ({ default: module.PeoplePage })))
+const ReportsPage = lazy(() => import('@/features/reports/reports-page').then((module) => ({ default: module.ReportsPage })))
+const ReportDetailPage = lazy(() => import('@/features/reports/report-detail-page').then((module) => ({ default: module.ReportDetailPage })))
 const LoginPage = lazy(() => import('@/features/auth/login-page').then((module) => ({ default: module.LoginPage })))
 const RecoveryPage = lazy(() => import('@/features/auth/recovery-page').then((module) => ({ default: module.RecoveryPage })))
 const SetupPage = lazy(() => import('@/features/auth/setup-page').then((module) => ({ default: module.SetupPage })))
@@ -83,18 +84,8 @@ function AuthenticatedRoutes() {
       <Route element={<AppShell />}>
         <Route index element={<DashboardPage />} />
         <Route path="people" element={<PeoplePage />} />
-        <Route
-          path="reports"
-          element={
-            <EmptySectionPage
-              title="报告记录"
-              description="报告快照、统计窗口和发送状态"
-              icon={FileChartColumnIcon}
-              columns={['统计截止日', '触发方式', '状态', '生成时间']}
-              emptyText="暂无报告记录"
-            />
-          }
-        />
+        <Route path="reports" element={<ReportsPage />} />
+        <Route path="reports/:id" element={<ReportDetailPage />} />
         <Route
           path="channels"
           element={

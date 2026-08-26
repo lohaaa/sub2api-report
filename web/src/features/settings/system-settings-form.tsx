@@ -17,6 +17,7 @@ const schema = z.object({
   timezone: z.string().trim().min(1, '请输入 IANA 时区').max(100),
   releaseChannel: z.string().trim().min(1, '请输入发布通道').max(32),
   logLevel: z.enum(['Verbose', 'Debug', 'Information', 'Warning', 'Error', 'Fatal']),
+  reportConcurrency: z.number().int().min(1).max(10),
   reportRetentionMonths: z.number().int().min(1).max(120),
   backupRetentionCount: z.number().int().min(1).max(100),
 })
@@ -43,6 +44,7 @@ export function SystemSettingsForm() {
       timezone: '',
       releaseChannel: '',
       logLevel: 'Information',
+      reportConcurrency: 4,
       reportRetentionMonths: 12,
       backupRetentionCount: 10,
     },
@@ -53,6 +55,7 @@ export function SystemSettingsForm() {
         timezone: settingsQuery.data.timezone,
         releaseChannel: settingsQuery.data.releaseChannel,
         logLevel: settingsQuery.data.logLevel as Values['logLevel'],
+        reportConcurrency: settingsQuery.data.reportConcurrency,
         reportRetentionMonths: settingsQuery.data.reportRetentionMonths,
         backupRetentionCount: settingsQuery.data.backupRetentionCount,
       })
@@ -117,6 +120,11 @@ export function SystemSettingsForm() {
             </Field>
           )}
         />
+        <Field data-invalid={Boolean(form.formState.errors.reportConcurrency)}>
+          <FieldLabel htmlFor="report-concurrency">报告采集并发数</FieldLabel>
+          <Input id="report-concurrency" type="number" inputMode="numeric" min={1} max={10} required aria-invalid={Boolean(form.formState.errors.reportConcurrency)} {...form.register('reportConcurrency', { valueAsNumber: true })} />
+          <FieldError errors={[form.formState.errors.reportConcurrency]} />
+        </Field>
         <Field data-invalid={Boolean(form.formState.errors.reportRetentionMonths)}>
           <FieldLabel htmlFor="report-retention">报告保留月数</FieldLabel>
           <Input id="report-retention" type="number" inputMode="numeric" min={1} max={120} required aria-invalid={Boolean(form.formState.errors.reportRetentionMonths)} {...form.register('reportRetentionMonths', { valueAsNumber: true })} />

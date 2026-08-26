@@ -9,6 +9,14 @@ public interface ISub2ApiClient
     Task<IReadOnlyList<Sub2ApiExternalKey>> GetApiKeysAsync(
         Sub2ApiConnectionCredentials connection,
         CancellationToken cancellationToken);
+
+    Task<Sub2ApiUsageStats> GetUsageStatsAsync(
+        Sub2ApiConnectionCredentials connection,
+        long externalApiKeyId,
+        DateOnly startDate,
+        DateOnly endDate,
+        string timezone,
+        CancellationToken cancellationToken);
 }
 
 public sealed record Sub2ApiConnectionProbe(long AvailableKeyCount);
@@ -18,9 +26,19 @@ public sealed record Sub2ApiExternalKey(
     string Name,
     string Status,
     long? GroupId,
-    DateTimeOffset? LastUsedAt,
-    DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset? LastUsedAt);
+
+public sealed record Sub2ApiUsageStats(
+    long TotalRequests,
+    long TotalInputTokens,
+    long TotalOutputTokens,
+    long TotalCacheTokens,
+    long TotalCacheCreationTokens,
+    long TotalCacheReadTokens,
+    long TotalTokens,
+    decimal TotalCost,
+    decimal TotalActualCost,
+    decimal AverageDurationMs);
 
 public enum Sub2ApiFailureKind
 {

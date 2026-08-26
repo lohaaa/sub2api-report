@@ -8,10 +8,10 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations;
 /// <inheritdoc />
 public partial class AddDynamicSystemSettings : Migration
 {
-    private static readonly string[] columns =
+    private static readonly string[] Columns =
         ["BackupRetentionCount", "LogLevel", "ReportRetentionMonths", "Revision", "UpdatedAt"];
 
-    private static readonly object[] values = [10, "Information", 12, 1L, null];
+    private static readonly object[] Values = [10, "Information", 12, 1L, null];
 
     /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
@@ -55,8 +55,8 @@ public partial class AddDynamicSystemSettings : Migration
             table: "SystemSettings",
             keyColumn: "Id",
             keyValue: 1,
-            columns: columns,
-            values: values);
+            columns: Columns,
+            values: Values);
     }
 
     /// <inheritdoc />

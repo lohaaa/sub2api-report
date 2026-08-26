@@ -29,6 +29,7 @@ public sealed class DatabaseMigrationTests
         Assert.Equal("Asia/Shanghai", setting.Timezone);
         Assert.Equal("stable", setting.ReleaseChannel);
         Assert.Equal("Information", setting.LogLevel);
+        Assert.Equal(4, setting.ReportConcurrency);
         Assert.Equal(12, setting.ReportRetentionMonths);
         Assert.Equal(10, setting.BackupRetentionCount);
         Assert.Equal(1, setting.Revision);
@@ -47,18 +48,22 @@ public sealed class DatabaseMigrationTests
         var migrator = dbContext.GetService<IMigrator>();
         await migrator.MigrateAsync("20260826103316_AddIdentityAndSetup", CancellationToken.None);
         var initializedAt = new DateTimeOffset(2026, 8, 26, 10, 0, 0, TimeSpan.Zero);
-        var setting = await dbContext.SystemSettings.SingleAsync(CancellationToken.None);
-        setting.MarkInitialized(initializedAt);
+        await dbContext.Database.ExecuteSqlInterpolatedAsync(
+            $"UPDATE SystemSettings SET InitializedAt = {initializedAt}, UpdatedAt = {initializedAt} WHERE Id = 1",
+            CancellationToken.None);
         dbContext.Users.Add(Administrator.Create("synthetic-admin", initializedAt));
         await dbContext.SaveChangesAsync(CancellationToken.None);
 
         await migrator.MigrateAsync(cancellationToken: CancellationToken.None);
 
         Assert.Single(await dbContext.Users.AsNoTracking().ToListAsync(CancellationToken.None));
-        Assert.Equal(initializedAt, (await dbContext.SystemSettings.AsNoTracking().SingleAsync(CancellationToken.None)).InitializedAt);
+        var migratedSetting = await dbContext.SystemSettings.AsNoTracking().SingleAsync(CancellationToken.None);
+        Assert.Equal(initializedAt, migratedSetting.InitializedAt);
+        Assert.Equal(4, migratedSetting.ReportConcurrency);
         Assert.Empty(await dbContext.Sub2ApiConnections.AsNoTracking().ToListAsync(CancellationToken.None));
         Assert.Empty(await dbContext.People.AsNoTracking().ToListAsync(CancellationToken.None));
         Assert.Empty(await dbContext.ExternalApiKeys.AsNoTracking().ToListAsync(CancellationToken.None));
+        Assert.Empty(await dbContext.ReportSnapshots.AsNoTracking().ToListAsync(CancellationToken.None));
     }
 
     [Fact]
@@ -90,6 +95,7 @@ public sealed class DatabaseMigrationTests
                         "UTC",
                         "preview",
                         "Warning",
+                        6,
                         24,
                         20,
                         current.Revision),
@@ -106,6 +112,7 @@ public sealed class DatabaseMigrationTests
                 Assert.Equal("UTC", updated.Timezone);
                 Assert.Equal("preview", updated.ReleaseChannel);
                 Assert.Equal("Warning", updated.LogLevel);
+                Assert.Equal(6, updated.ReportConcurrency);
                 Assert.Equal(24, updated.ReportRetentionMonths);
                 Assert.Equal(20, updated.BackupRetentionCount);
                 Assert.Equal(originalRevision + 1, updated.Revision);

@@ -20,7 +20,7 @@ internal static class Sub2ApiEndpoints
             .WithName("GetSub2ApiConnection")
             .WithSummary("获取 Sub2API 连接配置")
             .WithDescription("返回连接地址、目标标识和密钥掩码，不返回 Admin API Key 明文。")
-            .Produces<Sub2ApiConnectionResponse>(StatusCodes.Status200OK)
+            .Produces<Sub2ApiConnectionResponse>()
             .ProducesProblem(StatusCodes.Status401Unauthorized);
 
         group.MapPut("/connection", SaveConnectionAsync)
@@ -30,7 +30,7 @@ internal static class Sub2ApiEndpoints
             .WithName("SaveSub2ApiConnection")
             .WithSummary("保存 Sub2API 连接配置")
             .WithDescription("保存动态连接配置。替换或清除 Admin API Key 需要短时高风险操作授权。")
-            .Produces<Sub2ApiConnectionResponse>(StatusCodes.Status200OK)
+            .Produces<Sub2ApiConnectionResponse>()
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status409Conflict);
@@ -41,14 +41,14 @@ internal static class Sub2ApiEndpoints
             .WithName("TestSub2ApiConnection")
             .WithSummary("测试 Sub2API 连接")
             .WithDescription("使用已保存的密钥探测目标用户的 API Key 分页接口。")
-            .Produces<Sub2ApiConnectionTestResponse>(StatusCodes.Status200OK)
+            .Produces<Sub2ApiConnectionTestResponse>()
             .ProducesProblem(StatusCodes.Status409Conflict);
 
         group.MapGet("/keys", GetKeysAsync)
             .WithName("GetSub2ApiKeyInventory")
             .WithSummary("获取已同步的 API Key 清单")
             .WithDescription("分页返回脱敏 Key 快照、有效期归属和完整性诊断。")
-            .Produces<ApiKeyInventoryPageResponse>(StatusCodes.Status200OK)
+            .Produces<ApiKeyInventoryPageResponse>()
             .ProducesValidationProblem();
 
         group.MapPost("/keys/sync", SynchronizeKeysAsync)
@@ -57,7 +57,7 @@ internal static class Sub2ApiEndpoints
             .WithName("SynchronizeSub2ApiKeys")
             .WithSummary("同步 Sub2API Key")
             .WithDescription("完整读取上游分页后，以单个数据库事务更新本地快照。")
-            .Produces<KeySynchronizationResponse>(StatusCodes.Status200OK)
+            .Produces<KeySynchronizationResponse>()
             .ProducesProblem(StatusCodes.Status409Conflict)
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
             .ProducesProblem(StatusCodes.Status502BadGateway)
@@ -341,7 +341,7 @@ internal static class Sub2ApiEndpoints
         title: "Connection Changed",
         detail: "连接测试期间配置发生变化，请重新测试。");
 
-    internal static (string Code, string Message) DescribeFailure(Sub2ApiFailureKind kind) => kind switch
+    private static (string Code, string Message) DescribeFailure(Sub2ApiFailureKind kind) => kind switch
     {
         Sub2ApiFailureKind.Unauthorized => ("unauthorized", "Admin API Key 无效。"),
         Sub2ApiFailureKind.Forbidden => ("forbidden", "Admin API Key 没有读取目标用户 Key 的权限。"),

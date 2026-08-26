@@ -6,6 +6,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Sub2ApiReport.Infrastructure;
 using Sub2ApiReport.Infrastructure.Persistence;
+using Sub2ApiReport.Migrator;
 
 var builder = Host.CreateApplicationBuilder(args);
 var configuredConnectionString = Environment.GetEnvironmentVariable("SUB2API_REPORT_DATABASE")
@@ -16,7 +17,7 @@ var connectionString = DatabaseDefaults.ResolveConnectionString(
     builder.Environment.ContentRootPath);
 
 EnsureDatabaseDirectory(connectionString);
-builder.Services.AddInfrastructure(connectionString);
+_ = builder.Services.AddInfrastructure(connectionString);
 
 using var host = builder.Build();
 using var scope = host.Services.CreateScope();

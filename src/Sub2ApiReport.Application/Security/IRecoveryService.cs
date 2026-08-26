@@ -33,10 +33,8 @@ public sealed record AccountRecoveryResult(
 public enum AccountRecoveryStatus
 {
     Succeeded,
-    NotInitialized,
     InvalidCode,
     Expired,
     Locked,
     InvalidAccount,
-    Conflict,
 }

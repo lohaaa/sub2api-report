@@ -42,7 +42,7 @@ internal static class AuthEndpoints
             .RequireAuthorization()
             .WithName("GetCurrentAdministrator")
             .WithSummary("获取当前管理员会话")
-            .Produces<CurrentAdministratorResponse>(StatusCodes.Status200OK)
+            .Produces<CurrentAdministratorResponse>()
             .ProducesProblem(StatusCodes.Status401Unauthorized);
 
         group.MapPost("/logout", LogoutAsync)
@@ -67,7 +67,7 @@ internal static class AuthEndpoints
             .RequireRateLimiting("password")
             .WithName("CreateStepUpAuthorization")
             .WithSummary("确认密码并创建短时高风险操作授权")
-            .Produces<CurrentAdministratorResponse>(StatusCodes.Status200OK)
+            .Produces<CurrentAdministratorResponse>()
             .ProducesProblem(StatusCodes.Status401Unauthorized);
 
         return endpoints;

@@ -207,6 +207,84 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Sub2ApiReport.Domain.Reports.ReportSnapshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CanonicalJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ConnectionRevision")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateOnly>("CutoffDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("FailedSegmentCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("GeneratedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("GeneratedAtUnixMilliseconds")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("KeyCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("PersonCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SchemaVersion")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("SevenDayActualCost")
+                        .HasPrecision(38, 18)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("ThirtyDayActualCost")
+                        .HasPrecision(38, 18)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Timezone")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Trigger")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("UnassignedSegmentCount")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CutoffDate", "Status");
+
+                    b.HasIndex("GeneratedAtUnixMilliseconds", "Id");
+
+                    b.ToTable("ReportSnapshots", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ReportSnapshots_ConnectionRevision", "ConnectionRevision > 0");
+
+                            t.HasCheckConstraint("CK_ReportSnapshots_Costs", "SevenDayActualCost >= 0 AND ThirtyDayActualCost >= 0");
+
+                            t.HasCheckConstraint("CK_ReportSnapshots_Counts", "PersonCount >= 0 AND KeyCount >= 0 AND FailedSegmentCount >= 0 AND UnassignedSegmentCount >= 0");
+
+                            t.HasCheckConstraint("CK_ReportSnapshots_SchemaVersion", "SchemaVersion > 0");
+                        });
+                });
+
             modelBuilder.Entity("Sub2ApiReport.Domain.Security.RecoveryChallenge", b =>
                 {
                     b.Property<Guid>("Id")
@@ -408,6 +486,9 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("ReportConcurrency")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("ReportRetentionMonths")
                         .HasColumnType("INTEGER");
 
@@ -425,7 +506,7 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("SystemSettings", (string)null);
+                    b.ToTable("SystemSettings");
 
                     b.HasData(
                         new
@@ -434,6 +515,7 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                             BackupRetentionCount = 10,
                             LogLevel = "Information",
                             ReleaseChannel = "stable",
+                            ReportConcurrency = 4,
                             ReportRetentionMonths = 12,
                             Revision = 1L,
                             Timezone = "Asia/Shanghai"

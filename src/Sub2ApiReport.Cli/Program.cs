@@ -30,7 +30,7 @@ Directory.CreateDirectory(dataProtectionKeysPath);
 builder.Services.AddDataProtection()
     .SetApplicationName("Sub2ApiReport")
     .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysPath));
-builder.Services.AddInfrastructure(connectionString);
+_ = builder.Services.AddInfrastructure(connectionString);
 
 using var host = builder.Build();
 await using var scope = host.Services.CreateAsyncScope();

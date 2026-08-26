@@ -17,7 +17,7 @@ internal static class SetupEndpoints
             .WithName("GetSetupStatus")
             .WithSummary("获取初始化状态")
             .WithDescription("返回实例是否仍需要创建首个管理员，不返回初始化码。")
-            .Produces<SetupStatusResponse>(StatusCodes.Status200OK);
+            .Produces<SetupStatusResponse>();
 
         group.MapPost("/initialize", InitializeAsync)
             .WithName("InitializeAdministrator")

@@ -65,6 +65,12 @@ dotnet run --project src/Sub2ApiReport.Cli -- admin create-reset-code
 
 完整 Admin API Key 只在保存请求和进程内短时存在，SQLite 保存 Data Protection 密文，管理 API 只返回末四位掩码。同步响应中的完整业务 Key 字段不会写入本地数据库或日志。
 
+## 生成报告
+
+升级到 0.4.0 后运行 Migrator，应用 `AddReportSnapshots`。报告页面支持指定统计截止日；留空时使用配置时区中昨天，确保不包含运行当天的部分数据。每次手工生成会保存独立的 immutable canonical snapshot，不发送任何渠道。
+
+报告引擎把 30 日窗口按 7 日边界和 Key 归属有效期切分，以数据库中的 `ReportConcurrency` 并发上限调用 Sub2API stats。任一区间采集失败、归属冲突或存在实际用量但没有归属时，报告状态为部分完成。CSV 从已保存快照生成，使用 UTF-8 BOM，并对可能触发电子表格公式的文本加前缀保护。
+
 ## 启动前端
 
 在另一个终端执行：
@@ -77,17 +83,27 @@ pnpm --dir web run dev
 
 ## 质量检查
 
+完整验收统一执行：
+
 ```bash
-dotnet build Sub2ApiReport.slnx
-dotnet test Sub2ApiReport.slnx
-pnpm --dir web run typecheck
-pnpm --dir web run lint
-pnpm --dir web run test
-pnpm --dir web run build
-pnpm --dir web run e2e
+pnpm quality
 ```
 
-前端生产构建输出到 `src/Sub2ApiReport.Api/wwwroot/`。该目录是生成物，不提交到 Git；ASP.NET Core 发布和 App Dockerfile 会包含这份产物。
+`.NET` 质量门可单独执行：
+
+```bash
+pnpm quality:dotnet
+```
+
+该命令依次验证格式、Release 构建、JetBrains InspectCode 和全部 `.NET` 测试。InspectCode 使用仓库锁定的官方 `JetBrains.ReSharper.GlobalTools`，检查级别为 `SUGGESTION` 及以上；发现任何 Rider/ReSharper 问题时返回非零。SARIF 报告和缓存只写入系统临时目录并在结束时自动删除。
+
+前端质量门可单独执行：
+
+```bash
+pnpm quality:web
+```
+
+它依次运行 TypeScript typecheck、oxlint、Vitest、生产构建和桌面/移动 Playwright。前端生产构建输出到 `src/Sub2ApiReport.Api/wwwroot/`。该目录是生成物，不提交到 Git；ASP.NET Core 发布和 App Dockerfile 会包含这份产物。
 
 ## Docker Compose
 

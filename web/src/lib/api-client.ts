@@ -22,6 +22,7 @@ export type SystemSettings = {
   timezone: string
   releaseChannel: string
   logLevel: string
+  reportConcurrency: number
   reportRetentionMonths: number
   backupRetentionCount: number
   revision: number
@@ -106,6 +107,115 @@ export type KeySynchronization = {
   total: number
   synchronizedAt: string
   configurationRevision: number
+}
+
+export type ReportStatus = 'Complete' | 'Partial'
+export type ReportTrigger = 'ManualDryRun'
+
+export type ReportUsageMetrics = {
+  totalRequests: string
+  totalInputTokens: string
+  totalOutputTokens: string
+  totalCacheTokens: string
+  totalCacheCreationTokens: string
+  totalCacheReadTokens: string
+  totalTokens: string
+  totalCost: string
+  totalActualCost: string
+  averageDurationMs: string
+}
+
+export type ReportWindow = {
+  days: number
+  startDate: string
+  endDate: string
+}
+
+export type ReportPersonUsage = {
+  personId: string
+  code: string
+  displayName: string
+  keyCount: number
+  sevenDay: ReportUsageMetrics
+  thirtyDay: ReportUsageMetrics
+}
+
+export type ReportKeySegment = {
+  startDate: string
+  endDate: string
+  personId: string | null
+  personCode: string | null
+  personDisplayName: string | null
+  metrics: ReportUsageMetrics | null
+  failureKind: string | null
+  diagnosticCode: string | null
+}
+
+export type ReportKeyUsage = {
+  keyId: string
+  externalId: string
+  name: string
+  status: string
+  lastUsedAt: string | null
+  retiredAt: string | null
+  sevenDay: ReportUsageMetrics
+  thirtyDay: ReportUsageMetrics
+  segments: ReportKeySegment[]
+}
+
+export type ReportSegmentDiagnostic = {
+  externalKeyId: string
+  keyName: string
+  startDate: string
+  endDate: string
+  code: string
+  failureKind: string | null
+}
+
+export type ReportDetail = {
+  schemaVersion: number
+  reportId: string
+  status: ReportStatus
+  trigger: ReportTrigger
+  generatedAt: string
+  timezone: string
+  connectionRevision: number
+  sevenDayWindow: ReportWindow
+  thirtyDayWindow: ReportWindow
+  sevenDayTotal: ReportUsageMetrics
+  thirtyDayTotal: ReportUsageMetrics
+  people: ReportPersonUsage[]
+  keys: ReportKeyUsage[]
+  diagnostics: {
+    failedSegments: ReportSegmentDiagnostic[]
+    unassignedSegments: ReportSegmentDiagnostic[]
+    conflictingSegments: ReportSegmentDiagnostic[]
+    zeroUsageKeyIds: string[]
+  }
+}
+
+export type ReportListItem = {
+  id: string
+  schemaVersion: number
+  status: ReportStatus
+  trigger: ReportTrigger
+  cutoffDate: string
+  timezone: string
+  generatedAt: string
+  personCount: number
+  keyCount: number
+  failedSegmentCount: number
+  unassignedSegmentCount: number
+  sevenDayActualCost: string
+  thirtyDayActualCost: string
+}
+
+export type ReportPage = {
+  items: ReportListItem[]
+  total: number
+  page: number
+  pageSize: number
+  pages: number
 }
 
 type ProblemDetails = {
@@ -316,4 +426,38 @@ export function updateApiKeyAssignment(id: string, input: {
 
 export function deleteApiKeyAssignment(id: string) {
   return apiRequest<void>(`/api/v1/people/assignments/${id}`, { method: 'DELETE' })
+}
+
+export function getReports(page: number, signal?: AbortSignal) {
+  const query = new URLSearchParams({ page: String(page), pageSize: '25' })
+  return apiRequest<ReportPage>(`/api/v1/reports?${query}`, { signal })
+}
+
+export function getReport(id: string, signal?: AbortSignal) {
+  return apiRequest<ReportDetail>(`/api/v1/reports/${encodeURIComponent(id)}`, { signal })
+}
+
+export function generateReport(cutoffDate: string | null) {
+  return apiRequest<ReportDetail>('/api/v1/reports/dry-run', {
+    method: 'POST',
+    body: { cutoffDate },
+  })
+}
+
+export async function downloadReportCsv(id: string, signal?: AbortSignal) {
+  const response = await fetch(`${apiBaseUrl}/api/v1/reports/${encodeURIComponent(id)}/csv`, {
+    credentials: 'same-origin',
+    headers: { Accept: 'text/csv' },
+    signal,
+  })
+  if (!response.ok) {
+    throw await createApiError(response)
+  }
+
+  const disposition = response.headers.get('content-disposition') ?? ''
+  const encodedName = /filename\*=UTF-8''([^;]+)/i.exec(disposition)?.[1]
+  return {
+    blob: await response.blob(),
+    fileName: encodedName ? decodeURIComponent(encodedName) : `sub2api-report-${id}.csv`,
+  }
 }

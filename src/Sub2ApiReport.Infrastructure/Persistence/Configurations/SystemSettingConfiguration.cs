@@ -16,6 +16,7 @@ internal sealed class SystemSettingConfiguration : IEntityTypeConfiguration<Syst
         builder.Property(setting => setting.Timezone).HasMaxLength(100).IsRequired();
         builder.Property(setting => setting.ReleaseChannel).HasMaxLength(32).IsRequired();
         builder.Property(setting => setting.LogLevel).HasMaxLength(16).IsRequired();
+        builder.Property(setting => setting.ReportConcurrency).IsRequired();
         builder.Property(setting => setting.ReportRetentionMonths).IsRequired();
         builder.Property(setting => setting.BackupRetentionCount).IsRequired();
         builder.Property(setting => setting.Revision).IsConcurrencyToken().IsRequired();

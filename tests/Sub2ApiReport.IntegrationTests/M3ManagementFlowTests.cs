@@ -18,7 +18,7 @@ public sealed class M3ManagementFlowTests
     [Fact]
     public async Task M3EndpointsRequireAuthentication()
     {
-        using var factory = new ApiWebApplicationFactory();
+        await using var factory = new ApiWebApplicationFactory();
         using var client = CreateClient(factory);
 
         using var connectionResponse = await client.GetAsync("/api/v1/sub2api/connection");
@@ -41,7 +41,7 @@ public sealed class M3ManagementFlowTests
                 Key(102, "Beta", "active"),
             ],
         };
-        using var factory = new ApiWebApplicationFactory(
+        await using var factory = new ApiWebApplicationFactory(
             databasePath: null,
             deleteDatabaseOnDispose: true,
             configureTestServices: services =>
@@ -200,9 +200,7 @@ public sealed class M3ManagementFlowTests
         name,
         status,
         7,
-        null,
-        new DateTimeOffset(2026, 8, 1, 0, 0, 0, TimeSpan.Zero),
-        new DateTimeOffset(2026, 8, 25, 0, 0, 0, TimeSpan.Zero));
+        null);
 
     private static async Task<PersonResponse> CreatePersonAsync(
         HttpClient client,
@@ -295,5 +293,23 @@ public sealed class M3ManagementFlowTests
             CancellationToken cancellationToken) => Failure is null
             ? Task.FromResult(Keys)
             : Task.FromException<IReadOnlyList<Sub2ApiExternalKey>>(Failure);
+
+        public Task<Sub2ApiUsageStats> GetUsageStatsAsync(
+            Sub2ApiConnectionCredentials connection,
+            long externalApiKeyId,
+            DateOnly startDate,
+            DateOnly endDate,
+            string timezone,
+            CancellationToken cancellationToken) => Task.FromResult(new Sub2ApiUsageStats(
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0));
     }
 }

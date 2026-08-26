@@ -18,4 +18,7 @@
     <ProjectReference Include="..\..\src\Sub2ApiReport.Api\Sub2ApiReport.Api.csproj" />
     <ProjectReference Include="..\..\src\Sub2ApiReport.Infrastructure\Sub2ApiReport.Infrastructure.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="GoldenFiles\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

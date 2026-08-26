@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
@@ -45,9 +46,7 @@ public sealed class Sub2ApiClient(HttpClient httpClient, TimeProvider timeProvid
                     key.Name.Trim(),
                     key.Status.Trim(),
                     key.GroupId,
-                    key.LastUsedAt,
-                    key.CreatedAt,
-                    key.UpdatedAt)))
+                    key.LastUsedAt)))
                 {
                     throw InvalidResponse();
                 }
@@ -69,7 +68,56 @@ public sealed class Sub2ApiClient(HttpClient httpClient, TimeProvider timeProvid
             "Sub2API returned more pages than the configured safety limit.");
     }
 
-    private async Task<UpstreamPage> GetPageAsync(
+    public async Task<Sub2ApiUsageStats> GetUsageStatsAsync(
+        Sub2ApiConnectionCredentials connection,
+        long externalApiKeyId,
+        DateOnly startDate,
+        DateOnly endDate,
+        string timezone,
+        CancellationToken cancellationToken)
+    {
+        if (externalApiKeyId <= 0 || endDate < startDate)
+        {
+            throw new ArgumentException("The usage statistics range is invalid.");
+        }
+
+        ArgumentException.ThrowIfNullOrWhiteSpace(timezone);
+        var groupQuery = connection.CodexGroupId is { } groupId
+            ? string.Create(CultureInfo.InvariantCulture, $"&group_id={groupId}")
+            : string.Empty;
+        var path = string.Create(
+            CultureInfo.InvariantCulture,
+            $"/api/v1/admin/usage/stats?user_id={connection.UserId}&api_key_id={externalApiKeyId}{groupQuery}&start_date={startDate:yyyy-MM-dd}&end_date={endDate:yyyy-MM-dd}&timezone={Uri.EscapeDataString(timezone.Trim())}&nocache=true");
+        var endpoint = new Uri($"{connection.BaseUrl.TrimEnd('/')}{path}", UriKind.Absolute);
+        var stats = await GetDataAsync<UpstreamUsageStats>(connection, endpoint, cancellationToken);
+        if (stats.TotalRequests < 0
+            || stats.TotalInputTokens < 0
+            || stats.TotalOutputTokens < 0
+            || stats.TotalCacheTokens < 0
+            || stats.TotalCacheCreationTokens < 0
+            || stats.TotalCacheReadTokens < 0
+            || stats.TotalTokens < 0
+            || stats.TotalCost < 0
+            || stats.TotalActualCost < 0
+            || stats.AverageDurationMs < 0)
+        {
+            throw InvalidResponse();
+        }
+
+        return new Sub2ApiUsageStats(
+            stats.TotalRequests,
+            stats.TotalInputTokens,
+            stats.TotalOutputTokens,
+            stats.TotalCacheTokens,
+            stats.TotalCacheCreationTokens,
+            stats.TotalCacheReadTokens,
+            stats.TotalTokens,
+            stats.TotalCost,
+            stats.TotalActualCost,
+            stats.AverageDurationMs);
+    }
+
+    private Task<UpstreamPage> GetPageAsync(
         Sub2ApiConnectionCredentials connection,
         int page,
         int pageSize,
@@ -77,7 +125,15 @@ public sealed class Sub2ApiClient(HttpClient httpClient, TimeProvider timeProvid
     {
         var path = $"/api/v1/admin/users/{connection.UserId}/api-keys?page={page}&page_size={pageSize}&sort_by=id&sort_order=asc";
         var endpoint = new Uri($"{connection.BaseUrl.TrimEnd('/')}{path}", UriKind.Absolute);
+        return GetDataAsync<UpstreamPage>(connection, endpoint, cancellationToken);
+    }
 
+    private async Task<T> GetDataAsync<T>(
+        Sub2ApiConnectionCredentials connection,
+        Uri endpoint,
+        CancellationToken cancellationToken)
+        where T : class
+    {
         for (var attempt = 1; attempt <= 3; attempt++)
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, endpoint);
@@ -96,6 +152,12 @@ public sealed class Sub2ApiClient(HttpClient httpClient, TimeProvider timeProvid
             }
             catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested)
             {
+                if (attempt < 3)
+                {
+                    await Task.Delay(TimeSpan.FromMilliseconds(200 * attempt), timeProvider, cancellationToken);
+                    continue;
+                }
+
                 throw new Sub2ApiClientException(
                     Sub2ApiFailureKind.Timeout,
                     "The Sub2API request timed out.",
@@ -149,7 +211,7 @@ public sealed class Sub2ApiClient(HttpClient httpClient, TimeProvider timeProvid
                 try
                 {
                     await response.Content.LoadIntoBufferAsync(MaximumResponseBytes, cancellationToken);
-                    var envelope = await response.Content.ReadFromJsonAsync<UpstreamEnvelope>(
+                    var envelope = await response.Content.ReadFromJsonAsync<UpstreamEnvelope<T>>(
                         cancellationToken: cancellationToken);
                     if (envelope?.Code != 0 || envelope.Data is null)
                     {
@@ -191,12 +253,12 @@ public sealed class Sub2ApiClient(HttpClient httpClient, TimeProvider timeProvid
         }
     }
 
-    private static TimeSpan GetRetryAfter(HttpResponseMessage response)
+    private TimeSpan GetRetryAfter(HttpResponseMessage response)
     {
         var value = response.Headers.RetryAfter?.Delta;
         if (value is null && response.Headers.RetryAfter?.Date is { } date)
         {
-            value = date - DateTimeOffset.UtcNow;
+            value = date - timeProvider.GetUtcNow();
         }
 
         return value is { } delay && delay > TimeSpan.Zero
@@ -208,23 +270,36 @@ public sealed class Sub2ApiClient(HttpClient httpClient, TimeProvider timeProvid
         Sub2ApiFailureKind.InvalidResponse,
         "Sub2API returned an invalid response.");
 
-    private sealed record UpstreamEnvelope(
+    private sealed record UpstreamEnvelope<T>(
         [property: JsonPropertyName("code")] int Code,
-        [property: JsonPropertyName("data")] UpstreamPage? Data);
+        [property: JsonPropertyName("data")] T? Data)
+        where T : class;
 
+    [method: JsonConstructor]
     private sealed record UpstreamPage(
         [property: JsonPropertyName("items")] IReadOnlyList<UpstreamApiKey> Items,
         [property: JsonPropertyName("total")] long Total,
         [property: JsonPropertyName("page")] int Page,
-        [property: JsonPropertyName("page_size")] int PageSize,
         [property: JsonPropertyName("pages")] int Pages);
 
+    [method: JsonConstructor]
+    private sealed record UpstreamUsageStats(
+        [property: JsonPropertyName("total_requests")] long TotalRequests,
+        [property: JsonPropertyName("total_input_tokens")] long TotalInputTokens,
+        [property: JsonPropertyName("total_output_tokens")] long TotalOutputTokens,
+        [property: JsonPropertyName("total_cache_tokens")] long TotalCacheTokens,
+        [property: JsonPropertyName("total_cache_creation_tokens")] long TotalCacheCreationTokens,
+        [property: JsonPropertyName("total_cache_read_tokens")] long TotalCacheReadTokens,
+        [property: JsonPropertyName("total_tokens")] long TotalTokens,
+        [property: JsonPropertyName("total_cost")] decimal TotalCost,
+        [property: JsonPropertyName("total_actual_cost")] decimal TotalActualCost,
+        [property: JsonPropertyName("average_duration_ms")] decimal AverageDurationMs);
+
+    [method: JsonConstructor]
     private sealed record UpstreamApiKey(
         [property: JsonPropertyName("id")] long Id,
         [property: JsonPropertyName("name")] string Name,
         [property: JsonPropertyName("group_id")] long? GroupId,
         [property: JsonPropertyName("status")] string Status,
-        [property: JsonPropertyName("last_used_at")] DateTimeOffset? LastUsedAt,
-        [property: JsonPropertyName("created_at")] DateTimeOffset CreatedAt,
-        [property: JsonPropertyName("updated_at")] DateTimeOffset UpdatedAt);
+        [property: JsonPropertyName("last_used_at")] DateTimeOffset? LastUsedAt);
 }

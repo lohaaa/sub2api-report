@@ -8,7 +8,7 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations;
 /// <inheritdoc />
 public partial class InitialCreate : Migration
 {
-    private static readonly string[] columns = new[] { "Id", "InitializedAt", "ReleaseChannel", "Timezone" };
+    private static readonly string[] Columns = new[] { "Id", "InitializedAt", "ReleaseChannel", "Timezone" };
 
     /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
@@ -29,7 +29,7 @@ public partial class InitialCreate : Migration
 
         migrationBuilder.InsertData(
             table: "SystemSettings",
-            columns: columns,
+            columns: Columns,
             values: new object[] { 1, null, "stable", "Asia/Shanghai" });
     }
 

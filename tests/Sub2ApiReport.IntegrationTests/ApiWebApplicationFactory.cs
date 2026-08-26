@@ -12,10 +12,11 @@ namespace Sub2ApiReport.IntegrationTests;
 
 public sealed class ApiWebApplicationFactory : WebApplicationFactory<Program>
 {
-    private readonly string databasePath;
-    private readonly bool deleteDatabaseOnDispose;
-    private readonly string environmentName;
-    private readonly Action<IServiceCollection>? configureTestServices;
+    private readonly string _databasePath;
+    private readonly string _dataProtectionKeysPath;
+    private readonly bool _deleteDatabaseOnDispose;
+    private readonly string _environmentName;
+    private readonly Action<IServiceCollection>? _configureTestServices;
 
     public ApiWebApplicationFactory()
         : this(null, true, Environments.Development)
@@ -28,37 +29,41 @@ public sealed class ApiWebApplicationFactory : WebApplicationFactory<Program>
         string environmentName = "Development",
         Action<IServiceCollection>? configureTestServices = null)
     {
-        this.databasePath = databasePath ?? Path.Combine(
+        _databasePath = databasePath ?? Path.Combine(
             Path.GetTempPath(),
             $"sub2api-report-api-{Guid.NewGuid():N}.db");
-        this.deleteDatabaseOnDispose = deleteDatabaseOnDispose;
-        this.environmentName = environmentName;
-        this.configureTestServices = configureTestServices;
+        _dataProtectionKeysPath = Path.Combine(
+            Path.GetTempPath(),
+            $"sub2api-report-keys-{Guid.NewGuid():N}");
+        _deleteDatabaseOnDispose = deleteDatabaseOnDispose;
+        _environmentName = environmentName;
+        _configureTestServices = configureTestServices;
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.UseEnvironment(environmentName);
+        builder.UseEnvironment(_environmentName);
         builder.ConfigureAppConfiguration((_, configuration) =>
         {
             configuration.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["ConnectionStrings:Database"] = $"Data Source={databasePath}",
+                ["ConnectionStrings:Database"] = $"Data Source={_databasePath}",
+                ["DataProtection:KeysPath"] = _dataProtectionKeysPath,
             });
         });
         builder.ConfigureServices(services =>
         {
             services.RemoveAll<DbContextOptions<ReportDbContext>>();
             services.RemoveAll<ReportDbContext>();
-            services.AddDbContext<ReportDbContext>(options => options.UseSqlite($"Data Source={databasePath}"));
-            configureTestServices?.Invoke(services);
+            services.AddDbContext<ReportDbContext>(options => options.UseSqlite($"Data Source={_databasePath}"));
+            _configureTestServices?.Invoke(services);
         });
     }
 
     protected override IHost CreateHost(IHostBuilder builder)
     {
         var options = new DbContextOptionsBuilder<ReportDbContext>()
-            .UseSqlite($"Data Source={databasePath}")
+            .UseSqlite($"Data Source={_databasePath}")
             .Options;
         using (var dbContext = new ReportDbContext(options))
         {
@@ -77,12 +82,17 @@ public sealed class ApiWebApplicationFactory : WebApplicationFactory<Program>
             return;
         }
 
-        if (deleteDatabaseOnDispose)
+        if (_deleteDatabaseOnDispose)
         {
             SqliteConnection.ClearAllPools();
-            File.Delete(databasePath);
-            File.Delete($"{databasePath}-shm");
-            File.Delete($"{databasePath}-wal");
+            File.Delete(_databasePath);
+            File.Delete($"{_databasePath}-shm");
+            File.Delete($"{_databasePath}-wal");
+        }
+
+        if (Directory.Exists(_dataProtectionKeysPath))
+        {
+            Directory.Delete(_dataProtectionKeysPath, recursive: true);
         }
     }
 }

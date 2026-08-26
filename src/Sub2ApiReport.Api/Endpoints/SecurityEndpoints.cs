@@ -14,7 +14,7 @@ internal static class SecurityEndpoints
             .WithName("GetAntiforgeryToken")
             .WithSummary("获取 antiforgery token")
             .WithDescription("设置安全 antiforgery cookie，并返回写请求 header 使用的 token。")
-            .Produces<AntiforgeryTokenResponse>(StatusCodes.Status200OK);
+            .Produces<AntiforgeryTokenResponse>();
 
         return endpoints;
     }

@@ -12,7 +12,6 @@ public sealed class ApiSmokeTests(ApiWebApplicationFactory factory)
     : IClassFixture<ApiWebApplicationFactory>
 {
     private readonly HttpClient _client = factory.CreateClient();
-    private readonly ApiWebApplicationFactory _factory = factory;
 
     [Fact]
     public async Task LivenessEndpointIsAvailable()
@@ -38,7 +37,7 @@ public sealed class ApiSmokeTests(ApiWebApplicationFactory factory)
     public async Task DatabaseLogLevelChangeIsAppliedWithoutRestart()
     {
         SystemSettingsSnapshot updated;
-        await using (var scope = _factory.Services.CreateAsyncScope())
+        await using (var scope = factory.Services.CreateAsyncScope())
         {
             var settingsService = scope.ServiceProvider.GetRequiredService<ISystemSettingsService>();
             var current = await settingsService.GetAsync(CancellationToken.None);
@@ -47,13 +46,14 @@ public sealed class ApiSmokeTests(ApiWebApplicationFactory factory)
                     current.Timezone,
                     current.ReleaseChannel,
                     "Warning",
+                    current.ReportConcurrency,
                     current.ReportRetentionMonths,
                     current.BackupRetentionCount,
                     current.Revision),
                 CancellationToken.None);
         }
 
-        var levelSwitch = _factory.Services.GetRequiredService<LoggingLevelSwitch>();
+        var levelSwitch = factory.Services.GetRequiredService<LoggingLevelSwitch>();
         var deadline = DateTimeOffset.UtcNow.AddSeconds(10);
         while (levelSwitch.MinimumLevel != LogEventLevel.Warning && DateTimeOffset.UtcNow < deadline)
         {
@@ -65,7 +65,7 @@ public sealed class ApiSmokeTests(ApiWebApplicationFactory factory)
     }
 
     [Fact]
-    public async Task OpenApiIncludesM3ManagementEndpoints()
+    public async Task OpenApiIncludesManagementAndReportEndpoints()
     {
         var document = await _client.GetStringAsync("/openapi/v1.json", CancellationToken.None);
 
@@ -73,6 +73,8 @@ public sealed class ApiSmokeTests(ApiWebApplicationFactory factory)
         Assert.Contains("/api/v1/sub2api/keys/sync", document, StringComparison.Ordinal);
         Assert.Contains("/api/v1/people/{personId}", document, StringComparison.Ordinal);
         Assert.Contains("/api/v1/people/assignments/{assignmentId}", document, StringComparison.Ordinal);
+        Assert.Contains("/api/v1/reports/dry-run", document, StringComparison.Ordinal);
+        Assert.Contains("/api/v1/reports/{id}/csv", document, StringComparison.Ordinal);
     }
 
     [Fact]

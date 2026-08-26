@@ -169,21 +169,18 @@ Controller/Endpoint 只负责协议转换、认证授权和输入校验。统计
 ### 5.3 报表执行流程
 
 ```text
-Quartz/manual trigger
-  -> create ReportRun with idempotency key
-  -> load active people and API key assignments
-  -> refresh/validate Sub2API key inventory
+manual dry-run
+  -> load connection, system settings, Key inventory and assignment snapshots
   -> calculate previous complete 7/30-day windows
-  -> fetch per-key stats with bounded concurrency
-  -> aggregate API key -> person -> totals
+  -> split each Key at the 7-day and assignment boundaries
+  -> fetch per-key segment stats with bounded concurrency
+  -> aggregate segment -> Key -> person -> totals
+  -> mark failed, conflicting or materially unassigned segments
   -> freeze canonical report snapshot
-  -> render CSV and channel payloads
-  -> deliver all enabled channels independently
-  -> persist each delivery result
-  -> complete run or mark partial failure
+  -> render UTF-8 BOM CSV from the stored snapshot
 ```
 
-默认并发为 4，可配置为 1 到 10。对 `429`、网络错误和 `5xx` 做带抖动的指数退避；业务 `4xx` 直接失败。
+采集并发默认 4，可在 SQLite 中配置为 1 到 10，每次报告开始时固定该配置快照。单次请求超时 15 秒；网络错误和 `5xx` 最多尝试 3 次，`429` 尊重并限制 `Retry-After`，业务 `4xx` 直接失败。M6 在同一个报告引擎外增加 Quartz 触发、运行状态和渠道投递，不改变 canonical snapshot。
 
 ### 5.4 幂等与状态机
 
@@ -250,11 +247,11 @@ Pending -> Sending -> Succeeded
 | `People` | `Id`, `Code`, `DisplayName`, `Active` | 人员档案 |
 | `ExternalApiKeys` | `ExternalId`, `NameSnapshot`, `Status`, `LastSeenAt`, `RetiredAt` | Sub2API Key 本地清单，不保存完整 Key |
 | `PersonApiKeyAssignments` | `PersonId`, `ExternalApiKeyId`, `ValidFrom`, `ValidTo` | 支持 Key 轮换和一人多 Key |
-| `ReportSchedules` | `DayOfMonth`, `LocalTime`, `Timezone`, `Enabled` | MVP 只有一条月报计划 |
-| `NotificationChannels` | `Type`, `Name`, `Enabled`, `ConfigCiphertext` | 邮件、钉钉、飞书实例 |
-| `ReportRuns` | `Id`, `IdempotencyKey`, `PeriodEnd`, `Status`, `SnapshotJson` | 不可变报告快照 |
-| `UsageMetrics` | `RunId`, `PersonId`, `WindowDays`, token/cost fields | 7/30 天人员指标和总计 |
-| `DeliveryRecords` | `RunId`, `ChannelId`, `PayloadHash`, `Status`, `Attempts` | 分渠道幂等与错误信息 |
+| `ReportSnapshots` | `Id`, `SchemaVersion`, `CutoffDate`, `Status`, `CanonicalJson`, cost summaries | M4 不可变报告快照；列表字段单独索引，明细只保留一份 canonical JSON |
+| `ReportSchedules` | `DayOfMonth`, `LocalTime`, `Timezone`, `Enabled` | M6 计划任务，MVP 只有一条月报计划 |
+| `NotificationChannels` | `Type`, `Name`, `Enabled`, `ConfigCiphertext` | M5 邮件、钉钉、飞书实例 |
+| `ReportRuns` | `Id`, `IdempotencyKey`, `PeriodEnd`, `Status`, `SnapshotId` | M6 运行和调度幂等状态 |
+| `DeliveryRecords` | `RunId`, `ChannelId`, `PayloadHash`, `Status`, `Attempts` | M5/M6 分渠道幂等与错误信息 |
 | `UpdateRecords` | `FromVersion`, `ToVersion`, `Status`, timestamps | 升级历史 |
 | `AuditEvents` | `Actor`, `Action`, `Target`, `Result`, `MetadataJson` | 不保存密钥和密码 |
 

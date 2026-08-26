@@ -13,7 +13,7 @@ internal static class SpaFallback
         }
 
         var environment = context.RequestServices.GetRequiredService<IWebHostEnvironment>();
-        var indexPath = Path.Combine(environment.WebRootPath ?? string.Empty, "index.html");
+        var indexPath = Path.Combine(environment.WebRootPath, "index.html");
         if (!File.Exists(indexPath))
         {
             await WriteNotFoundAsync(context);

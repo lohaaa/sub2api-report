@@ -6,6 +6,7 @@ public sealed class SystemSetting
     public const string DefaultTimezone = "Asia/Shanghai";
     public const string DefaultReleaseChannel = "stable";
     public const string DefaultLogLevel = "Information";
+    public const int DefaultReportConcurrency = 4;
     public const int DefaultReportRetentionMonths = 12;
     public const int DefaultBackupRetentionCount = 10;
 
@@ -25,6 +26,8 @@ public sealed class SystemSetting
     public string ReleaseChannel { get; private set; } = DefaultReleaseChannel;
 
     public string LogLevel { get; private set; } = DefaultLogLevel;
+
+    public int ReportConcurrency { get; private set; } = DefaultReportConcurrency;
 
     public int ReportRetentionMonths { get; private set; } = DefaultReportRetentionMonths;
 
@@ -52,6 +55,7 @@ public sealed class SystemSetting
         string timezone,
         string releaseChannel,
         string logLevel,
+        int reportConcurrency,
         int reportRetentionMonths,
         int backupRetentionCount,
         DateTimeOffset updatedAt)
@@ -61,6 +65,13 @@ public sealed class SystemSetting
         var validatedLogLevel = AllowedLogLevels.FirstOrDefault(level =>
             level.Equals(logLevel, StringComparison.OrdinalIgnoreCase))
             ?? throw new ArgumentException("Unsupported log level.", nameof(logLevel));
+
+        if (reportConcurrency is < 1 or > 10)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(reportConcurrency),
+                "Report concurrency must be between 1 and 10.");
+        }
 
         if (reportRetentionMonths is < 1 or > 120)
         {
@@ -79,6 +90,7 @@ public sealed class SystemSetting
         Timezone = validatedTimezone;
         ReleaseChannel = validatedReleaseChannel;
         LogLevel = validatedLogLevel;
+        ReportConcurrency = reportConcurrency;
         ReportRetentionMonths = reportRetentionMonths;
         BackupRetentionCount = backupRetentionCount;
         UpdatedAt = updatedAt;

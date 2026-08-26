@@ -7,6 +7,7 @@ public sealed record SystemSettingsResponse(
     string Timezone,
     string ReleaseChannel,
     string LogLevel,
+    int ReportConcurrency,
     int ReportRetentionMonths,
     int BackupRetentionCount,
     long Revision,
@@ -23,6 +24,9 @@ public sealed record UpdateSystemSettingsRequest
 
     [Required, StringLength(16, MinimumLength = 3)]
     public required string LogLevel { get; init; }
+
+    [Range(1, 10)]
+    public required int ReportConcurrency { get; init; }
 
     [Range(1, 120)]
     public required int ReportRetentionMonths { get; init; }

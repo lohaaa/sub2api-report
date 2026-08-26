@@ -49,9 +49,5 @@ public sealed class Sub2ApiConnectionNotConfiguredException()
     : InvalidOperationException("The Sub2API connection is not fully configured.");
 
 public sealed class Sub2ApiConnectionConflictException(long expectedRevision, long actualRevision)
-    : InvalidOperationException("The Sub2API connection was modified by another request.")
-{
-    public long ExpectedRevision { get; } = expectedRevision;
-
-    public long ActualRevision { get; } = actualRevision;
-}
+    : InvalidOperationException(
+        $"The Sub2API connection revision changed from {expectedRevision} to {actualRevision}.");

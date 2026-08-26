@@ -13,6 +13,7 @@ public sealed record SystemSettingsSnapshot(
     string Timezone,
     string ReleaseChannel,
     string LogLevel,
+    int ReportConcurrency,
     int ReportRetentionMonths,
     int BackupRetentionCount,
     long Revision,
@@ -22,14 +23,10 @@ public sealed record UpdateSystemSettingsCommand(
     string Timezone,
     string ReleaseChannel,
     string LogLevel,
+    int ReportConcurrency,
     int ReportRetentionMonths,
     int BackupRetentionCount,
     long ExpectedRevision);
 
 public sealed class SystemSettingsConflictException(long expectedRevision, long actualRevision)
-    : Exception($"System settings revision {expectedRevision} is stale; current revision is {actualRevision}.")
-{
-    public long ExpectedRevision { get; } = expectedRevision;
-
-    public long ActualRevision { get; } = actualRevision;
-}
+    : Exception($"System settings revision {expectedRevision} is stale; current revision is {actualRevision}.");

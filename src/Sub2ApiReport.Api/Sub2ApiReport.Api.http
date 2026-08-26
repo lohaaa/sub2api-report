@@ -111,6 +111,25 @@ X-CSRF-TOKEN: {{authenticatedAntiforgery.response.body.$.token}}
   "validTo": null
 }
 
+### Generate and persist a manual dry-run report
+# @name generateReport
+POST {{baseUrl}}/api/v1/reports/dry-run
+Content-Type: application/json
+X-CSRF-TOKEN: {{authenticatedAntiforgery.response.body.$.token}}
+
+{
+  "cutoffDate": null
+}
+
+### List immutable report snapshots
+GET {{baseUrl}}/api/v1/reports?page=1&pageSize=25
+
+### Read the generated canonical report snapshot
+GET {{baseUrl}}/api/v1/reports/{{generateReport.response.body.$.reportId}}
+
+### Download the generated UTF-8 BOM CSV
+GET {{baseUrl}}/api/v1/reports/{{generateReport.response.body.$.reportId}}/csv
+
 ### Logout
 POST {{baseUrl}}/api/v1/auth/logout
 X-CSRF-TOKEN: {{authenticatedAntiforgery.response.body.$.token}}

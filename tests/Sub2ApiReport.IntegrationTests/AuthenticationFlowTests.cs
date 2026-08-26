@@ -16,7 +16,7 @@ public sealed class AuthenticationFlowTests
     [Fact]
     public async Task StateChangingEndpointRejectsMissingAntiforgeryToken()
     {
-        using var factory = new ApiWebApplicationFactory();
+        await using var factory = new ApiWebApplicationFactory();
         using var client = CreateClient(factory);
 
         using var response = await client.PostAsJsonAsync("/api/v1/setup/initialize", new
@@ -33,7 +33,7 @@ public sealed class AuthenticationFlowTests
     [Fact]
     public async Task ConcurrentInitializationCreatesOnlyOneAdministrator()
     {
-        using var factory = new ApiWebApplicationFactory();
+        await using var factory = new ApiWebApplicationFactory();
         var issue = await RotateSetupCodeAsync(factory);
         using var firstClient = CreateClient(factory);
         using var secondClient = CreateClient(factory);
@@ -66,7 +66,7 @@ public sealed class AuthenticationFlowTests
     [Fact]
     public async Task LoginCookieAndAntiforgeryProtectTheSession()
     {
-        using var factory = new ApiWebApplicationFactory();
+        await using var factory = new ApiWebApplicationFactory();
         await InitializeAsync(factory);
         using var client = CreateClient(factory);
 
@@ -116,7 +116,7 @@ public sealed class AuthenticationFlowTests
     [Fact]
     public async Task ProductionCookieUsesHostPrefixAndSecureFlags()
     {
-        using var factory = new ApiWebApplicationFactory(
+        await using var factory = new ApiWebApplicationFactory(
             databasePath: null,
             deleteDatabaseOnDispose: true,
             environmentName: Microsoft.Extensions.Hosting.Environments.Production);
@@ -138,7 +138,7 @@ public sealed class AuthenticationFlowTests
     [Fact]
     public async Task PasswordChangeInvalidatesTheOldPassword()
     {
-        using var factory = new ApiWebApplicationFactory();
+        await using var factory = new ApiWebApplicationFactory();
         await InitializeAsync(factory);
         using var client = CreateClient(factory);
         await LoginAsync(client, Password);
@@ -161,7 +161,7 @@ public sealed class AuthenticationFlowTests
     [Fact]
     public async Task HostRecoveryCodeResetsThePasswordOnce()
     {
-        using var factory = new ApiWebApplicationFactory();
+        await using var factory = new ApiWebApplicationFactory();
         await InitializeAsync(factory);
         SecretCodeIssue issue;
         await using (var scope = factory.Services.CreateAsyncScope())
@@ -195,7 +195,7 @@ public sealed class AuthenticationFlowTests
     [Fact]
     public async Task AuthenticatedSettingsUpdateUsesRevisionConcurrency()
     {
-        using var factory = new ApiWebApplicationFactory();
+        await using var factory = new ApiWebApplicationFactory();
         await InitializeAsync(factory);
         using var client = CreateClient(factory);
         await LoginAsync(client, Password);
@@ -207,6 +207,7 @@ public sealed class AuthenticationFlowTests
             timezone = "UTC",
             releaseChannel = "preview",
             logLevel = "Warning",
+            reportConcurrency = 6,
             reportRetentionMonths = 24,
             backupRetentionCount = 20,
             revision = current.Revision,
@@ -233,12 +234,12 @@ public sealed class AuthenticationFlowTests
     {
         var databasePath = Path.Combine(Path.GetTempPath(), $"sub2api-report-restart-{Guid.NewGuid():N}.db");
         SecretCodeIssue firstIssue;
-        using (var firstFactory = new ApiWebApplicationFactory(databasePath, false))
+        await using (var firstFactory = new ApiWebApplicationFactory(databasePath, false))
         {
             firstIssue = await RotateSetupCodeAsync(firstFactory);
         }
 
-        using var secondFactory = new ApiWebApplicationFactory(databasePath, true);
+        await using var secondFactory = new ApiWebApplicationFactory(databasePath, true);
         using var client = CreateClient(secondFactory);
         using var request = await CreateJsonRequestAsync(
             client,

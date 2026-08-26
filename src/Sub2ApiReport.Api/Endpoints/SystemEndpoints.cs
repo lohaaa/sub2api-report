@@ -19,13 +19,13 @@ internal static class SystemEndpoints
             .WithName("GetSystemVersion")
             .WithSummary("获取系统版本")
             .WithDescription("返回当前应用版本、运行环境和发布通道。")
-            .Produces<SystemVersionResponse>(StatusCodes.Status200OK);
+            .Produces<SystemVersionResponse>();
 
         group.MapGet("/settings", GetSettingsAsync)
             .RequireAuthorization()
             .WithName("GetSystemSettings")
             .WithSummary("获取动态系统设置")
-            .Produces<SystemSettingsResponse>(StatusCodes.Status200OK)
+            .Produces<SystemSettingsResponse>()
             .ProducesProblem(StatusCodes.Status401Unauthorized);
 
         group.MapPut("/settings", UpdateSettingsAsync)
@@ -34,7 +34,7 @@ internal static class SystemEndpoints
             .RequireRateLimiting("configuration")
             .WithName("UpdateSystemSettings")
             .WithSummary("更新动态系统设置")
-            .Produces<SystemSettingsResponse>(StatusCodes.Status200OK)
+            .Produces<SystemSettingsResponse>()
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status409Conflict);
 
@@ -75,6 +75,7 @@ internal static class SystemEndpoints
                     request.Timezone,
                     request.ReleaseChannel,
                     request.LogLevel,
+                    request.ReportConcurrency,
                     request.ReportRetentionMonths,
                     request.BackupRetentionCount,
                     request.Revision),
@@ -109,6 +110,7 @@ internal static class SystemEndpoints
         settings.Timezone,
         settings.ReleaseChannel,
         settings.LogLevel,
+        settings.ReportConcurrency,
         settings.ReportRetentionMonths,
         settings.BackupRetentionCount,
         settings.Revision,

@@ -19,12 +19,12 @@ internal static class PeopleEndpoints
         group.MapGet("", ListAsync)
             .WithName("ListPeople")
             .WithSummary("列出人员")
-            .Produces<IReadOnlyList<PersonResponse>>(StatusCodes.Status200OK);
+            .Produces<IReadOnlyList<PersonResponse>>();
 
         group.MapGet("/{personId:guid}", GetAsync)
             .WithName("GetPerson")
             .WithSummary("获取人员")
-            .Produces<PersonResponse>(StatusCodes.Status200OK)
+            .Produces<PersonResponse>()
             .ProducesProblem(StatusCodes.Status404NotFound);
 
         group.MapPost("", CreateAsync)
@@ -41,7 +41,7 @@ internal static class PeopleEndpoints
             .RequireRateLimiting("configuration")
             .WithName("UpdatePerson")
             .WithSummary("更新人员")
-            .Produces<PersonResponse>(StatusCodes.Status200OK)
+            .Produces<PersonResponse>()
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict);
@@ -58,7 +58,7 @@ internal static class PeopleEndpoints
         group.MapGet("/assignments/{assignmentId:guid}", GetAssignmentAsync)
             .WithName("GetApiKeyAssignment")
             .WithSummary("获取 API Key 归属")
-            .Produces<ApiKeyAssignmentResponse>(StatusCodes.Status200OK)
+            .Produces<ApiKeyAssignmentResponse>()
             .ProducesProblem(StatusCodes.Status404NotFound);
 
         group.MapPost("/{personId:guid}/assignments", CreateAssignmentAsync)
@@ -76,7 +76,7 @@ internal static class PeopleEndpoints
             .RequireRateLimiting("configuration")
             .WithName("UpdateApiKeyAssignment")
             .WithSummary("更新 API Key 归属有效期")
-            .Produces<ApiKeyAssignmentResponse>(StatusCodes.Status200OK)
+            .Produces<ApiKeyAssignmentResponse>()
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict);

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Sub2ApiReport.Domain.Audit;
 using Sub2ApiReport.Domain.People;
+using Sub2ApiReport.Domain.Reports;
 using Sub2ApiReport.Domain.Security;
 using Sub2ApiReport.Domain.Sub2Api;
 using Sub2ApiReport.Domain.System;
@@ -28,6 +29,8 @@ public sealed class ReportDbContext(DbContextOptions<ReportDbContext> options)
     public DbSet<Person> People => Set<Person>();
 
     public DbSet<PersonApiKeyAssignment> PersonApiKeyAssignments => Set<PersonApiKeyAssignment>();
+
+    public DbSet<ReportSnapshot> ReportSnapshots => Set<ReportSnapshot>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

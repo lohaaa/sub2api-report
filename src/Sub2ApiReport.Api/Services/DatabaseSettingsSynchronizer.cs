@@ -10,7 +10,7 @@ internal sealed class DatabaseSettingsSynchronizer(
     ILogger<DatabaseSettingsSynchronizer> logger) : BackgroundService
 {
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(5);
-    private long appliedRevision;
+    private long _appliedRevision;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -31,7 +31,7 @@ internal sealed class DatabaseSettingsSynchronizer(
             var settingsService = scope.ServiceProvider.GetRequiredService<ISystemSettingsService>();
             var settings = await settingsService.GetAsync(cancellationToken);
 
-            if (settings.Revision == appliedRevision)
+            if (settings.Revision == _appliedRevision)
             {
                 return;
             }
@@ -46,7 +46,7 @@ internal sealed class DatabaseSettingsSynchronizer(
             }
 
             loggingLevelSwitch.MinimumLevel = level;
-            appliedRevision = settings.Revision;
+            _appliedRevision = settings.Revision;
             DatabaseSettingsLog.Applied(logger, settings.Revision);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

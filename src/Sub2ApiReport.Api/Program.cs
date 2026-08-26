@@ -2,13 +2,11 @@ using System.Globalization;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
-using Microsoft.EntityFrameworkCore;
 using Serilog;
 using Serilog.Core;
 using Serilog.Events;
@@ -23,7 +21,7 @@ using Sub2ApiReport.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var loggingLevelSwitch = new LoggingLevelSwitch(LogEventLevel.Information);
+var loggingLevelSwitch = new LoggingLevelSwitch();
 builder.Services.AddSingleton(loggingLevelSwitch);
 builder.Services.AddSerilog((services, loggerConfiguration) => loggerConfiguration
     .MinimumLevel.ControlledBy(loggingLevelSwitch)
@@ -68,7 +66,7 @@ Directory.CreateDirectory(dataProtectionKeysPath);
 builder.Services.AddDataProtection()
     .SetApplicationName("Sub2ApiReport")
     .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysPath));
-builder.Services.AddInfrastructure(connectionString);
+_ = builder.Services.AddInfrastructure(connectionString);
 builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme)
     .AddIdentityCookies();
 builder.Services.ConfigureApplicationCookie(options =>
@@ -192,12 +190,13 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
     Predicate = registration => registration.Tags.Contains("ready"),
 });
 
-app.MapSecurityEndpoints();
-app.MapSetupEndpoints();
-app.MapAuthEndpoints();
-app.MapSystemEndpoints();
-app.MapSub2ApiEndpoints();
-app.MapPeopleEndpoints();
+_ = app.MapSecurityEndpoints()
+    .MapSetupEndpoints()
+    .MapAuthEndpoints()
+    .MapSystemEndpoints()
+    .MapSub2ApiEndpoints()
+    .MapPeopleEndpoints()
+    .MapReportEndpoints();
 
 app.UseDefaultFiles();
 app.UseStaticFiles(new StaticFileOptions

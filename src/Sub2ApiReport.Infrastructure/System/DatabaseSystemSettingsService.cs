@@ -35,6 +35,7 @@ internal sealed class DatabaseSystemSettingsService(
             command.Timezone,
             command.ReleaseChannel,
             command.LogLevel,
+            command.ReportConcurrency,
             command.ReportRetentionMonths,
             command.BackupRetentionCount,
             timeProvider.GetUtcNow());
@@ -57,6 +58,7 @@ internal sealed class DatabaseSystemSettingsService(
         setting.Timezone,
         setting.ReleaseChannel,
         setting.LogLevel,
+        setting.ReportConcurrency,
         setting.ReportRetentionMonths,
         setting.BackupRetentionCount,
         setting.Revision,

@@ -12,7 +12,7 @@ internal sealed class DatabaseSub2ApiConnectionService(
     TimeProvider timeProvider) : ISub2ApiConnectionService
 {
     private const string ProtectorPurpose = "Sub2ApiReport.Sub2Api.AdminApiKey.v1";
-    private readonly IDataProtector protector = dataProtectionProvider.CreateProtector(ProtectorPurpose);
+    private readonly IDataProtector _protector = dataProtectionProvider.CreateProtector(ProtectorPurpose);
 
     public async Task<Sub2ApiConnectionSnapshot?> GetAsync(CancellationToken cancellationToken)
     {
@@ -50,7 +50,7 @@ internal sealed class DatabaseSub2ApiConnectionService(
 
             connection = Sub2ApiConnection.Create(
                 baseUrl,
-                protector.Protect(secret),
+                _protector.Protect(secret),
                 CreateSuffix(secret),
                 command.UserId,
                 command.CodexGroupId,
@@ -68,7 +68,7 @@ internal sealed class DatabaseSub2ApiConnectionService(
 
             connection.Update(
                 baseUrl,
-                secret is null ? null : protector.Protect(secret),
+                secret is null ? null : _protector.Protect(secret),
                 secret is null ? null : CreateSuffix(secret),
                 command.ClearAdminApiKey,
                 command.UserId,
@@ -105,7 +105,7 @@ internal sealed class DatabaseSub2ApiConnectionService(
 
         return new Sub2ApiConnectionCredentials(
             connection.BaseUrl,
-            protector.Unprotect(connection.AdminApiKeyCiphertext),
+            _protector.Unprotect(connection.AdminApiKeyCiphertext),
             connection.UserId,
             connection.CodexGroupId,
             connection.Revision);

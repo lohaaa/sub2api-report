@@ -105,13 +105,99 @@ public sealed class Sub2ApiClientTests
     [Fact]
     public async Task ClientClassifiesTimeouts()
     {
-        var client = CreateClient(new StubHandler((_, _, _) =>
-            throw new TaskCanceledException("synthetic timeout")));
+        var handler = new StubHandler((_, _, _) =>
+            throw new TaskCanceledException("synthetic timeout"));
+        var client = CreateClient(handler);
 
         var exception = await Assert.ThrowsAsync<Sub2ApiClientException>(() =>
             client.TestAsync(Connection, CancellationToken.None));
 
         Assert.Equal(Sub2ApiFailureKind.Timeout, exception.Kind);
+        Assert.Equal(3, handler.CallCount);
+    }
+
+    [Fact]
+    public async Task ClientReadsUsageStatsWithClosedNaturalDayRange()
+    {
+        Uri? requestedUri = null;
+        var handler = new StubHandler((request, _, _) =>
+        {
+            requestedUri = request.RequestUri;
+            return Task.FromResult(Json("""
+                {
+                  "code": 0,
+                  "data": {
+                    "total_requests": 12,
+                    "total_input_tokens": 100,
+                    "total_output_tokens": 50,
+                    "total_cache_tokens": 25,
+                    "total_cache_creation_tokens": 10,
+                    "total_cache_read_tokens": 15,
+                    "total_tokens": 175,
+                    "total_cost": 1.234567890123456789,
+                    "total_actual_cost": 0.987654321098765432,
+                    "average_duration_ms": 123.45,
+                    "future_field": true
+                  }
+                }
+                """));
+        });
+        var client = CreateClient(handler);
+
+        var stats = await client.GetUsageStatsAsync(
+            Connection,
+            101,
+            new DateOnly(2026, 7, 2),
+            new DateOnly(2026, 7, 31),
+            "Asia/Shanghai",
+            CancellationToken.None);
+
+        Assert.NotNull(requestedUri);
+        Assert.Equal("/api/v1/admin/usage/stats", requestedUri.AbsolutePath);
+        Assert.Contains("user_id=42", requestedUri.Query, StringComparison.Ordinal);
+        Assert.Contains("api_key_id=101", requestedUri.Query, StringComparison.Ordinal);
+        Assert.Contains("group_id=7", requestedUri.Query, StringComparison.Ordinal);
+        Assert.Contains("start_date=2026-07-02", requestedUri.Query, StringComparison.Ordinal);
+        Assert.Contains("end_date=2026-07-31", requestedUri.Query, StringComparison.Ordinal);
+        Assert.Contains("timezone=Asia%2FShanghai", requestedUri.Query, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("nocache=true", requestedUri.Query, StringComparison.Ordinal);
+        Assert.Equal(12, stats.TotalRequests);
+        Assert.Equal(175, stats.TotalTokens);
+        Assert.Equal(1.234567890123456789m, stats.TotalCost);
+        Assert.Equal(0.987654321098765432m, stats.TotalActualCost);
+    }
+
+    [Fact]
+    public async Task ClientRejectsNegativeUsageStats()
+    {
+        var client = CreateClient(new StubHandler((_, _, _) => Task.FromResult(Json("""
+            {
+              "code": 0,
+              "data": {
+                "total_requests": -1,
+                "total_input_tokens": 0,
+                "total_output_tokens": 0,
+                "total_cache_tokens": 0,
+                "total_cache_creation_tokens": 0,
+                "total_cache_read_tokens": 0,
+                "total_tokens": 0,
+                "total_cost": 0,
+                "total_actual_cost": 0,
+                "average_duration_ms": 0
+              }
+            }
+            """))));
+
+        var exception = await Assert.ThrowsAsync<Sub2ApiClientException>(() =>
+            client.GetUsageStatsAsync(
+                Connection,
+                101,
+                new DateOnly(2026, 7, 2),
+                new DateOnly(2026, 7, 31),
+                "Asia/Shanghai",
+                CancellationToken.None));
+
+        Assert.Equal(Sub2ApiFailureKind.InvalidResponse, exception.Kind);
     }
 
     [Fact]

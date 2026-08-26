@@ -1,6 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using Sub2ApiReport.Application.Sub2Api;
-using Sub2ApiReport.Domain.People;
 using Sub2ApiReport.Domain.Sub2Api;
 using Sub2ApiReport.Infrastructure.Persistence;
 
@@ -127,7 +126,7 @@ internal sealed class DatabaseKeyInventoryService(
             ? []
             : await dbContext.PersonApiKeyAssignments
                 .AsNoTracking()
-                .Where(assignment => keyIds.Contains(assignment.ExternalApiKeyId))
+                .Where(assignment => Enumerable.Contains(keyIds, assignment.ExternalApiKeyId))
                 .OrderBy(assignment => assignment.ValidFrom)
                 .Select(assignment => new AssignmentProjection(
                     assignment.ExternalApiKeyId,

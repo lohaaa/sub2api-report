@@ -12,6 +12,10 @@ internal sealed class ExternalApiKeyConfiguration : IEntityTypeConfiguration<Ext
         builder.HasKey(key => key.Id);
         builder.Property(key => key.NameSnapshot).HasMaxLength(200).IsRequired();
         builder.Property(key => key.Status).HasMaxLength(32).IsRequired();
+        builder.HasOne(key => key.Sub2ApiUser)
+            .WithMany()
+            .HasForeignKey(key => key.Sub2ApiUserId)
+            .OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(key => key.ExternalId).IsUnique();
         builder.HasIndex(key => new { key.RetiredAt, key.Status, key.ExternalId });
         builder.ToTable(table => table.HasCheckConstraint(

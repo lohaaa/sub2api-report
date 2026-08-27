@@ -1,0 +1,49 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "API (.NET)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "dev: prepare API",
+      "program": "${workspaceFolder}/src/Sub2ApiReport.Api/bin/Debug/net10.0/Sub2ApiReport.Api.dll",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "stopAtEntry": false,
+      "justMyCode": true,
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ASPNETCORE_URLS": "http://127.0.0.1:5080",
+        "SUB2API_REPORT_DATABASE": "Data Source=${workspaceFolder}/data/vscode/db/sub2api-report.db;Foreign Keys=True;Default Timeout=5;Pooling=True",
+        "DataProtection__KeysPath": "${workspaceFolder}/data/vscode/keys"
+      }
+    },
+    {
+      "name": "Web (Vite + Chrome)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "pnpm run dev --host 127.0.0.1 --port 5173 --strictPort",
+      "cwd": "${workspaceFolder}/web",
+      "serverReadyAction": {
+        "pattern": "Local:\\s+(https?://\\S+)",
+        "uriFormat": "%s",
+        "action": "debugWithChrome",
+        "webRoot": "${workspaceFolder}/web"
+      }
+    }
+  ],
+  "compounds": [
+    {
+      "name": "API + Web（一键启动/重启）",
+      "configurations": [
+        "API (.NET)",
+        "Web (Vite + Chrome)"
+      ],
+      "stopAll": true,
+      "presentation": {
+        "group": "development",
+        "order": 1
+      }
+    }
+  ]
+}

@@ -22,16 +22,16 @@ public sealed class M3ManagementFlowTests
         using var client = CreateClient(factory);
 
         using var connectionResponse = await client.GetAsync("/api/v1/sub2api/connection");
-        using var peopleResponse = await client.GetAsync("/api/v1/people");
+        using var usersResponse = await client.GetAsync("/api/v1/sub2api/users");
         using var keysResponse = await client.GetAsync("/api/v1/sub2api/keys");
 
         Assert.Equal(HttpStatusCode.Unauthorized, connectionResponse.StatusCode);
-        Assert.Equal(HttpStatusCode.Unauthorized, peopleResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, usersResponse.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, keysResponse.StatusCode);
     }
 
     [Fact]
-    public async Task AdministratorCanConfigureSynchronizeAndAssignKeysWithoutPersistingSecrets()
+    public async Task AdministratorCanConfigureSynchronizeKeysWithoutPersistingSecrets()
     {
         var upstream = new StubSub2ApiClient
         {
@@ -97,7 +97,19 @@ public sealed class M3ManagementFlowTests
         var tested = Assert.IsType<Sub2ApiConnectionTestResponse>(
             await testResponse.Content.ReadFromJsonAsync<Sub2ApiConnectionTestResponse>());
         Assert.True(tested.Succeeded);
-        Assert.Equal(2, tested.AvailableKeyCount);
+        Assert.Equal(1, tested.AvailableUserCount);
+
+        using var usersSync = await SendJsonAsync<object?>(client, HttpMethod.Post, "/api/v1/sub2api/users/sync", null);
+        Assert.Equal(HttpStatusCode.OK, usersSync.StatusCode);
+        var userScope = Assert.IsType<Sub2ApiUserScopeResponse>(
+            await client.GetFromJsonAsync<Sub2ApiUserScopeResponse>("/api/v1/sub2api/users"));
+        var targetUser = Assert.Single(userScope.Users);
+        using var scopeUpdate = await SendJsonAsync(
+            client,
+            HttpMethod.Put,
+            "/api/v1/sub2api/users/scope",
+            new { mode = "SelectedUsers", selectedUserIds = new[] { targetUser.Id }, revision = userScope.ConnectionRevision });
+        Assert.Equal(HttpStatusCode.OK, scopeUpdate.StatusCode);
 
         using var firstSyncResponse = await SendJsonAsync<object?>(
             client,
@@ -122,43 +134,10 @@ public sealed class M3ManagementFlowTests
         Assert.Equal(2, unchangedInventory?.Total);
         upstream.Failure = null;
 
-        var firstPerson = await CreatePersonAsync(client, "person-a", "合成人员 A");
-        var secondPerson = await CreatePersonAsync(client, "person-b", "合成人员 B");
         var inventory = await client.GetFromJsonAsync<ApiKeyInventoryPageResponse>(
             "/api/v1/sub2api/keys?page=1&pageSize=50");
         Assert.NotNull(inventory);
-        Assert.Equal(2, inventory.Diagnostics.UnmappedKeys);
-        var firstKey = inventory.Items.Single(item => item.ExternalId == "101");
-
-        using var assignmentResponse = await SendJsonAsync(
-            client,
-            HttpMethod.Post,
-            $"/api/v1/people/{firstPerson.Id}/assignments",
-            new
-            {
-                externalApiKeyId = firstKey.Id,
-                validFrom = "2026-01-01",
-                validTo = (string?)null,
-            });
-        Assert.Equal(HttpStatusCode.Created, assignmentResponse.StatusCode);
-
-        using var overlappingResponse = await SendJsonAsync(
-            client,
-            HttpMethod.Post,
-            $"/api/v1/people/{secondPerson.Id}/assignments",
-            new
-            {
-                externalApiKeyId = firstKey.Id,
-                validFrom = "2026-08-01",
-                validTo = (string?)null,
-            });
-        Assert.Equal(HttpStatusCode.Conflict, overlappingResponse.StatusCode);
-
-        inventory = await client.GetFromJsonAsync<ApiKeyInventoryPageResponse>(
-            "/api/v1/sub2api/keys?page=1&pageSize=50");
-        Assert.NotNull(inventory);
-        Assert.Equal(1, inventory.Diagnostics.UnmappedKeys);
-        Assert.Equal(0, inventory.Diagnostics.OverlappingAssignments);
+        Assert.Equal("user@example.com", inventory.Items.Single(item => item.ExternalId == "101").SourceUserEmail);
 
         upstream.Keys = [Key(101, "Alpha renamed", "inactive")];
         using var secondSyncResponse = await SendJsonAsync<object?>(
@@ -176,7 +155,6 @@ public sealed class M3ManagementFlowTests
         Assert.NotNull(inventory);
         Assert.Equal("Alpha renamed", inventory.Items.Single(item => item.ExternalId == "101").Name);
         Assert.NotNull(inventory.Items.Single(item => item.ExternalId == "102").RetiredAt);
-        Assert.Equal(1, inventory.Diagnostics.UnmappedKeys);
         Assert.Equal(1, inventory.Diagnostics.RetiredKeys);
 
         await using var auditScope = factory.Services.CreateAsyncScope();
@@ -190,7 +168,6 @@ public sealed class M3ManagementFlowTests
         baseUrl = "https://sub2api.example.com",
         adminApiKey,
         clearAdminApiKey = false,
-        userId = "42",
         codexGroupId = "7",
         revision = 0,
     };
@@ -201,20 +178,6 @@ public sealed class M3ManagementFlowTests
         status,
         7,
         null);
-
-    private static async Task<PersonResponse> CreatePersonAsync(
-        HttpClient client,
-        string code,
-        string displayName)
-    {
-        using var response = await SendJsonAsync(
-            client,
-            HttpMethod.Post,
-            "/api/v1/people",
-            new { code, displayName });
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        return Assert.IsType<PersonResponse>(await response.Content.ReadFromJsonAsync<PersonResponse>());
-    }
 
     private static HttpClient CreateClient(ApiWebApplicationFactory factory) => factory.CreateClient(
         new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions
@@ -286,16 +249,24 @@ public sealed class M3ManagementFlowTests
         public Task<Sub2ApiConnectionProbe> TestAsync(
             Sub2ApiConnectionCredentials connection,
             CancellationToken cancellationToken) =>
-            Task.FromResult(new Sub2ApiConnectionProbe(Keys.Count));
+            Task.FromResult(new Sub2ApiConnectionProbe(1));
+
+        public Task<IReadOnlyList<Sub2ApiExternalUser>> GetUsersAsync(
+            Sub2ApiConnectionCredentials connection,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<Sub2ApiExternalUser>>(
+                [new Sub2ApiExternalUser(42, "user@example.com", "synthetic-user", "active")]);
 
         public Task<IReadOnlyList<Sub2ApiExternalKey>> GetApiKeysAsync(
             Sub2ApiConnectionCredentials connection,
+            long externalUserId,
             CancellationToken cancellationToken) => Failure is null
             ? Task.FromResult(Keys)
             : Task.FromException<IReadOnlyList<Sub2ApiExternalKey>>(Failure);
 
         public Task<Sub2ApiUsageStats> GetUsageStatsAsync(
             Sub2ApiConnectionCredentials connection,
+            long externalUserId,
             long externalApiKeyId,
             DateOnly startDate,
             DateOnly endDate,

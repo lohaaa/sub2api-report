@@ -14,18 +14,17 @@ public sealed record ApiKeyInventoryPageResponse(
 public sealed record ApiKeyInventoryItemResponse(
     Guid Id,
     string ExternalId,
+    string? SourceUserId,
+    string? SourceUserEmail,
     string Name,
     string Status,
     string? GroupId,
     DateTimeOffset? LastUsedAt,
     DateTimeOffset LastSeenAt,
-    DateTimeOffset? RetiredAt,
-    IReadOnlyList<ApiKeyAssignmentResponse> Assignments);
+    DateTimeOffset? RetiredAt);
 
-/// <summary>Reports mapping consistency counts for the synchronized Key inventory.</summary>
+/// <summary>Reports inventory consistency counts for the synchronized Key inventory.</summary>
 public sealed record ApiKeyInventoryDiagnosticsResponse(
-    int UnmappedKeys,
-    int OverlappingAssignments,
     int RetiredKeys);
 
 /// <summary>Reports the result of a completed all-or-nothing Sub2API Key synchronization.</summary>

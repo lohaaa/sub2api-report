@@ -10,6 +10,10 @@ public sealed class ExternalApiKey
 
     public long ExternalId { get; private init; }
 
+    public Guid? Sub2ApiUserId { get; private set; }
+
+    public Sub2ApiUser? Sub2ApiUser { get; private set; }
+
     public string NameSnapshot { get; private set; } = string.Empty;
 
     public string Status { get; private set; } = string.Empty;
@@ -23,6 +27,7 @@ public sealed class ExternalApiKey
     public DateTimeOffset? RetiredAt { get; private set; }
 
     public static ExternalApiKey Create(
+        Guid sub2ApiUserId,
         long externalId,
         string name,
         string status,
@@ -31,6 +36,7 @@ public sealed class ExternalApiKey
         DateTimeOffset seenAt) => new()
         {
             Id = Guid.NewGuid(),
+            Sub2ApiUserId = ValidateUserId(sub2ApiUserId),
             ExternalId = ValidateExternalId(externalId),
             NameSnapshot = ValidateText(name, 200, nameof(name)),
             Status = ValidateText(status, 32, nameof(status)).ToLowerInvariant(),
@@ -38,6 +44,11 @@ public sealed class ExternalApiKey
             LastUsedAt = lastUsedAt,
             LastSeenAt = seenAt,
         };
+
+    public void AssignUser(Guid userId)
+    {
+        Sub2ApiUserId = ValidateUserId(userId);
+    }
 
     public bool ApplySnapshot(
         string name,
@@ -74,6 +85,10 @@ public sealed class ExternalApiKey
         RetiredAt = retiredAt;
         return true;
     }
+
+    private static Guid ValidateUserId(Guid value) => value != Guid.Empty
+        ? value
+        : throw new ArgumentException("The Sub2API user identifier is required.", nameof(value));
 
     private static long ValidateExternalId(long value) => value > 0
         ? value

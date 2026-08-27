@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Sub2ApiReport.Domain.Audit;
-using Sub2ApiReport.Domain.People;
+using Sub2ApiReport.Domain.Notifications;
 using Sub2ApiReport.Domain.Reports;
 using Sub2ApiReport.Domain.Security;
 using Sub2ApiReport.Domain.Sub2Api;
@@ -24,13 +24,21 @@ public sealed class ReportDbContext(DbContextOptions<ReportDbContext> options)
 
     public DbSet<Sub2ApiConnection> Sub2ApiConnections => Set<Sub2ApiConnection>();
 
+    public DbSet<Sub2ApiUser> Sub2ApiUsers => Set<Sub2ApiUser>();
+
     public DbSet<ExternalApiKey> ExternalApiKeys => Set<ExternalApiKey>();
 
-    public DbSet<Person> People => Set<Person>();
-
-    public DbSet<PersonApiKeyAssignment> PersonApiKeyAssignments => Set<PersonApiKeyAssignment>();
-
     public DbSet<ReportSnapshot> ReportSnapshots => Set<ReportSnapshot>();
+
+    public DbSet<ReportGenerationRun> ReportGenerationRuns => Set<ReportGenerationRun>();
+
+    public DbSet<NotificationChannel> NotificationChannels => Set<NotificationChannel>();
+
+    public DbSet<ReportRun> ReportRuns => Set<ReportRun>();
+
+    public DbSet<DeliveryRecord> DeliveryRecords => Set<DeliveryRecord>();
+
+    public DbSet<DeliveryPart> DeliveryParts => Set<DeliveryPart>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

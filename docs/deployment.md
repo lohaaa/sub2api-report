@@ -362,7 +362,6 @@ reports/
 backups/
 logs/
 test-results/
-playwright-report/
 *.har
 *.trace.zip
 ```

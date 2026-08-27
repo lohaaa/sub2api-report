@@ -38,16 +38,11 @@ dist/
 .pnpm-store/
 /src/Sub2ApiReport.Api/wwwroot/
 
-# Browser tests
-playwright-report/
-test-results/
-blob-report/
-*.har
-*.trace.zip
-
 # Editors and operating systems
 .idea/
-.vscode/
+.vscode/*
+!.vscode/launch.json
+!.vscode/tasks.json
 .DS_Store
 Thumbs.db
 

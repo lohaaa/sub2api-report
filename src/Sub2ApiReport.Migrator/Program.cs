@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -17,6 +19,8 @@ var connectionString = DatabaseDefaults.ResolveConnectionString(
     builder.Environment.ContentRootPath);
 
 EnsureDatabaseDirectory(connectionString);
+_ = builder.Services.AddAuthentication();
+_ = builder.Services.AddDataProtection();
 _ = builder.Services.AddInfrastructure(connectionString);
 
 using var host = builder.Build();

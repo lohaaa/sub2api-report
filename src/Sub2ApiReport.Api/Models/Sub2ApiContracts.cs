@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Sub2ApiReport.Domain.Sub2Api;
 
 namespace Sub2ApiReport.Api.Models;
 
@@ -8,13 +9,15 @@ public sealed record Sub2ApiConnectionResponse(
     string? BaseUrl,
     bool HasAdminApiKey,
     string? AdminApiKeyMask,
-    string? UserId,
+    string UserScopeMode,
     string? CodexGroupId,
     long Revision,
     DateTimeOffset? UpdatedAt,
     DateTimeOffset? LastTestedAt,
     bool? LastTestSucceeded,
     string? LastTestCode,
+    DateTimeOffset? LastUsersSynchronizedAt,
+    int? LastSynchronizedUserCount,
     DateTimeOffset? LastSynchronizedAt,
     int? LastSynchronizedKeyCount);
 
@@ -29,9 +32,6 @@ public sealed record SaveSub2ApiConnectionRequest
 
     public bool ClearAdminApiKey { get; init; }
 
-    [Required, RegularExpression("^[1-9][0-9]{0,18}$")]
-    public required string UserId { get; init; }
-
     [RegularExpression("^[1-9][0-9]{0,18}$")]
     public string? CodexGroupId { get; init; }
 
@@ -44,5 +44,5 @@ public sealed record Sub2ApiConnectionTestResponse(
     bool Succeeded,
     string Code,
     string Message,
-    long? AvailableKeyCount,
+    long? AvailableUserCount,
     DateTimeOffset TestedAt);

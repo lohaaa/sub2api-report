@@ -12,6 +12,8 @@ internal sealed class DatabaseReportService(
     ReportDbContext dbContext,
     ISub2ApiClient sub2ApiClient,
     ISub2ApiConnectionService connectionService,
+    ISub2ApiUserService userService,
+    IKeyInventoryService keyInventoryService,
     ISystemSettingsService settingsService,
     TimeProvider timeProvider) : IReportService
 {
@@ -19,106 +21,111 @@ internal sealed class DatabaseReportService(
         GenerateReportCommand command,
         CancellationToken cancellationToken)
     {
-        var settings = await settingsService.GetAsync(cancellationToken);
-        var timezone = ResolveTimezone(settings.Timezone);
-        var localToday = DateOnly.FromDateTime(
-            TimeZoneInfo.ConvertTime(timeProvider.GetUtcNow(), timezone).Date);
-        var latestCutoffDate = localToday.AddDays(-1);
-        var cutoffDate = command.CutoffDate ?? latestCutoffDate;
-        if (cutoffDate > latestCutoffDate)
-        {
-            throw new ReportGenerationPreconditionException(
-                "The report cutoff date must be earlier than the current local date.");
-        }
-
-        if (cutoffDate.DayNumber < 29)
-        {
-            throw new ReportGenerationPreconditionException(
-                "The report cutoff date is too early to form a 30-day window.");
-        }
-
-        var credentials = await connectionService.GetCredentialsAsync(cancellationToken);
-        var keys = await dbContext.ExternalApiKeys
-            .AsNoTracking()
-            .OrderBy(key => key.ExternalId)
-            .Select(key => new KeySnapshot(
-                key.Id,
-                key.ExternalId,
-                key.NameSnapshot,
-                key.Status,
-                key.LastUsedAt,
-                key.RetiredAt))
-            .ToListAsync(cancellationToken);
-        if (keys.Count == 0)
-        {
-            throw new ReportGenerationPreconditionException(
-                "Synchronize the Sub2API key inventory before generating a report.");
-        }
-
-        var thirtyDayStart = cutoffDate.AddDays(-29);
-        var sevenDayStart = cutoffDate.AddDays(-6);
-        var assignments = await dbContext.PersonApiKeyAssignments
-            .AsNoTracking()
-            .Where(assignment =>
-                assignment.ValidFrom <= cutoffDate
-                && (assignment.ValidTo == null || assignment.ValidTo >= thirtyDayStart))
-            .Select(assignment => new AssignmentSnapshot(
-                assignment.ExternalApiKeyId,
-                assignment.PersonId,
-                assignment.Person.Code,
-                assignment.Person.DisplayName,
-                assignment.ValidFrom,
-                assignment.ValidTo))
-            .ToListAsync(cancellationToken);
-        var assignmentsByKey = assignments
-            .GroupBy(assignment => assignment.ExternalApiKeyId)
-            .ToDictionary(group => group.Key, group => (IReadOnlyList<AssignmentSnapshot>)group.ToArray());
-
-        var work = keys
-            .SelectMany(key => BuildSegments(
-                key,
-                assignmentsByKey.GetValueOrDefault(key.Id) ?? [],
-                thirtyDayStart,
-                sevenDayStart,
-                cutoffDate))
-            .ToArray();
-        var results = await CollectAsync(
-            work,
-            credentials,
-            settings.Timezone,
-            settings.ReportConcurrency,
-            cancellationToken);
-        var generatedAt = timeProvider.GetUtcNow();
-        var reportId = Guid.NewGuid();
-        var document = BuildDocument(
-            reportId,
-            generatedAt,
-            settings.Timezone,
-            credentials.Revision,
-            sevenDayStart,
-            thirtyDayStart,
-            cutoffDate,
-            keys,
-            results);
-        var canonicalJson = ReportCanonicalSerializer.Serialize(document);
-        var report = ReportSnapshot.Create(
-            document.ReportId,
-            document.Status,
-            document.Trigger,
-            cutoffDate,
-            document.Timezone,
-            document.ConnectionRevision,
-            document.GeneratedAt,
-            document.People.Count,
-            document.Keys.Count,
-            document.Diagnostics.FailedSegments.Count,
-            document.Diagnostics.UnassignedSegments.Count,
-            document.SevenDayTotal.TotalActualCost,
-            document.ThirtyDayTotal.TotalActualCost,
-            canonicalJson);
-        dbContext.ReportSnapshots.Add(report);
+        var run = dbContext.ReportGenerationRuns.Add(ReportGenerationRun.Start(
+            ReportTrigger.ManualDryRun,
+            0,
+            timeProvider.GetUtcNow())).Entity;
         await dbContext.SaveChangesAsync(cancellationToken);
-        return document;
+        var stage = "prepare";
+        try
+        {
+            var settings = await settingsService.GetAsync(cancellationToken);
+            var timezone = ResolveTimezone(settings.Timezone);
+            var localToday = DateOnly.FromDateTime(
+                TimeZoneInfo.ConvertTime(timeProvider.GetUtcNow(), timezone).Date);
+            var latestCutoffDate = localToday.AddDays(-1);
+            var cutoffDate = command.CutoffDate ?? latestCutoffDate;
+            if (cutoffDate > latestCutoffDate)
+            {
+                throw new ReportGenerationPreconditionException(
+                    "The report cutoff date must be earlier than the current local date.");
+            }
+
+            if (cutoffDate.DayNumber < 29)
+            {
+                throw new ReportGenerationPreconditionException(
+                    "The report cutoff date is too early to form a 30-day window.");
+            }
+
+            var credentials = await connectionService.GetCredentialsAsync(cancellationToken);
+            run.MarkConnectionRevision(credentials.Revision);
+            await dbContext.SaveChangesAsync(cancellationToken);
+
+            stage = "user_sync";
+            await userService.SynchronizeAsync(cancellationToken);
+
+            stage = "key_sync";
+            await keyInventoryService.SynchronizeAsync(cancellationToken);
+
+            stage = "collect";
+            var keys = await LoadKeySnapshotsAsync(cutoffDate, cancellationToken);
+            if (keys.Count == 0)
+            {
+                throw new ReportGenerationPreconditionException(
+                    "所选 Sub2API 用户暂无 API Key，请检查统计用户范围。");
+            }
+
+            var thirtyDayStart = cutoffDate.AddDays(-29);
+            var sevenDayStart = cutoffDate.AddDays(-6);
+            var results = await CollectAsync(
+                keys,
+                credentials,
+                settings.Timezone,
+                settings.ReportConcurrency,
+                sevenDayStart,
+                thirtyDayStart,
+                cutoffDate,
+                cancellationToken);
+
+            stage = "snapshot";
+            var generatedAt = timeProvider.GetUtcNow();
+            var reportId = Guid.NewGuid();
+            var document = BuildDocument(
+                reportId,
+                generatedAt,
+                settings.Timezone,
+                credentials.Revision,
+                sevenDayStart,
+                thirtyDayStart,
+                cutoffDate,
+                keys,
+                results);
+            var canonicalJson = ReportCanonicalSerializer.Serialize(document);
+            var report = ReportSnapshot.Create(
+                document.ReportId,
+                document.Status,
+                document.Trigger,
+                cutoffDate,
+                document.Timezone,
+                document.ConnectionRevision,
+                document.GeneratedAt,
+                document.Users.Count,
+                document.Keys.Count,
+                document.Diagnostics.FailedRanges.Count,
+                document.SevenDayTotal.TotalActualCost,
+                document.ThirtyDayTotal.TotalActualCost,
+                canonicalJson);
+            dbContext.ReportSnapshots.Add(report);
+            run.MarkSucceeded(report.Id, timeProvider.GetUtcNow());
+            await dbContext.SaveChangesAsync(cancellationToken);
+            return document;
+        }
+        catch (Exception exception) when (exception is
+            Sub2ApiClientException or
+            Sub2ApiUserScopeException or
+            Sub2ApiConnectionNotConfiguredException or
+            Sub2ApiConnectionConflictException or
+            ReportGenerationPreconditionException)
+        {
+            run.MarkFailed(
+                stage,
+                DescribeErrorCode(exception),
+                DescribeErrorMessage(exception),
+                run.ConnectionRevision,
+                timeProvider.GetUtcNow());
+            await dbContext.SaveChangesAsync(cancellationToken);
+            throw;
+        }
     }
 
     public async Task<ReportPage> GetPageAsync(
@@ -146,10 +153,9 @@ internal sealed class DatabaseReportService(
                 report.CutoffDate,
                 report.Timezone,
                 report.GeneratedAt,
-                report.PersonCount,
+                report.UserCount,
                 report.KeyCount,
-                report.FailedSegmentCount,
-                report.UnassignedSegmentCount,
+                report.FailedRangeCount,
                 report.SevenDayActualCost,
                 report.ThirtyDayActualCost))
             .ToListAsync(cancellationToken);
@@ -157,14 +163,55 @@ internal sealed class DatabaseReportService(
         return new ReportPage(items, total, page, pageSize, pages);
     }
 
+    public async Task<ReportGenerationRunPage> GetGenerationRunsAsync(
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        if (page < 1 || pageSize is < 1 or > 100)
+        {
+            throw new ArgumentOutOfRangeException(nameof(page), "The generation run page is invalid.");
+        }
+
+        var total = await dbContext.ReportGenerationRuns.CountAsync(cancellationToken);
+        var items = await dbContext.ReportGenerationRuns
+            .AsNoTracking()
+            .OrderByDescending(item => item.StartedAtUnixMilliseconds)
+            .ThenByDescending(item => item.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(item => new ReportGenerationRunItem(
+                item.Id,
+                item.Trigger,
+                item.Status,
+                item.Stage,
+                item.ErrorCode,
+                item.ErrorMessage,
+                item.ConnectionRevision,
+                item.StartedAt,
+                item.CompletedAt,
+                item.ReportSnapshotId))
+            .ToListAsync(cancellationToken);
+        var pages = total == 0 ? 0 : (int)Math.Ceiling(total / (double)pageSize);
+        return new ReportGenerationRunPage(items, total, page, pageSize, pages);
+    }
+
     public async Task<ReportDocument?> GetAsync(Guid id, CancellationToken cancellationToken)
     {
-        var canonicalJson = await dbContext.ReportSnapshots
+        var snapshot = await dbContext.ReportSnapshots
             .AsNoTracking()
             .Where(report => report.Id == id)
-            .Select(report => report.CanonicalJson)
+            .Select(report => new { report.SchemaVersion, report.CanonicalJson })
             .SingleOrDefaultAsync(cancellationToken);
-        return canonicalJson is null ? null : ReportCanonicalSerializer.Deserialize(canonicalJson);
+        if (snapshot is null)
+        {
+            return null;
+        }
+
+        return snapshot.SchemaVersion >= ReportSnapshot.CurrentSchemaVersion
+            ? ReportCanonicalSerializer.Deserialize(snapshot.CanonicalJson)
+            : LegacyReportDocumentMapper.MapFromLegacy(
+                ReportCanonicalSerializer.DeserializeLegacy(snapshot.CanonicalJson));
     }
 
     public async Task<ReportCsv?> GetCsvAsync(Guid id, CancellationToken cancellationToken)
@@ -179,18 +226,60 @@ internal sealed class DatabaseReportService(
                     $"sub2api-report-{report.ThirtyDayWindow.EndDate:yyyy-MM-dd}.csv"));
     }
 
-    private async Task<IReadOnlyList<SegmentResult>> CollectAsync(
-        IReadOnlyList<WorkSegment> work,
+    private async Task<IReadOnlyList<KeySnapshot>> LoadKeySnapshotsAsync(
+        DateOnly cutoffDate,
+        CancellationToken cancellationToken)
+    {
+        var scopeMode = await dbContext.Sub2ApiConnections.AsNoTracking()
+            .Where(item => item.Id == Domain.Sub2Api.Sub2ApiConnection.SingletonId)
+            .Select(item => item.UserScopeMode)
+            .SingleAsync(cancellationToken);
+        var keys = await dbContext.ExternalApiKeys
+            .AsNoTracking()
+            .Where(key => key.Sub2ApiUser != null
+                && key.Sub2ApiUser.RetiredAt == null
+                && key.Sub2ApiUser.Status == "active"
+                && (scopeMode == Domain.Sub2Api.Sub2ApiUserScopeMode.AllActiveUsers
+                    || key.Sub2ApiUser.IsSelected))
+            .OrderBy(key => key.Sub2ApiUser!.ExternalId)
+            .ThenBy(key => key.ExternalId)
+            .Select(key => new KeySnapshot(
+                key.Id,
+                key.Sub2ApiUser!.Id,
+                key.Sub2ApiUser.ExternalId,
+                key.Sub2ApiUser.EmailSnapshot,
+                key.Sub2ApiUser.UsernameSnapshot,
+                key.ExternalId,
+                key.NameSnapshot,
+                key.Status,
+                key.LastUsedAt,
+                key.RetiredAt))
+            .ToListAsync(cancellationToken);
+        return keys;
+    }
+
+    private async Task<IReadOnlyList<WindowResult>> CollectAsync(
+        IReadOnlyList<KeySnapshot> keys,
         Sub2ApiConnectionCredentials credentials,
         string timezone,
         int maximumConcurrency,
+        DateOnly sevenDayStart,
+        DateOnly thirtyDayStart,
+        DateOnly cutoffDate,
         CancellationToken cancellationToken)
     {
+        var work = keys
+            .SelectMany(key => new WorkWindow[]
+            {
+                new(key, sevenDayStart, cutoffDate, true),
+                new(key, thirtyDayStart, cutoffDate, false),
+            })
+            .ToArray();
         using var semaphore = new SemaphoreSlim(maximumConcurrency, maximumConcurrency);
-        var tasks = new Task<SegmentResult>[work.Count];
-        for (var index = 0; index < work.Count; index++)
+        var tasks = new Task<WindowResult>[work.Length];
+        for (var index = 0; index < work.Length; index++)
         {
-            tasks[index] = CollectSegmentAsync(
+            tasks[index] = CollectWindowAsync(
                 work[index],
                 credentials,
                 timezone,
@@ -201,8 +290,8 @@ internal sealed class DatabaseReportService(
         return await Task.WhenAll(tasks);
     }
 
-    private async Task<SegmentResult> CollectSegmentAsync(
-        WorkSegment segment,
+    private async Task<WindowResult> CollectWindowAsync(
+        WorkWindow window,
         Sub2ApiConnectionCredentials credentials,
         string timezone,
         SemaphoreSlim semaphore,
@@ -213,16 +302,17 @@ internal sealed class DatabaseReportService(
         {
             var stats = await sub2ApiClient.GetUsageStatsAsync(
                 credentials,
-                segment.Key.ExternalId,
-                segment.StartDate,
-                segment.EndDate,
+                window.Key.ExternalUserId,
+                window.Key.ExternalId,
+                window.StartDate,
+                window.EndDate,
                 timezone,
                 cancellationToken);
-            return new SegmentResult(segment, Map(stats), null);
+            return new WindowResult(window, Map(stats), null);
         }
         catch (Sub2ApiClientException exception)
         {
-            return new SegmentResult(segment, null, exception.Kind);
+            return new WindowResult(window, null, exception);
         }
         finally
         {
@@ -239,123 +329,93 @@ internal sealed class DatabaseReportService(
         DateOnly thirtyDayStart,
         DateOnly cutoffDate,
         IReadOnlyList<KeySnapshot> keys,
-        IReadOnlyList<SegmentResult> results)
+        IReadOnlyList<WindowResult> results)
     {
-        var sevenDayTotal = new MetricsAccumulator();
-        var thirtyDayTotal = new MetricsAccumulator();
-        var personUsage = new Dictionary<Guid, PersonAccumulator>();
-        var failed = new List<ReportSegmentDiagnostic>();
-        var unassigned = new List<ReportSegmentDiagnostic>();
-        var conflicting = new List<ReportSegmentDiagnostic>();
-        var hasMaterialUnassignedUsage = false;
-
-        foreach (var result in results)
-        {
-            var segment = result.Segment;
-            foreach (var owner in segment.Owners)
-            {
-                personUsage.TryAdd(
-                    owner.PersonId,
-                    new PersonAccumulator(owner.PersonId, owner.Code, owner.DisplayName));
-            }
-
-            if (result.FailureKind is { } failureKind)
-            {
-                failed.Add(CreateDiagnostic(segment, "upstream_failure", failureKind));
-                if (segment.Owners.Count == 0)
-                {
-                    unassigned.Add(CreateDiagnostic(segment, "unassigned", null));
-                }
-
-                if (segment.Owners.Count > 1)
-                {
-                    conflicting.Add(CreateDiagnostic(segment, "assignment_conflict", null));
-                }
-
-                continue;
-            }
-
-            var metrics = result.Metrics!;
-            thirtyDayTotal.Add(metrics);
-            if (segment.StartDate >= sevenDayStart)
-            {
-                sevenDayTotal.Add(metrics);
-            }
-
-            if (segment.Owners.Count == 1)
-            {
-                var owner = segment.Owners[0];
-                var accumulator = personUsage[owner.PersonId];
-                accumulator.KeyIds.Add(segment.Key.Id);
-                accumulator.ThirtyDay.Add(metrics);
-                if (segment.StartDate >= sevenDayStart)
-                {
-                    accumulator.SevenDay.Add(metrics);
-                }
-            }
-            else if (segment.Owners.Count == 0)
-            {
-                unassigned.Add(CreateDiagnostic(segment, "unassigned", null));
-                hasMaterialUnassignedUsage |= !IsZero(metrics);
-            }
-            else
-            {
-                conflicting.Add(CreateDiagnostic(segment, "assignment_conflict", null));
-            }
-        }
-
+        var resultsByKey = results
+            .GroupBy(result => result.Window.Key.Id)
+            .ToDictionary(group => group.Key, group => group.ToArray());
+        var userAccumulators = new Dictionary<Guid, UserAccumulator>();
         var keyUsage = keys.Select(key =>
         {
-            var keyResults = results
-                .Where(result => result.Segment.Key.Id == key.Id)
-                .OrderBy(result => result.Segment.StartDate)
-                .ToArray();
+            var keyResults = resultsByKey.GetValueOrDefault(key.Id) ?? [];
             var sevenDay = new MetricsAccumulator();
             var thirtyDay = new MetricsAccumulator();
-            foreach (var result in keyResults.Where(result => result.Metrics is not null))
+            foreach (var result in keyResults)
             {
-                thirtyDay.Add(result.Metrics!);
-                if (result.Segment.StartDate >= sevenDayStart)
+                if (result.Metrics is null)
                 {
-                    sevenDay.Add(result.Metrics!);
+                    continue;
+                }
+
+                if (result.Window.IsSevenDay)
+                {
+                    sevenDay.Add(result.Metrics);
+                }
+                else
+                {
+                    thirtyDay.Add(result.Metrics);
                 }
             }
 
+            var accumulator = userAccumulators.TryGetValue(key.UserId, out var existing)
+                ? existing
+                : userAccumulators[key.UserId] = new UserAccumulator(
+                    key.UserId,
+                    key.ExternalUserId,
+                    key.UserEmail,
+                    key.Username);
+            accumulator.SevenDay.Add(sevenDay.ToMetrics(), 1);
+            accumulator.ThirtyDay.Add(thirtyDay.ToMetrics(), 1);
             return new ReportKeyUsage(
                 key.Id,
                 key.ExternalId.ToString(CultureInfo.InvariantCulture),
+                key.ExternalUserId,
+                key.UserEmail,
                 key.Name,
                 key.Status,
                 key.LastUsedAt,
                 key.RetiredAt,
                 sevenDay.ToMetrics(),
-                thirtyDay.ToMetrics(),
-                keyResults.Select(MapSegment).ToArray());
+                thirtyDay.ToMetrics());
         }).ToArray();
-        var zeroUsageKeyIds = keyUsage
-            .Where(key =>
-                key.Segments.All(segment => segment.FailureKind is null)
-                && IsZero(key.ThirtyDay))
-            .Select(key => key.ExternalId)
+        var failedRanges = results
+            .Where(result => result.Exception is not null)
+            .Select(result => new ReportRangeFailure(
+                result.Window.Key.ExternalUserId,
+                result.Window.Key.UserEmail,
+                result.Window.Key.ExternalId,
+                result.Window.Key.Name,
+                result.Window.StartDate,
+                result.Window.EndDate,
+                result.Exception!.Kind,
+                DescribeFailureCode(result.Exception.Kind)))
+            .OrderBy(item => item.ExternalUserId)
+            .ThenBy(item => item.ExternalKeyId)
+            .ThenBy(item => item.StartDate)
             .ToArray();
-        var status = failed.Count > 0 || conflicting.Count > 0 || hasMaterialUnassignedUsage
-            ? ReportStatus.Partial
-            : ReportStatus.Complete;
-        var people = personUsage.Values
-            .OrderBy(person => person.Code, StringComparer.Ordinal)
-            .Select(person => new ReportPersonUsage(
-                person.PersonId,
-                person.Code,
-                person.DisplayName,
-                person.KeyIds.Count,
-                person.SevenDay.ToMetrics(),
-                person.ThirtyDay.ToMetrics()))
+        var users = userAccumulators.Values
+            .OrderBy(user => user.ExternalUserId)
+            .Select(user => new ReportUserUsage(
+                user.UserId,
+                user.ExternalUserId,
+                user.Username,
+                user.Email,
+                user.SevenDay.KeyCount,
+                user.SevenDay.ToMetrics(),
+                user.ThirtyDay.ToMetrics()))
             .ToArray();
+        var sevenDayTotal = new MetricsAccumulator();
+        var thirtyDayTotal = new MetricsAccumulator();
+        foreach (var user in users)
+        {
+            sevenDayTotal.Add(user.SevenDay, 0);
+            thirtyDayTotal.Add(user.ThirtyDay, 0);
+        }
 
         return new ReportDocument(
             ReportSnapshot.CurrentSchemaVersion,
             reportId,
-            status,
+            failedRanges.Length == 0 ? ReportStatus.Complete : ReportStatus.Partial,
             ReportTrigger.ManualDryRun,
             generatedAt,
             timezone,
@@ -364,83 +424,10 @@ internal sealed class DatabaseReportService(
             new ReportWindow(30, thirtyDayStart, cutoffDate),
             sevenDayTotal.ToMetrics(),
             thirtyDayTotal.ToMetrics(),
-            people,
+            users,
             keyUsage,
-            new ReportDiagnostics(failed, unassigned, conflicting, zeroUsageKeyIds));
+            new ReportDiagnostics(failedRanges));
     }
-
-    private static List<WorkSegment> BuildSegments(
-        KeySnapshot key,
-        IReadOnlyList<AssignmentSnapshot> assignments,
-        DateOnly thirtyDayStart,
-        DateOnly sevenDayStart,
-        DateOnly cutoffDate)
-    {
-        var endExclusive = cutoffDate.AddDays(1);
-        var boundaries = new SortedSet<DateOnly> { thirtyDayStart, sevenDayStart, endExclusive };
-        foreach (var assignment in assignments)
-        {
-            if (assignment.ValidFrom > thirtyDayStart && assignment.ValidFrom <= cutoffDate)
-            {
-                boundaries.Add(assignment.ValidFrom);
-            }
-
-            if (assignment.ValidTo is { } validTo && validTo >= thirtyDayStart && validTo < cutoffDate)
-            {
-                boundaries.Add(validTo.AddDays(1));
-            }
-        }
-
-        var points = boundaries.ToArray();
-        var segments = new List<WorkSegment>(points.Length - 1);
-        for (var index = 0; index < points.Length - 1; index++)
-        {
-            var startDate = points[index];
-            var segmentEnd = points[index + 1].AddDays(-1);
-            var owners = assignments
-                .Where(assignment =>
-                    assignment.ValidFrom <= startDate
-                    && (assignment.ValidTo is null || assignment.ValidTo >= startDate))
-                .OrderBy(assignment => assignment.Code, StringComparer.Ordinal)
-                .ToArray();
-            segments.Add(new WorkSegment(key, startDate, segmentEnd, owners));
-        }
-
-        return segments;
-    }
-
-    private static ReportKeySegment MapSegment(SegmentResult result)
-    {
-        var segment = result.Segment;
-        var owner = segment.Owners.Count == 1 ? segment.Owners[0] : null;
-        var code = result.FailureKind is not null
-            ? "upstream_failure"
-            : segment.Owners.Count == 0
-                ? "unassigned"
-                : segment.Owners.Count > 1
-                    ? "assignment_conflict"
-                    : null;
-        return new ReportKeySegment(
-            segment.StartDate,
-            segment.EndDate,
-            owner?.PersonId,
-            owner?.Code,
-            owner?.DisplayName,
-            result.Metrics,
-            result.FailureKind,
-            code);
-    }
-
-    private static ReportSegmentDiagnostic CreateDiagnostic(
-        WorkSegment segment,
-        string code,
-        Sub2ApiFailureKind? failureKind) => new(
-            segment.Key.ExternalId.ToString(CultureInfo.InvariantCulture),
-            segment.Key.Name,
-            segment.StartDate,
-            segment.EndDate,
-            code,
-            failureKind);
 
     private static ReportUsageMetrics Map(Sub2ApiUsageStats stats) => new(
         stats.TotalRequests,
@@ -454,15 +441,43 @@ internal sealed class DatabaseReportService(
         stats.TotalActualCost,
         stats.AverageDurationMs);
 
-    private static bool IsZero(ReportUsageMetrics metrics) => metrics is
+    private static string DescribeFailureCode(Sub2ApiFailureKind kind) => kind switch
     {
-        TotalRequests: 0,
-        TotalInputTokens: 0,
-        TotalOutputTokens: 0,
-        TotalCacheTokens: 0,
-        TotalTokens: 0,
-        TotalCost: 0,
-        TotalActualCost: 0,
+        Sub2ApiFailureKind.Unauthorized => "unauthorized",
+        Sub2ApiFailureKind.Forbidden => "forbidden",
+        Sub2ApiFailureKind.Incompatible => "incompatible",
+        Sub2ApiFailureKind.RateLimited => "rate-limited",
+        Sub2ApiFailureKind.Timeout => "timeout",
+        Sub2ApiFailureKind.Unavailable => "unavailable",
+        _ => "invalid-response",
+    };
+
+    private static string DescribeErrorCode(Exception exception) => exception switch
+    {
+        Sub2ApiClientException client => DescribeFailureCode(client.Kind),
+        Sub2ApiUserScopeException => "user-scope",
+        Sub2ApiConnectionNotConfiguredException => "connection-not-configured",
+        Sub2ApiConnectionConflictException => "connection-changed",
+        _ => "precondition",
+    };
+
+    private static string DescribeErrorMessage(Exception exception) => exception switch
+    {
+        Sub2ApiClientException client => client.Kind switch
+        {
+            Sub2ApiFailureKind.Unauthorized => "Admin API Key 无效，无法刷新 Sub2API 数据。",
+            Sub2ApiFailureKind.Forbidden => "Admin API Key 没有读取目标用户的权限。",
+            Sub2ApiFailureKind.Incompatible => "当前 Sub2API 部署不支持所需的同步接口。",
+            Sub2ApiFailureKind.RateLimited => "Sub2API 暂时限流，请稍后重试。",
+            Sub2ApiFailureKind.Timeout => "连接 Sub2API 超时，报告未生成。",
+            Sub2ApiFailureKind.Unavailable => "Sub2API 当前不可用，报告未生成。",
+            _ => "Sub2API 返回了无法识别的数据，报告未生成。",
+        },
+        Sub2ApiUserScopeException or
+        Sub2ApiConnectionNotConfiguredException or
+        Sub2ApiConnectionConflictException or
+        ReportGenerationPreconditionException => exception.Message,
+        _ => exception.Message,
     };
 
     private static TimeZoneInfo ResolveTimezone(string timezone)
@@ -479,43 +494,40 @@ internal sealed class DatabaseReportService(
 
     private sealed record KeySnapshot(
         Guid Id,
+        Guid UserId,
+        long ExternalUserId,
+        string UserEmail,
+        string? Username,
         long ExternalId,
         string Name,
         string Status,
         DateTimeOffset? LastUsedAt,
         DateTimeOffset? RetiredAt);
 
-    private sealed record AssignmentSnapshot(
-        Guid ExternalApiKeyId,
-        Guid PersonId,
-        string Code,
-        string DisplayName,
-        DateOnly ValidFrom,
-        DateOnly? ValidTo);
-
-    private sealed record WorkSegment(
+    private sealed record WorkWindow(
         KeySnapshot Key,
         DateOnly StartDate,
         DateOnly EndDate,
-        IReadOnlyList<AssignmentSnapshot> Owners);
+        bool IsSevenDay);
 
-    private sealed record SegmentResult(
-        WorkSegment Segment,
+    private sealed record WindowResult(
+        WorkWindow Window,
         ReportUsageMetrics? Metrics,
-        Sub2ApiFailureKind? FailureKind);
+        Sub2ApiClientException? Exception);
 
-    private sealed class PersonAccumulator(
-        Guid personId,
-        string code,
-        string displayName)
+    private sealed class UserAccumulator(
+        Guid userId,
+        long externalUserId,
+        string email,
+        string? username)
     {
-        public Guid PersonId { get; } = personId;
+        public Guid UserId { get; } = userId;
 
-        public string Code { get; } = code;
+        public long ExternalUserId { get; } = externalUserId;
 
-        public string DisplayName { get; } = displayName;
+        public string Email { get; } = email;
 
-        public HashSet<Guid> KeyIds { get; } = [];
+        public string? Username { get; } = username;
 
         public MetricsAccumulator SevenDay { get; } = new();
 
@@ -534,6 +546,9 @@ internal sealed class DatabaseReportService(
         private decimal _totalCost;
         private decimal _totalActualCost;
         private decimal _weightedDuration;
+        private int _keyCount;
+
+        public int KeyCount => _keyCount;
 
         public void Add(ReportUsageMetrics metrics)
         {
@@ -550,6 +565,12 @@ internal sealed class DatabaseReportService(
                 _totalActualCost += metrics.TotalActualCost;
                 _weightedDuration += metrics.AverageDurationMs * metrics.TotalRequests;
             }
+        }
+
+        public void Add(ReportUsageMetrics metrics, int keyCount)
+        {
+            _keyCount += keyCount;
+            Add(metrics);
         }
 
         public ReportUsageMetrics ToMetrics() => new(

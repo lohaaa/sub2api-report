@@ -1,3 +1,5 @@
+using Sub2ApiReport.Domain.Sub2Api;
+
 namespace Sub2ApiReport.Application.Sub2Api;
 
 public interface ISub2ApiConnectionService
@@ -20,13 +22,15 @@ public sealed record Sub2ApiConnectionSnapshot(
     string BaseUrl,
     bool HasAdminApiKey,
     string? AdminApiKeyMask,
-    long UserId,
+    Sub2ApiUserScopeMode UserScopeMode,
     long? CodexGroupId,
     long Revision,
     DateTimeOffset UpdatedAt,
     DateTimeOffset? LastTestedAt,
     bool? LastTestSucceeded,
     string? LastTestCode,
+    DateTimeOffset? LastUsersSynchronizedAt,
+    int? LastSynchronizedUserCount,
     DateTimeOffset? LastSynchronizedAt,
     int? LastSynchronizedKeyCount);
 
@@ -34,14 +38,12 @@ public sealed record SaveSub2ApiConnectionCommand(
     string BaseUrl,
     string? AdminApiKey,
     bool ClearAdminApiKey,
-    long UserId,
     long? CodexGroupId,
     long ExpectedRevision);
 
 public sealed record Sub2ApiConnectionCredentials(
     string BaseUrl,
     string AdminApiKey,
-    long UserId,
     long? CodexGroupId,
     long Revision);
 

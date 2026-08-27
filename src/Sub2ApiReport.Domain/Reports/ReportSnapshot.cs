@@ -13,7 +13,7 @@ public enum ReportTrigger
 
 public sealed class ReportSnapshot
 {
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = 3;
 
     private ReportSnapshot()
     {
@@ -37,13 +37,11 @@ public sealed class ReportSnapshot
 
     public long GeneratedAtUnixMilliseconds { get; private init; }
 
-    public int PersonCount { get; private init; }
+    public int UserCount { get; private init; }
 
     public int KeyCount { get; private init; }
 
-    public int FailedSegmentCount { get; private init; }
-
-    public int UnassignedSegmentCount { get; private init; }
+    public int FailedRangeCount { get; private init; }
 
     public decimal SevenDayActualCost { get; private init; }
 
@@ -59,10 +57,9 @@ public sealed class ReportSnapshot
         string timezone,
         long connectionRevision,
         DateTimeOffset generatedAt,
-        int personCount,
+        int userCount,
         int keyCount,
-        int failedSegmentCount,
-        int unassignedSegmentCount,
+        int failedRangeCount,
         decimal sevenDayActualCost,
         decimal thirtyDayActualCost,
         string canonicalJson)
@@ -79,9 +76,9 @@ public sealed class ReportSnapshot
             throw new ArgumentException("The report configuration snapshot is invalid.");
         }
 
-        if (personCount < 0 || keyCount < 0 || failedSegmentCount < 0 || unassignedSegmentCount < 0)
+        if (userCount < 0 || keyCount < 0 || failedRangeCount < 0)
         {
-            throw new ArgumentOutOfRangeException(nameof(personCount), "Report counts cannot be negative.");
+            throw new ArgumentOutOfRangeException(nameof(userCount), "Report counts cannot be negative.");
         }
 
         if (sevenDayActualCost < 0 || thirtyDayActualCost < 0)
@@ -100,10 +97,9 @@ public sealed class ReportSnapshot
             ConnectionRevision = connectionRevision,
             GeneratedAt = generatedAt,
             GeneratedAtUnixMilliseconds = generatedAt.ToUnixTimeMilliseconds(),
-            PersonCount = personCount,
+            UserCount = userCount,
             KeyCount = keyCount,
-            FailedSegmentCount = failedSegmentCount,
-            UnassignedSegmentCount = unassignedSegmentCount,
+            FailedRangeCount = failedRangeCount,
             SevenDayActualCost = sevenDayActualCost,
             ThirtyDayActualCost = thirtyDayActualCost,
             CanonicalJson = canonicalJson,

@@ -30,7 +30,9 @@ import {
   ApiError,
   downloadReportCsv,
   generateReport,
+  getReportGenerationRuns,
   getReports,
+  type ReportGenerationStatus,
   type ReportStatus,
 } from '@/lib/api-client'
 import { formatCost, formatDate, formatTimestamp } from './report-format'
@@ -50,8 +52,13 @@ export function ReportsPage() {
     mutationFn: () => generateReport(cutoffDate || null),
     onSuccess: async (report) => {
       await queryClient.invalidateQueries({ queryKey: ['reports'] })
+      await queryClient.invalidateQueries({ queryKey: ['report-generations'] })
       navigate(`/reports/${report.reportId}`)
     },
+  })
+  const generationsQuery = useQuery({
+    queryKey: ['report-generations'],
+    queryFn: ({ signal }) => getReportGenerationRuns(1, signal),
   })
 
   function handleGenerate(event: FormEvent<HTMLFormElement>) {
@@ -121,7 +128,7 @@ export function ReportsPage() {
             <TableRow>
               <TableHead scope="col">截止日</TableHead>
               <TableHead scope="col">状态</TableHead>
-              <TableHead scope="col" className="text-right">人员 / Key</TableHead>
+              <TableHead scope="col" className="text-right">用户 / Key</TableHead>
               <TableHead scope="col" className="text-right">7 日费用</TableHead>
               <TableHead scope="col" className="text-right">30 日费用</TableHead>
               <TableHead scope="col">生成时间</TableHead>
@@ -141,7 +148,7 @@ export function ReportsPage() {
                       <TableCell className="font-medium">{formatDate(report.cutoffDate)}</TableCell>
                       <TableCell><ReportStatusBadge status={report.status} /></TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {report.personCount} / {report.keyCount}
+                        {report.userCount} / {report.keyCount}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{formatCost(report.sevenDayActualCost)}</TableCell>
                       <TableCell className="text-right tabular-nums">{formatCost(report.thirtyDayActualCost)}</TableCell>
@@ -203,8 +210,69 @@ export function ReportsPage() {
           </Button>
         </nav>
       ) : null}
+
+      <section aria-labelledby="generation-runs-title" className="border-y">
+        <h2 id="generation-runs-title" className="py-3 text-sm font-semibold">最近生成记录</h2>
+        <Table>
+          <TableCaption>包含自动刷新失败的阶段与错误信息</TableCaption>
+          <TableHeader>
+            <TableRow>
+              <TableHead scope="col">开始时间</TableHead>
+              <TableHead scope="col">状态</TableHead>
+              <TableHead scope="col">失败阶段</TableHead>
+              <TableHead scope="col">错误信息</TableHead>
+              <TableHead scope="col" className="text-right">报告</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {generationsQuery.isPending
+              ? (
+                  <TableRow>
+                    <TableCell colSpan={5}><Skeleton className="h-8 w-full" /></TableCell>
+                  </TableRow>
+                )
+              : generationsQuery.data?.items.length
+                ? generationsQuery.data.items.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell>{formatTimestamp(item.startedAt)}</TableCell>
+                      <TableCell><GenerationStatusBadge status={item.status} /></TableCell>
+                      <TableCell>{item.stage ?? '—'}</TableCell>
+                      <TableCell>{item.errorMessage ?? '—'}</TableCell>
+                      <TableCell>
+                        {item.reportSnapshotId
+                          ? (
+                              <Link
+                                className={buttonVariants({ variant: 'ghost', size: 'sm' })}
+                                to={`/reports/${item.reportSnapshotId}`}
+                              >
+                                <EyeIcon data-icon="inline-start" />
+                                查看
+                              </Link>
+                            )
+                            : '—'}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                : (
+                    <TableRow>
+                      <TableCell colSpan={5} className="h-16 text-center text-muted-foreground">
+                        暂无生成记录
+                      </TableCell>
+                    </TableRow>
+                  )}
+          </TableBody>
+        </Table>
+      </section>
     </div>
   )
+}
+
+function GenerationStatusBadge({ status }: { status: ReportGenerationStatus }) {
+  return status === 'Succeeded'
+    ? <Badge variant="secondary">成功</Badge>
+    : status === 'Failed'
+      ? <Badge variant="outline">失败</Badge>
+      : <Badge variant="outline">运行中</Badge>
 }
 
 export function ReportStatusBadge({ status }: { status: ReportStatus }) {

@@ -30,7 +30,7 @@ import { logout } from '@/lib/api-client'
 
 const navigation = [
   { title: '工作台', to: '/', icon: ChartNoAxesCombinedIcon },
-  { title: '人员与 Key', to: '/people', icon: UsersIcon },
+  { title: 'API Keys', to: '/keys', icon: UsersIcon },
   { title: '报告记录', to: '/reports', icon: FileChartColumnIcon },
   { title: '发送渠道', to: '/channels', icon: MegaphoneIcon },
   { title: '计划任务', to: '/schedule', icon: CalendarClockIcon },

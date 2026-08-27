@@ -122,88 +122,334 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                     b.ToTable("AuditEvents", (string)null);
                 });
 
-            modelBuilder.Entity("Sub2ApiReport.Domain.People.Person", b =>
+            modelBuilder.Entity("Sub2ApiReport.Domain.Notifications.NotificationChannel", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("Code")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .UseCollation("NOCASE");
+                    b.Property<string>("CcAddressesJson")
+                        .HasMaxLength(4096)
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("DisplayName")
-                        .IsRequired()
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("FromAddress")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FromName")
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
 
-                    b.Property<bool>("IsActive")
+                    b.Property<string>("LastTestCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool?>("LastTestSucceeded")
                         .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset?>("LastTestedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("SignSecretCiphertext")
+                        .HasMaxLength(16384)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SignSecretSuffix")
+                        .HasMaxLength(8)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SmtpHost")
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SmtpPasswordCiphertext")
+                        .HasMaxLength(16384)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SmtpPasswordSuffix")
+                        .HasMaxLength(8)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("SmtpPort")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SmtpSecurity")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SmtpUsername")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ToAddressesJson")
+                        .HasMaxLength(4096)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("WebhookCiphertext")
+                        .HasMaxLength(4096)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("WebhookSuffix")
+                        .HasMaxLength(8)
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Code")
-                        .IsUnique();
-
-                    b.HasIndex("IsActive", "DisplayName");
-
-                    b.ToTable("People", null, t =>
+                    b.ToTable("NotificationChannels", null, t =>
                         {
-                            t.HasCheckConstraint("CK_People_Revision", "Revision > 0");
+                            t.HasCheckConstraint("CK_NotificationChannels_EmailExclusive", "Type = 'Email' OR (SmtpHost IS NULL AND SmtpPort IS NULL AND SmtpSecurity IS NULL AND SmtpUsername IS NULL AND FromAddress IS NULL AND FromName IS NULL AND ToAddressesJson IS NULL AND CcAddressesJson IS NULL AND SmtpPasswordCiphertext IS NULL AND SmtpPasswordSuffix IS NULL)");
+
+                            t.HasCheckConstraint("CK_NotificationChannels_EmailFields", "Type <> 'Email' OR (SmtpHost IS NOT NULL AND SmtpPort IS NOT NULL AND SmtpSecurity IS NOT NULL AND FromAddress IS NOT NULL AND ToAddressesJson IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_NotificationChannels_EmailSecret", "Type <> 'Email' OR (SmtpPasswordCiphertext IS NULL AND SmtpPasswordSuffix IS NULL) OR (SmtpPasswordCiphertext IS NOT NULL AND SmtpPasswordSuffix IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_NotificationChannels_Name", "length(Name) >= 1");
+
+                            t.HasCheckConstraint("CK_NotificationChannels_Revision", "Revision > 0");
+
+                            t.HasCheckConstraint("CK_NotificationChannels_WebhookExclusive", "Type IN ('DingTalk', 'Feishu') OR (WebhookCiphertext IS NULL AND WebhookSuffix IS NULL AND SignSecretCiphertext IS NULL AND SignSecretSuffix IS NULL)");
+
+                            t.HasCheckConstraint("CK_NotificationChannels_WebhookFields", "Type NOT IN ('DingTalk', 'Feishu') OR (WebhookCiphertext IS NOT NULL AND WebhookSuffix IS NOT NULL AND SignSecretCiphertext IS NOT NULL AND SignSecretSuffix IS NOT NULL)");
                         });
                 });
 
-            modelBuilder.Entity("Sub2ApiReport.Domain.People.PersonApiKeyAssignment", b =>
+            modelBuilder.Entity("Sub2ApiReport.Domain.Reports.DeliveryPart", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<Guid>("ExternalApiKeyId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<Guid>("PersonId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<long>("Revision")
-                        .IsConcurrencyToken()
+                    b.Property<int>("Attempts")
                         .HasColumnType("INTEGER");
 
-                    b.Property<DateTimeOffset>("UpdatedAt")
+                    b.Property<Guid>("DeliveryId")
                         .HasColumnType("TEXT");
 
-                    b.Property<DateOnly>("ValidFrom")
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
-                    b.Property<DateOnly?>("ValidTo")
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("PartCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("PartIndex")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("PayloadHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("SentAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ExternalApiKeyId", "ValidFrom", "ValidTo");
+                    b.HasIndex("DeliveryId", "PartIndex")
+                        .IsUnique();
 
-                    b.HasIndex("PersonId", "ValidFrom", "ValidTo");
-
-                    b.ToTable("PersonApiKeyAssignments", null, t =>
+                    b.ToTable("DeliveryParts", null, t =>
                         {
-                            t.HasCheckConstraint("CK_PersonApiKeyAssignments_DateRange", "ValidTo IS NULL OR ValidTo >= ValidFrom");
+                            t.HasCheckConstraint("CK_DeliveryParts_Attempts", "Attempts >= 0");
 
-                            t.HasCheckConstraint("CK_PersonApiKeyAssignments_Revision", "Revision > 0");
+                            t.HasCheckConstraint("CK_DeliveryParts_Index", "PartIndex >= 0 AND PartCount >= 1 AND PartIndex < PartCount");
+
+                            t.HasCheckConstraint("CK_DeliveryParts_Status", "Status IN ('Pending', 'Succeeded', 'Failed')");
+                        });
+                });
+
+            modelBuilder.Entity("Sub2ApiReport.Domain.Reports.DeliveryRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("ChannelId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ChannelName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ChannelType")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PayloadHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("SentAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChannelId");
+
+                    b.HasIndex("RunId", "ChannelId")
+                        .IsUnique();
+
+                    b.ToTable("DeliveryRecords", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_DeliveryRecords_Attempts", "Attempts >= 0");
+
+                            t.HasCheckConstraint("CK_DeliveryRecords_ChannelType", "ChannelType IN ('Email', 'DingTalk', 'Feishu')");
+
+                            t.HasCheckConstraint("CK_DeliveryRecords_Status", "Status IN ('Pending', 'Sending', 'Succeeded', 'Failed')");
+                        });
+                });
+
+            modelBuilder.Entity("Sub2ApiReport.Domain.Reports.ReportGenerationRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ConnectionRevision")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ReportSnapshotId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Stage")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("StartedAtUnixMilliseconds")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Trigger")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("StartedAt", "Id");
+
+                    b.ToTable("ReportGenerationRuns", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ReportGenerationRuns_Status", "Status IN ('Running', 'Succeeded', 'Failed')");
+                        });
+                });
+
+            modelBuilder.Entity("Sub2ApiReport.Domain.Reports.ReportRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("IdempotencyKey")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ReportSnapshotId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Trigger")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IdempotencyKey")
+                        .IsUnique();
+
+                    b.HasIndex("ReportSnapshotId", "StartedAt");
+
+                    b.ToTable("ReportRuns", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ReportRuns_Completion", "(Status = 'Running' AND CompletedAt IS NULL) OR (Status <> 'Running' AND CompletedAt IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_ReportRuns_Status", "Status IN ('Running', 'Succeeded', 'PartialFailed', 'Failed')");
+
+                            t.HasCheckConstraint("CK_ReportRuns_Trigger", "Trigger = 'ManualDelivery'");
                         });
                 });
 
@@ -223,7 +469,7 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                     b.Property<DateOnly>("CutoffDate")
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("FailedSegmentCount")
+                    b.Property<int>("FailedRangeCount")
                         .HasColumnType("INTEGER");
 
                     b.Property<DateTimeOffset>("GeneratedAt")
@@ -233,9 +479,6 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("KeyCount")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("PersonCount")
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("SchemaVersion")
@@ -264,7 +507,7 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("UnassignedSegmentCount")
+                    b.Property<int>("UserCount")
                         .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
@@ -279,7 +522,7 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
 
                             t.HasCheckConstraint("CK_ReportSnapshots_Costs", "SevenDayActualCost >= 0 AND ThirtyDayActualCost >= 0");
 
-                            t.HasCheckConstraint("CK_ReportSnapshots_Counts", "PersonCount >= 0 AND KeyCount >= 0 AND FailedSegmentCount >= 0 AND UnassignedSegmentCount >= 0");
+                            t.HasCheckConstraint("CK_ReportSnapshots_Counts", "UserCount >= 0 AND KeyCount >= 0 AND FailedRangeCount >= 0");
 
                             t.HasCheckConstraint("CK_ReportSnapshots_SchemaVersion", "SchemaVersion > 0");
                         });
@@ -389,10 +632,15 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("Sub2ApiUserId")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ExternalId")
                         .IsUnique();
+
+                    b.HasIndex("Sub2ApiUserId");
 
                     b.HasIndex("RetiredAt", "Status", "ExternalId");
 
@@ -431,6 +679,9 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                     b.Property<int?>("LastSynchronizedKeyCount")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int?>("LastSynchronizedUserCount")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("LastTestCode")
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
@@ -441,6 +692,13 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("LastTestedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTimeOffset?>("LastUsersSynchronizedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("LegacyUserId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("UserId");
+
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
                         .HasColumnType("INTEGER");
@@ -448,8 +706,12 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("TEXT");
 
-                    b.Property<long>("UserId")
-                        .HasColumnType("INTEGER");
+                    b.Property<string>("UserScopeMode")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("SelectedUsers");
 
                     b.HasKey("Id");
 
@@ -461,7 +723,52 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
 
                             t.HasCheckConstraint("CK_Sub2ApiConnections_Singleton", "Id = 1");
 
-                            t.HasCheckConstraint("CK_Sub2ApiConnections_UserId", "UserId > 0");
+                            t.HasCheckConstraint("CK_Sub2ApiConnections_UserId", "UserId IS NULL OR UserId > 0");
+                        });
+                });
+
+            modelBuilder.Entity("Sub2ApiReport.Domain.Sub2Api.Sub2ApiUser", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EmailSnapshot")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ExternalId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsSelected")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("LastSeenAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("RetiredAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UsernameSnapshot")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExternalId")
+                        .IsUnique();
+
+                    b.HasIndex("RetiredAt", "Status", "IsSelected");
+
+                    b.ToTable("Sub2ApiUsers", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Sub2ApiUsers_ExternalId", "ExternalId > 0");
                         });
                 });
 
@@ -506,7 +813,7 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("SystemSettings");
+                    b.ToTable("SystemSettings", (string)null);
 
                     b.HasData(
                         new
@@ -626,23 +933,41 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("Sub2ApiReport.Domain.People.PersonApiKeyAssignment", b =>
+            modelBuilder.Entity("Sub2ApiReport.Domain.Reports.DeliveryPart", b =>
                 {
-                    b.HasOne("Sub2ApiReport.Domain.Sub2Api.ExternalApiKey", "ExternalApiKey")
+                    b.HasOne("Sub2ApiReport.Domain.Reports.DeliveryRecord", "Delivery")
+                        .WithMany("Parts")
+                        .HasForeignKey("DeliveryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Delivery");
+                });
+
+            modelBuilder.Entity("Sub2ApiReport.Domain.Reports.DeliveryRecord", b =>
+                {
+                    b.HasOne("Sub2ApiReport.Domain.Notifications.NotificationChannel", null)
                         .WithMany()
-                        .HasForeignKey("ExternalApiKeyId")
+                        .HasForeignKey("ChannelId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("Sub2ApiReport.Domain.People.Person", "Person")
-                        .WithMany()
-                        .HasForeignKey("PersonId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                    b.HasOne("Sub2ApiReport.Domain.Reports.ReportRun", "Run")
+                        .WithMany("Deliveries")
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("ExternalApiKey");
+                    b.Navigation("Run");
+                });
 
-                    b.Navigation("Person");
+            modelBuilder.Entity("Sub2ApiReport.Domain.Reports.ReportRun", b =>
+                {
+                    b.HasOne("Sub2ApiReport.Domain.Reports.ReportSnapshot", null)
+                        .WithMany()
+                        .HasForeignKey("ReportSnapshotId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Sub2ApiReport.Domain.Security.RecoveryChallenge", b =>
@@ -652,6 +977,26 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                         .HasForeignKey("AdministratorId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Sub2ApiReport.Domain.Sub2Api.ExternalApiKey", b =>
+                {
+                    b.HasOne("Sub2ApiReport.Domain.Sub2Api.Sub2ApiUser", "Sub2ApiUser")
+                        .WithMany()
+                        .HasForeignKey("Sub2ApiUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Sub2ApiUser");
+                });
+
+            modelBuilder.Entity("Sub2ApiReport.Domain.Reports.DeliveryRecord", b =>
+                {
+                    b.Navigation("Parts");
+                });
+
+            modelBuilder.Entity("Sub2ApiReport.Domain.Reports.ReportRun", b =>
+                {
+                    b.Navigation("Deliveries");
                 });
 #pragma warning restore 612, 618
         }

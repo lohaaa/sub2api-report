@@ -12,7 +12,7 @@ public interface IKeyInventoryService
 public sealed record ApiKeyInventoryQuery(
     int Page,
     int PageSize,
-    bool UnmappedOnly);
+    bool RetiredOnly);
 
 public sealed record KeySynchronizationResult(
     int Added,
@@ -34,24 +34,14 @@ public sealed record ApiKeyInventoryPage(
 public sealed record ApiKeyInventoryItem(
     Guid Id,
     long ExternalId,
+    long? SourceUserId,
+    string? SourceUserEmail,
     string Name,
     string Status,
     long? GroupId,
     DateTimeOffset? LastUsedAt,
     DateTimeOffset LastSeenAt,
-    DateTimeOffset? RetiredAt,
-    IReadOnlyList<ApiKeyAssignmentSnapshot> Assignments);
-
-public sealed record ApiKeyAssignmentSnapshot(
-    Guid Id,
-    Guid PersonId,
-    string PersonCode,
-    string PersonDisplayName,
-    DateOnly ValidFrom,
-    DateOnly? ValidTo,
-    long Revision);
+    DateTimeOffset? RetiredAt);
 
 public sealed record ApiKeyInventoryDiagnostics(
-    int UnmappedKeys,
-    int OverlappingAssignments,
     int RetiredKeys);

@@ -61,7 +61,6 @@ public sealed class DatabaseMigrationTests
         Assert.Equal(initializedAt, migratedSetting.InitializedAt);
         Assert.Equal(4, migratedSetting.ReportConcurrency);
         Assert.Empty(await dbContext.Sub2ApiConnections.AsNoTracking().ToListAsync(CancellationToken.None));
-        Assert.Empty(await dbContext.People.AsNoTracking().ToListAsync(CancellationToken.None));
         Assert.Empty(await dbContext.ExternalApiKeys.AsNoTracking().ToListAsync(CancellationToken.None));
         Assert.Empty(await dbContext.ReportSnapshots.AsNoTracking().ToListAsync(CancellationToken.None));
     }

@@ -10,7 +10,6 @@ public sealed class Sub2ApiClientTests
     private static readonly Sub2ApiConnectionCredentials Connection = new(
         "https://sub2api.example.com",
         "synthetic-admin-key",
-        42,
         7,
         1);
 
@@ -31,7 +30,7 @@ public sealed class Sub2ApiClientTests
         });
         var client = CreateClient(handler);
 
-        var keys = await client.GetApiKeysAsync(Connection, CancellationToken.None);
+        var keys = await client.GetApiKeysAsync(Connection, 42, CancellationToken.None);
 
         Assert.Equal([101, 103], keys.Select(key => key.ExternalId));
         Assert.Equal("Beta", keys[1].Name);
@@ -44,7 +43,7 @@ public sealed class Sub2ApiClientTests
         var client = CreateClient(new StubHandler((_, _, _) =>
             Task.FromResult(Json(PageJson(1, 1, string.Empty, total: 0)))));
 
-        var keys = await client.GetApiKeysAsync(Connection, CancellationToken.None);
+        var keys = await client.GetApiKeysAsync(Connection, 42, CancellationToken.None);
 
         Assert.Empty(keys);
     }
@@ -146,6 +145,7 @@ public sealed class Sub2ApiClientTests
 
         var stats = await client.GetUsageStatsAsync(
             Connection,
+            42,
             101,
             new DateOnly(2026, 7, 2),
             new DateOnly(2026, 7, 31),
@@ -191,6 +191,7 @@ public sealed class Sub2ApiClientTests
         var exception = await Assert.ThrowsAsync<Sub2ApiClientException>(() =>
             client.GetUsageStatsAsync(
                 Connection,
+                42,
                 101,
                 new DateOnly(2026, 7, 2),
                 new DateOnly(2026, 7, 31),

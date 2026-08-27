@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Sub2ApiReport.Application.Sub2Api;
 using Sub2ApiReport.Domain.Reports;
 
@@ -17,6 +18,11 @@ public interface IReportService
     Task<ReportDocument?> GetAsync(Guid id, CancellationToken cancellationToken);
 
     Task<ReportCsv?> GetCsvAsync(Guid id, CancellationToken cancellationToken);
+
+    Task<ReportGenerationRunPage> GetGenerationRunsAsync(
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken);
 }
 
 public sealed record GenerateReportCommand(DateOnly? CutoffDate);
@@ -38,12 +44,30 @@ public sealed record ReportListItem(
     DateOnly CutoffDate,
     string Timezone,
     DateTimeOffset GeneratedAt,
-    int PersonCount,
+    int UserCount,
     int KeyCount,
-    int FailedSegmentCount,
-    int UnassignedSegmentCount,
+    int FailedRangeCount,
     decimal SevenDayActualCost,
     decimal ThirtyDayActualCost);
+
+public sealed record ReportGenerationRunPage(
+    IReadOnlyList<ReportGenerationRunItem> Items,
+    int Total,
+    int Page,
+    int PageSize,
+    int Pages);
+
+public sealed record ReportGenerationRunItem(
+    Guid Id,
+    ReportTrigger Trigger,
+    ReportGenerationStatus Status,
+    string? Stage,
+    string? ErrorCode,
+    string? ErrorMessage,
+    long ConnectionRevision,
+    DateTimeOffset StartedAt,
+    DateTimeOffset? CompletedAt,
+    Guid? ReportSnapshotId);
 
 public sealed record ReportDocument(
     int SchemaVersion,
@@ -57,7 +81,7 @@ public sealed record ReportDocument(
     ReportWindow ThirtyDayWindow,
     ReportUsageMetrics SevenDayTotal,
     ReportUsageMetrics ThirtyDayTotal,
-    IReadOnlyList<ReportPersonUsage> People,
+    IReadOnlyList<ReportUserUsage> Users,
     IReadOnlyList<ReportKeyUsage> Keys,
     ReportDiagnostics Diagnostics);
 
@@ -75,10 +99,11 @@ public sealed record ReportUsageMetrics(
     decimal TotalActualCost,
     decimal AverageDurationMs);
 
-public sealed record ReportPersonUsage(
-    Guid PersonId,
-    string Code,
-    string DisplayName,
+public sealed record ReportUserUsage(
+    Guid UserId,
+    long ExternalUserId,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Username,
+    string Email,
     int KeyCount,
     ReportUsageMetrics SevenDay,
     ReportUsageMetrics ThirtyDay);
@@ -86,37 +111,27 @@ public sealed record ReportPersonUsage(
 public sealed record ReportKeyUsage(
     Guid KeyId,
     string ExternalId,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? SourceUserId,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? SourceUserEmail,
     string Name,
     string Status,
     DateTimeOffset? LastUsedAt,
     DateTimeOffset? RetiredAt,
     ReportUsageMetrics SevenDay,
-    ReportUsageMetrics ThirtyDay,
-    IReadOnlyList<ReportKeySegment> Segments);
-
-public sealed record ReportKeySegment(
-    DateOnly StartDate,
-    DateOnly EndDate,
-    Guid? PersonId,
-    string? PersonCode,
-    string? PersonDisplayName,
-    ReportUsageMetrics? Metrics,
-    Sub2ApiFailureKind? FailureKind,
-    string? DiagnosticCode);
+    ReportUsageMetrics ThirtyDay);
 
 public sealed record ReportDiagnostics(
-    IReadOnlyList<ReportSegmentDiagnostic> FailedSegments,
-    IReadOnlyList<ReportSegmentDiagnostic> UnassignedSegments,
-    IReadOnlyList<ReportSegmentDiagnostic> ConflictingSegments,
-    IReadOnlyList<string> ZeroUsageKeyIds);
+    IReadOnlyList<ReportRangeFailure> FailedRanges);
 
-public sealed record ReportSegmentDiagnostic(
-    string ExternalKeyId,
+public sealed record ReportRangeFailure(
+    long ExternalUserId,
+    string UserEmail,
+    long ExternalKeyId,
     string KeyName,
     DateOnly StartDate,
     DateOnly EndDate,
-    string Code,
-    Sub2ApiFailureKind? FailureKind);
+    Sub2ApiFailureKind? FailureKind,
+    string? ErrorCode);
 
 public sealed class ReportGenerationPreconditionException(string message)
     : InvalidOperationException(message);

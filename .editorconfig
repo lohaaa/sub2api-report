@@ -60,3 +60,7 @@ resharper_not_accessed_positional_property_global_highlighting = none
 # EF Core discovers this factory through IDesignTimeDbContextFactory reflection.
 [src/Sub2ApiReport.Infrastructure/Persistence/DesignTimeReportDbContextFactory.cs]
 resharper_unused_type_global_highlighting = none
+
+# EF migration files are generated and removed only through dotnet-ef.
+[src/Sub2ApiReport.Infrastructure/Persistence/Migrations/*.cs]
+generated_code = true

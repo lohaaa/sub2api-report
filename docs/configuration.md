@@ -19,7 +19,7 @@
 - 备份保留数量；
 - revision 和最后更新时间。
 
-`Sub2ApiConnections` 单例保存 Base URL、目标用户 ID、可选 Codex Group ID、revision、连接测试和同步状态。Admin API Key 使用 ASP.NET Core Data Protection 加密，读取 API 只返回末四位掩码。通知渠道、报告计划、备份策略和升级策略由后续模块分别使用自己的数据库实体保存。
+`Sub2ApiConnections` 单例保存 Base URL、用户范围模式、可选 Codex Group ID、revision、连接测试和同步状态；`Sub2ApiUsers` 保存同步的用户快照与指定用户选择。Admin API Key 使用 ASP.NET Core Data Protection 加密，读取 API 只返回末四位掩码。通知渠道、报告计划、备份策略和升级策略由后续模块分别使用自己的数据库实体保存。
 
 ## 2. 启动配置例外
 

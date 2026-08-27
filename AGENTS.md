@@ -27,6 +27,12 @@ Sub2API Codex 用量，并定时发送报告。
 - 通用前端任务还必须遵守 `modern-web-guidance` Skill
 - 只按任务加载必要 Skill，禁止为了方便一次性引入无关 Skill
 
+## 官方 CLI 优先
+
+有官方 CLI 且仓库已采用时，必须优先使用官方 CLI，禁止用手工修改生成物或自制脚本
+替代官方维护流程。EF migration 只能由 `dotnet ef migrations add/remove` 创建或删除，
+禁止手工编辑 migration 和 model snapshot。
+
 ## 公开仓库安全
 
 本仓库是公开仓库。禁止添加私人聊天记录、真实姓名、个人邮箱、组织标识、
@@ -51,10 +57,10 @@ SQLite 与 Data Protection 绝对路径；不得让 IDE Content Root、当前目
 
 ## 质量验收
 
-涉及 C# 的代码验收必须执行 `pnpm quality:dotnet`；该命令必须包含格式检查、Release
-构建、JetBrains InspectCode 的 `SUGGESTION` 及以上检查和全部 .NET 测试，任何阶段
-出现问题都不得宣称完成。完整里程碑和提交前必须执行 `pnpm quality`，覆盖后端和前端
-全部质量门。
+涉及 C# 的修改，Agent 环境提供 LSP 时可先对相关文件做一次诊断，仅作为辅助，
+不是强制质量门。C# 代码验收必须执行 `pnpm quality:dotnet`，包含格式检查、
+Release 构建和全部 .NET 测试；任何阶段出现问题都不得宣称完成。完整里程碑和
+提交前必须执行 `pnpm quality`，覆盖后端和前端全部质量门。
 
 ## Agent Memory
 
@@ -65,10 +71,12 @@ SQLite 与 Data Protection 绝对路径；不得让 IDE Content Root、当前目
 
 ## 当前开发状态
 
-项目目前处于 0.4.0 报告引擎阶段，已实现安全初始化、Sub2API Key 同步与有效期
-归属、7/30 日手工报告、不可变快照和 UTF-8 BOM CSV。发送渠道、计划任务和在线
-升级尚未实现，不得声称已经存在可运行的正式版本。前端依赖统一使用 pnpm，禁止
-生成 npm 或 Yarn 锁文件。
+项目目前处于 0.6.0 用户与 Key 直接统计阶段：报告统计主体是 Sub2API 用户 →
+API Key（稳定标识 user_id + api_key_id，Key 名称仅保存快照），生成报告前自动
+刷新用户与 Key，刷新失败终止报告并保存可展示的错误记录；人员/Key 归属功能已在
+0.6.0 移除。已实现安全初始化、7/30 日不可变快照和 UTF-8 BOM CSV，以及邮件/钉
+钉/飞书手工投递、逐渠道状态与失败补发。计划任务和在线升级尚未实现，不得声称已
+经存在可运行的正式版本。前端依赖统一使用 pnpm，禁止生成 npm 或 Yarn 锁文件。
 
 ## 文件维护
 

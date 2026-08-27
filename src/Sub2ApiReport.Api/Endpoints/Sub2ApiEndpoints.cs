@@ -44,10 +44,31 @@ internal static class Sub2ApiEndpoints
             .Produces<Sub2ApiConnectionTestResponse>()
             .ProducesProblem(StatusCodes.Status409Conflict);
 
+        group.MapGet("/users", GetUsersAsync)
+            .WithName("GetSub2ApiUsers")
+            .WithSummary("获取 Sub2API 用户与统计范围")
+            .Produces<Sub2ApiUserScopeResponse>();
+
+        group.MapPost("/users/sync", SynchronizeUsersAsync)
+            .RequireAntiforgery()
+            .RequireRateLimiting("external")
+            .WithName("SynchronizeSub2ApiUsers")
+            .WithSummary("同步 Sub2API 用户")
+            .Produces<Sub2ApiUserSynchronizationResponse>();
+
+        group.MapPut("/users/scope", UpdateUserScopeAsync)
+            .RequireAntiforgery()
+            .RequireRateLimiting("configuration")
+            .WithName("UpdateSub2ApiUserScope")
+            .WithSummary("更新报告用户范围")
+            .Produces<Sub2ApiUserScopeResponse>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status409Conflict);
+
         group.MapGet("/keys", GetKeysAsync)
             .WithName("GetSub2ApiKeyInventory")
             .WithSummary("获取已同步的 API Key 清单")
-            .WithDescription("分页返回脱敏 Key 快照、有效期归属和完整性诊断。")
+            .WithDescription("分页返回脱敏 Key 快照与来源用户；报告生成前会自动刷新此清单。")
             .Produces<ApiKeyInventoryPageResponse>()
             .ProducesValidationProblem();
 
@@ -85,17 +106,12 @@ internal static class Sub2ApiEndpoints
     {
         try
         {
-            if (!long.TryParse(
-                    request.UserId,
-                    NumberStyles.None,
-                    CultureInfo.InvariantCulture,
-                    out var userId)
-                || (request.CodexGroupId is not null
+            if (request.CodexGroupId is not null
                     && !long.TryParse(
                         request.CodexGroupId,
                         NumberStyles.None,
                         CultureInfo.InvariantCulture,
-                        out _)))
+                        out _))
             {
                 return TypedResults.ValidationProblem(new Dictionary<string, string[]>
                 {
@@ -111,7 +127,6 @@ internal static class Sub2ApiEndpoints
                     request.BaseUrl,
                     request.AdminApiKey,
                     request.ClearAdminApiKey,
-                    userId,
                     codexGroupId,
                     request.Revision),
                 cancellationToken);
@@ -187,7 +202,7 @@ internal static class Sub2ApiEndpoints
                 true,
                 "connected",
                 "连接成功。",
-                probe.AvailableKeyCount,
+                probe.AvailableUserCount,
                 timeProvider.GetUtcNow()));
         }
         catch (Sub2ApiClientException exception)
@@ -219,10 +234,92 @@ internal static class Sub2ApiEndpoints
         }
     }
 
+    private static async Task<Ok<Sub2ApiUserScopeResponse>> GetUsersAsync(
+        ISub2ApiUserService userService,
+        CancellationToken cancellationToken) =>
+        TypedResults.Ok(MapUsers(await userService.GetAsync(cancellationToken)));
+
+    private static async Task<IResult> SynchronizeUsersAsync(
+        ClaimsPrincipal principal,
+        ISub2ApiUserService userService,
+        IAuditWriter auditWriter,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await userService.SynchronizeAsync(cancellationToken);
+            await auditWriter.WriteAsync(
+                principal.Identity?.Name,
+                "sub2api.users.synchronize",
+                "sub2api-users",
+                "succeeded",
+                httpContext.TraceIdentifier,
+                $"{{\"total\":{result.Total}}}",
+                cancellationToken);
+            return TypedResults.Ok(new Sub2ApiUserSynchronizationResponse(
+                result.Added,
+                result.Updated,
+                result.Retired,
+                result.Total,
+                result.SynchronizedAt,
+                result.ConfigurationRevision));
+        }
+        catch (Sub2ApiConnectionNotConfiguredException)
+        {
+            return TypedResults.Problem(
+                statusCode: StatusCodes.Status409Conflict,
+                title: "Connection Not Configured",
+                detail: "请先保存完整的 Sub2API 连接配置。");
+        }
+    }
+
+    private static async Task<IResult> UpdateUserScopeAsync(
+        UpdateSub2ApiUserScopeRequest request,
+        ISub2ApiUserService userService,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await userService.UpdateScopeAsync(
+                new UpdateSub2ApiUserScopeCommand(request.Mode, request.SelectedUserIds, request.Revision),
+                cancellationToken);
+            return TypedResults.Ok(MapUsers(result));
+        }
+        catch (Sub2ApiConnectionConflictException)
+        {
+            return TypedResults.Problem(
+                statusCode: StatusCodes.Status409Conflict,
+                title: "Connection Changed",
+                detail: "用户范围配置已变化，请刷新后重试。");
+        }
+        catch (Sub2ApiUserScopeException exception)
+        {
+            return TypedResults.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["scope"] = [exception.Message],
+            });
+        }
+    }
+
+    private static Sub2ApiUserScopeResponse MapUsers(Sub2ApiUserScopeSnapshot result) => new(
+        result.ScopeMode.ToString(),
+        result.Users.Select(user => new Sub2ApiUserResponse(
+            user.Id,
+            user.ExternalId.ToString(CultureInfo.InvariantCulture),
+            user.Email,
+            user.Username,
+            user.Status,
+            user.IsSelected,
+            user.LastSeenAt,
+            user.RetiredAt)).ToArray(),
+        result.ConnectionRevision,
+        result.LastSynchronizedAt);
+
     private static async Task<IResult> GetKeysAsync(
         int? page,
         int? pageSize,
-        bool? unmappedOnly,
+        bool? retiredOnly,
         IKeyInventoryService inventoryService,
         CancellationToken cancellationToken)
     {
@@ -232,27 +329,26 @@ internal static class Sub2ApiEndpoints
                 new ApiKeyInventoryQuery(
                     page ?? 1,
                     pageSize ?? 50,
-                    unmappedOnly ?? false),
+                    retiredOnly ?? false),
                 cancellationToken);
             return TypedResults.Ok(new ApiKeyInventoryPageResponse(
                 result.Items.Select(item => new ApiKeyInventoryItemResponse(
                     item.Id,
                     item.ExternalId.ToString(CultureInfo.InvariantCulture),
+                    item.SourceUserId?.ToString(CultureInfo.InvariantCulture),
+                    item.SourceUserEmail,
                     item.Name,
                     item.Status,
                     item.GroupId?.ToString(CultureInfo.InvariantCulture),
                     item.LastUsedAt,
                     item.LastSeenAt,
-                    item.RetiredAt,
-                    item.Assignments.Select(PeopleEndpoints.Map).ToArray()))
+                    item.RetiredAt))
                     .ToArray(),
                 result.Total,
                 result.Page,
                 result.PageSize,
                 result.Pages,
                 new ApiKeyInventoryDiagnosticsResponse(
-                    result.Diagnostics.UnmappedKeys,
-                    result.Diagnostics.OverlappingAssignments,
                     result.Diagnostics.RetiredKeys),
                 result.LastSynchronizedAt));
         }
@@ -304,6 +400,13 @@ internal static class Sub2ApiEndpoints
                 statusCode: StatusCodes.Status409Conflict,
                 title: "Connection Changed",
                 detail: "同步期间连接配置发生变化，请重新同步。");
+        }
+        catch (Sub2ApiUserScopeException exception)
+        {
+            return TypedResults.Problem(
+                statusCode: StatusCodes.Status409Conflict,
+                title: "User Scope Not Configured",
+                detail: exception.Message);
         }
         catch (Sub2ApiClientException exception)
         {
@@ -358,9 +461,11 @@ internal static class Sub2ApiEndpoints
             null,
             false,
             null,
-            null,
+            Domain.Sub2Api.Sub2ApiUserScopeMode.SelectedUsers.ToString(),
             null,
             0,
+            null,
+            null,
             null,
             null,
             null,
@@ -372,13 +477,15 @@ internal static class Sub2ApiEndpoints
             connection.BaseUrl,
             connection.HasAdminApiKey,
             connection.AdminApiKeyMask,
-            connection.UserId.ToString(CultureInfo.InvariantCulture),
+            connection.UserScopeMode.ToString(),
             connection.CodexGroupId?.ToString(CultureInfo.InvariantCulture),
             connection.Revision,
             connection.UpdatedAt,
             connection.LastTestedAt,
             connection.LastTestSucceeded,
             connection.LastTestCode,
+            connection.LastUsersSynchronizedAt,
+            connection.LastSynchronizedUserCount,
             connection.LastSynchronizedAt,
             connection.LastSynchronizedKeyCount);
 }

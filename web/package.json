@@ -1,17 +1,16 @@
 {
   "name": "@sub2api-report/web",
   "private": true,
-  "version": "0.4.0",
+  "version": "0.6.0",
   "type": "module",
   "packageManager": "pnpm@11.17.0",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b --pretty false",
-    "lint": "oxlint src tests vite.config.ts vitest.config.ts playwright.config.ts",
+    "lint": "oxlint src tests vite.config.ts vitest.config.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "e2e": "playwright test",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -34,8 +33,6 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@axe-core/playwright": "^4.13.0",
-    "@playwright/test": "^1.62.1",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.6",

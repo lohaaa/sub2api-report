@@ -1,0 +1,59 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "dev: migrate database",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "run",
+        "--project",
+        "${workspaceFolder}/src/Sub2ApiReport.Migrator/Sub2ApiReport.Migrator.csproj",
+        "--no-launch-profile"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "DOTNET_ENVIRONMENT": "Development",
+          "SUB2API_REPORT_DATABASE": "Data Source=${workspaceFolder}/data/vscode/db/sub2api-report.db;Foreign Keys=True;Default Timeout=5;Pooling=True"
+        }
+      },
+      "problemMatcher": "$msCompile",
+      "presentation": {
+        "reveal": "silent",
+        "panel": "dedicated",
+        "clear": true
+      }
+    },
+    {
+      "label": "dev: build API",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "build",
+        "${workspaceFolder}/src/Sub2ApiReport.Api/Sub2ApiReport.Api.csproj",
+        "--configuration",
+        "Debug",
+        "--nologo"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": "$msCompile",
+      "presentation": {
+        "reveal": "silent",
+        "panel": "dedicated",
+        "clear": true
+      }
+    },
+    {
+      "label": "dev: prepare API",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "dev: migrate database",
+        "dev: build API"
+      ],
+      "problemMatcher": []
+    }
+  ]
+}

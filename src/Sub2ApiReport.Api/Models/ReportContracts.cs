@@ -23,10 +23,9 @@ public sealed record ReportListItemResponse(
     DateOnly CutoffDate,
     string Timezone,
     DateTimeOffset GeneratedAt,
-    int PersonCount,
+    int UserCount,
     int KeyCount,
-    int FailedSegmentCount,
-    int UnassignedSegmentCount,
+    int FailedRangeCount,
     string SevenDayActualCost,
     string ThirtyDayActualCost);
 
@@ -43,7 +42,7 @@ public sealed record ReportDetailResponse(
     ReportWindowResponse ThirtyDayWindow,
     ReportUsageMetricsResponse SevenDayTotal,
     ReportUsageMetricsResponse ThirtyDayTotal,
-    IReadOnlyList<ReportPersonUsageResponse> People,
+    IReadOnlyList<ReportUserUsageResponse> Users,
     IReadOnlyList<ReportKeyUsageResponse> Keys,
     ReportDiagnosticsResponse Diagnostics);
 
@@ -63,11 +62,12 @@ public sealed record ReportUsageMetricsResponse(
     string TotalActualCost,
     string AverageDurationMs);
 
-/// <summary>Represents usage attributed to one person.</summary>
-public sealed record ReportPersonUsageResponse(
-    Guid PersonId,
-    string Code,
-    string DisplayName,
+/// <summary>Represents usage attributed to one Sub2API user.</summary>
+public sealed record ReportUserUsageResponse(
+    Guid UserId,
+    long ExternalUserId,
+    string? Username,
+    string Email,
     int KeyCount,
     ReportUsageMetricsResponse SevenDay,
     ReportUsageMetricsResponse ThirtyDay);
@@ -76,37 +76,47 @@ public sealed record ReportPersonUsageResponse(
 public sealed record ReportKeyUsageResponse(
     Guid KeyId,
     string ExternalId,
+    string? SourceUserId,
+    string? SourceUserEmail,
     string Name,
     string Status,
     DateTimeOffset? LastUsedAt,
     DateTimeOffset? RetiredAt,
     ReportUsageMetricsResponse SevenDay,
-    ReportUsageMetricsResponse ThirtyDay,
-    IReadOnlyList<ReportKeySegmentResponse> Segments);
-
-/// <summary>Represents one atomic ownership and collection segment for an API Key.</summary>
-public sealed record ReportKeySegmentResponse(
-    DateOnly StartDate,
-    DateOnly EndDate,
-    Guid? PersonId,
-    string? PersonCode,
-    string? PersonDisplayName,
-    ReportUsageMetricsResponse? Metrics,
-    Sub2ApiFailureKind? FailureKind,
-    string? DiagnosticCode);
+    ReportUsageMetricsResponse ThirtyDay);
 
 /// <summary>Represents completeness diagnostics for a report.</summary>
 public sealed record ReportDiagnosticsResponse(
-    IReadOnlyList<ReportSegmentDiagnosticResponse> FailedSegments,
-    IReadOnlyList<ReportSegmentDiagnosticResponse> UnassignedSegments,
-    IReadOnlyList<ReportSegmentDiagnosticResponse> ConflictingSegments,
-    IReadOnlyList<string> ZeroUsageKeyIds);
+    IReadOnlyList<ReportRangeFailureResponse> FailedRanges);
 
-/// <summary>Represents one report segment requiring attention.</summary>
-public sealed record ReportSegmentDiagnosticResponse(
-    string ExternalKeyId,
+/// <summary>Represents one collection range that failed while generating the report.</summary>
+public sealed record ReportRangeFailureResponse(
+    long ExternalUserId,
+    string UserEmail,
+    long ExternalKeyId,
     string KeyName,
     DateOnly StartDate,
     DateOnly EndDate,
-    string Code,
-    Sub2ApiFailureKind? FailureKind);
+    Sub2ApiFailureKind? FailureKind,
+    string? ErrorCode);
+
+/// <summary>Represents one page of report generation runs.</summary>
+public sealed record ReportGenerationRunPageResponse(
+    IReadOnlyList<ReportGenerationRunItemResponse> Items,
+    int Total,
+    int Page,
+    int PageSize,
+    int Pages);
+
+/// <summary>Represents one report generation attempt, including refresh failures.</summary>
+public sealed record ReportGenerationRunItemResponse(
+    Guid Id,
+    ReportTrigger Trigger,
+    ReportGenerationStatus Status,
+    string? Stage,
+    string? ErrorCode,
+    string? ErrorMessage,
+    long ConnectionRevision,
+    DateTimeOffset StartedAt,
+    DateTimeOffset? CompletedAt,
+    Guid? ReportSnapshotId);

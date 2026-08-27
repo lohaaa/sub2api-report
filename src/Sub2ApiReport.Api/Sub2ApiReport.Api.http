@@ -124,6 +124,97 @@ X-CSRF-TOKEN: {{authenticatedAntiforgery.response.body.$.token}}
 ### List immutable report snapshots
 GET {{baseUrl}}/api/v1/reports?page=1&pageSize=25
 
+### Create an email notification channel
+# @name createEmailChannel
+POST {{baseUrl}}/api/v1/channels
+Content-Type: application/json
+X-CSRF-TOKEN: {{authenticatedAntiforgery.response.body.$.token}}
+
+{
+  "type": "Email",
+  "name": "Synthetic Email Channel",
+  "enabled": true,
+  "email": {
+    "host": "smtp.example.com",
+    "port": 587,
+    "security": "StartTls",
+    "username": "reports@example.com",
+    "fromAddress": "reports@example.com",
+    "fromName": "Sub2API Report",
+    "toAddresses": ["recipient@example.com"],
+    "ccAddresses": []
+  },
+  "smtpPassword": null,
+  "webhookUrl": null,
+  "signSecret": null
+}
+
+### Create a DingTalk webhook channel
+# @name createDingTalkChannel
+POST {{baseUrl}}/api/v1/channels
+Content-Type: application/json
+X-CSRF-TOKEN: {{authenticatedAntiforgery.response.body.$.token}}
+
+{
+  "type": "DingTalk",
+  "name": "Synthetic DingTalk Channel",
+  "enabled": true,
+  "email": null,
+  "smtpPassword": null,
+  "webhookUrl": "https://oapi.dingtalk.com/robot/send?access_token=REPLACE-WITH-TOKEN",
+  "signSecret": "REPLACE-WITH-SECRET"
+}
+
+### List channels with masked secrets
+GET {{baseUrl}}/api/v1/channels
+
+### Replace channel settings (secrets kept when empty)
+PUT {{baseUrl}}/api/v1/channels/{{createEmailChannel.response.body.$.id}}
+Content-Type: application/json
+X-CSRF-TOKEN: {{authenticatedAntiforgery.response.body.$.token}}
+
+{
+  "name": "Synthetic Email Channel",
+  "enabled": true,
+  "email": {
+    "host": "smtp.example.com",
+    "port": 587,
+    "security": "StartTls",
+    "username": "reports@example.com",
+    "fromAddress": "reports@example.com",
+    "fromName": "Sub2API Report",
+    "toAddresses": ["recipient@example.com"],
+    "ccAddresses": []
+  },
+  "removeStoredPassword": false,
+  "newSmtpPassword": null,
+  "webhookUrl": null,
+  "signSecret": null,
+  "revision": 1
+}
+
+### Send a synthetic test message to one channel
+POST {{baseUrl}}/api/v1/channels/{{createEmailChannel.response.body.$.id}}/test
+X-CSRF-TOKEN: {{authenticatedAntiforgery.response.body.$.token}}
+
+### Deliver the saved report to selected channels
+# @name deliverReport
+POST {{baseUrl}}/api/v1/reports/{{generateReport.response.body.$.reportId}}/deliveries
+Content-Type: application/json
+X-CSRF-TOKEN: {{authenticatedAntiforgery.response.body.$.token}}
+
+{
+  "channelIds": ["{{createEmailChannel.response.body.$.id}}"],
+  "confirmPartial": false
+}
+
+### List delivery runs and per-channel states
+GET {{baseUrl}}/api/v1/reports/{{generateReport.response.body.$.reportId}}/deliveries
+
+### Retry only the failed channels of a run
+POST {{baseUrl}}/api/v1/reports/{{generateReport.response.body.$.reportId}}/deliveries/{{deliverReport.response.body.$.id}}/retry
+X-CSRF-TOKEN: {{authenticatedAntiforgery.response.body.$.token}}
+
 ### Read the generated canonical report snapshot
 GET {{baseUrl}}/api/v1/reports/{{generateReport.response.body.$.reportId}}
 

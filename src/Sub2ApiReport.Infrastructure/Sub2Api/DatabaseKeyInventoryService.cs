@@ -18,19 +18,47 @@ internal sealed class DatabaseKeyInventoryService(
         await SynchronizationLock.WaitAsync(cancellationToken);
         try
         {
-            var connection = await connectionService.GetCredentialsAsync(cancellationToken);
-            var remoteKeys = await client.GetApiKeysAsync(connection, cancellationToken);
+            var credentials = await connectionService.GetCredentialsAsync(cancellationToken);
+            var connection = await dbContext.Sub2ApiConnections.AsNoTracking().SingleAsync(
+                item => item.Id == Sub2ApiConnection.SingletonId,
+                cancellationToken);
+            var usersQuery = dbContext.Sub2ApiUsers.AsNoTracking()
+                .Where(user => user.RetiredAt == null && user.Status == "active");
+            if (connection.UserScopeMode == Sub2ApiUserScopeMode.SelectedUsers)
+            {
+                usersQuery = usersQuery.Where(user => user.IsSelected);
+            }
+
+            var targetUsers = await usersQuery.OrderBy(user => user.ExternalId).ToListAsync(cancellationToken);
+            if (targetUsers.Count == 0)
+            {
+                throw new Sub2ApiUserScopeException("请先同步并选择至少一个 Sub2API 用户。");
+            }
+
+            var remote = new List<(Sub2ApiUser User, Sub2ApiExternalKey Key)>();
+            foreach (var user in targetUsers)
+            {
+                var keys = await client.GetApiKeysAsync(credentials, user.ExternalId, cancellationToken);
+                remote.AddRange(keys.Select(key => (user, key)));
+            }
+
             var now = timeProvider.GetUtcNow();
             var existingKeys = await dbContext.ExternalApiKeys.ToListAsync(cancellationToken);
-            var existingByExternalId = existingKeys.ToDictionary(key => key.ExternalId);
-            var seenIds = new HashSet<long>();
+            var existingByIdentity = existingKeys
+                .Where(key => key.Sub2ApiUserId.HasValue)
+                .ToDictionary(key => (key.Sub2ApiUserId!.Value, key.ExternalId));
+            var legacyByExternalId = existingKeys
+                .Where(key => !key.Sub2ApiUserId.HasValue)
+                .ToDictionary(key => key.ExternalId);
+            var seen = new HashSet<(Guid UserId, long KeyId)>();
             var added = 0;
             var updated = 0;
 
-            foreach (var remoteKey in remoteKeys)
+            foreach (var (user, remoteKey) in remote)
             {
-                seenIds.Add(remoteKey.ExternalId);
-                if (existingByExternalId.TryGetValue(remoteKey.ExternalId, out var existing))
+                var identity = (user.Id, remoteKey.ExternalId);
+                seen.Add(identity);
+                if (existingByIdentity.TryGetValue(identity, out var existing))
                 {
                     if (existing.ApplySnapshot(
                         remoteKey.Name,
@@ -42,9 +70,22 @@ internal sealed class DatabaseKeyInventoryService(
                         updated++;
                     }
                 }
+                else if (connection.LegacyUserId == user.ExternalId
+                    && legacyByExternalId.TryGetValue(remoteKey.ExternalId, out var legacy))
+                {
+                    legacy.AssignUser(user.Id);
+                    legacy.ApplySnapshot(
+                        remoteKey.Name,
+                        remoteKey.Status,
+                        remoteKey.GroupId,
+                        remoteKey.LastUsedAt,
+                        now);
+                    updated++;
+                }
                 else
                 {
                     dbContext.ExternalApiKeys.Add(ExternalApiKey.Create(
+                        user.Id,
                         remoteKey.ExternalId,
                         remoteKey.Name,
                         remoteKey.Status,
@@ -55,27 +96,31 @@ internal sealed class DatabaseKeyInventoryService(
                 }
             }
 
+            var targetIds = targetUsers.Select(user => user.Id).ToHashSet();
             var retired = existingKeys.Count(key =>
-                !seenIds.Contains(key.ExternalId) && key.MarkRetired(now));
+                key.Sub2ApiUserId.HasValue
+                && targetIds.Contains(key.Sub2ApiUserId.Value)
+                && !seen.Contains((key.Sub2ApiUserId.Value, key.ExternalId))
+                && key.MarkRetired(now));
             var trackedConnection = await dbContext.Sub2ApiConnections.SingleAsync(
                 item => item.Id == Sub2ApiConnection.SingletonId,
                 cancellationToken);
-            if (trackedConnection.Revision != connection.Revision)
+            if (trackedConnection.Revision != credentials.Revision)
             {
                 throw new Sub2ApiConnectionConflictException(
-                    connection.Revision,
+                    credentials.Revision,
                     trackedConnection.Revision);
             }
 
-            trackedConnection.RecordSynchronization(remoteKeys.Count, now);
+            trackedConnection.RecordSynchronization(remote.Count, now);
             await dbContext.SaveChangesAsync(cancellationToken);
             return new KeySynchronizationResult(
                 added,
                 updated,
                 retired,
-                remoteKeys.Count,
+                remote.Count,
                 now,
-                connection.Revision);
+                credentials.Revision);
         }
         finally
         {
@@ -97,20 +142,12 @@ internal sealed class DatabaseKeyInventoryService(
             throw new ArgumentOutOfRangeException(nameof(query), "Page size must be between 1 and 100.");
         }
 
-        var currentDate = await GetCurrentDateAsync(cancellationToken);
-        var keysQuery = dbContext.ExternalApiKeys.AsNoTracking();
-        if (query.UnmappedOnly)
+        IQueryable<ExternalApiKey> keysQuery = dbContext.ExternalApiKeys
+            .AsNoTracking()
+            .Include(key => key.Sub2ApiUser);
+        if (query.RetiredOnly)
         {
-            keysQuery = keysQuery.Where(key =>
-                !dbContext.PersonApiKeyAssignments.Any(assignment =>
-                    assignment.ExternalApiKeyId == key.Id)
-                || (key.RetiredAt == null
-                    && key.Status == "active"
-                    && !dbContext.PersonApiKeyAssignments.Any(assignment =>
-                        assignment.ExternalApiKeyId == key.Id
-                        && assignment.Person.IsActive
-                        && assignment.ValidFrom <= currentDate
-                        && (assignment.ValidTo == null || assignment.ValidTo >= currentDate))));
+            keysQuery = keysQuery.Where(key => key.RetiredAt != null);
         }
 
         var total = await keysQuery.CountAsync(cancellationToken);
@@ -121,32 +158,9 @@ internal sealed class DatabaseKeyInventoryService(
             .Skip((query.Page - 1) * query.PageSize)
             .Take(query.PageSize)
             .ToListAsync(cancellationToken);
-        var keyIds = keys.Select(key => key.Id).ToArray();
-        var assignments = keyIds.Length == 0
-            ? []
-            : await dbContext.PersonApiKeyAssignments
-                .AsNoTracking()
-                .Where(assignment => Enumerable.Contains(keyIds, assignment.ExternalApiKeyId))
-                .OrderBy(assignment => assignment.ValidFrom)
-                .Select(assignment => new AssignmentProjection(
-                    assignment.ExternalApiKeyId,
-                    assignment.Id,
-                    assignment.PersonId,
-                    assignment.Person.Code,
-                    assignment.Person.DisplayName,
-                    assignment.ValidFrom,
-                    assignment.ValidTo,
-                    assignment.Revision))
-                .ToListAsync(cancellationToken);
-        var assignmentsByKey = assignments
-            .GroupBy(assignment => assignment.ExternalApiKeyId)
-            .ToDictionary(
-                group => group.Key,
-                group => (IReadOnlyList<ApiKeyAssignmentSnapshot>)group
-                    .Select(MapAssignment)
-                    .ToArray());
-
-        var diagnostics = await GetDiagnosticsAsync(currentDate, cancellationToken);
+        var retiredKeys = await dbContext.ExternalApiKeys
+            .AsNoTracking()
+            .CountAsync(key => key.RetiredAt != null, cancellationToken);
         var connection = await dbContext.Sub2ApiConnections
             .AsNoTracking()
             .SingleOrDefaultAsync(
@@ -156,106 +170,20 @@ internal sealed class DatabaseKeyInventoryService(
             keys.Select(key => new ApiKeyInventoryItem(
                 key.Id,
                 key.ExternalId,
+                key.Sub2ApiUser?.ExternalId,
+                key.Sub2ApiUser?.EmailSnapshot,
                 key.NameSnapshot,
                 key.Status,
                 key.GroupId,
                 key.LastUsedAt,
                 key.LastSeenAt,
-                key.RetiredAt,
-                assignmentsByKey.GetValueOrDefault(key.Id, [])))
+                key.RetiredAt))
                 .ToArray(),
             total,
             query.Page,
             query.PageSize,
             pages,
-            diagnostics,
+            new ApiKeyInventoryDiagnostics(retiredKeys),
             connection?.LastSynchronizedAt);
     }
-
-    private async Task<ApiKeyInventoryDiagnostics> GetDiagnosticsAsync(
-        DateOnly currentDate,
-        CancellationToken cancellationToken)
-    {
-        var unmapped = await dbContext.ExternalApiKeys
-            .AsNoTracking()
-            .CountAsync(key =>
-                !dbContext.PersonApiKeyAssignments.Any(assignment =>
-                    assignment.ExternalApiKeyId == key.Id)
-                || (key.RetiredAt == null
-                    && key.Status == "active"
-                    && !dbContext.PersonApiKeyAssignments.Any(assignment =>
-                        assignment.ExternalApiKeyId == key.Id
-                        && assignment.Person.IsActive
-                        && assignment.ValidFrom <= currentDate
-                        && (assignment.ValidTo == null || assignment.ValidTo >= currentDate))),
-                cancellationToken);
-        var retired = await dbContext.ExternalApiKeys
-            .AsNoTracking()
-            .CountAsync(key => key.RetiredAt != null, cancellationToken);
-        var allAssignments = await dbContext.PersonApiKeyAssignments
-            .AsNoTracking()
-            .OrderBy(assignment => assignment.ExternalApiKeyId)
-            .ThenBy(assignment => assignment.ValidFrom)
-            .Select(assignment => new AssignmentRange(
-                assignment.ExternalApiKeyId,
-                assignment.ValidFrom,
-                assignment.ValidTo))
-            .ToListAsync(cancellationToken);
-        var overlapping = allAssignments
-            .GroupBy(assignment => assignment.ExternalApiKeyId)
-            .Count(group => ContainsOverlap(group.ToArray()));
-        return new ApiKeyInventoryDiagnostics(unmapped, overlapping, retired);
-    }
-
-    private async Task<DateOnly> GetCurrentDateAsync(CancellationToken cancellationToken)
-    {
-        var timezone = await dbContext.SystemSettings
-            .AsNoTracking()
-            .Where(setting => setting.Id == Domain.System.SystemSetting.SingletonId)
-            .Select(setting => setting.Timezone)
-            .SingleAsync(cancellationToken);
-        var localNow = TimeZoneInfo.ConvertTime(timeProvider.GetUtcNow(), TimeZoneInfo.FindSystemTimeZoneById(timezone));
-        return DateOnly.FromDateTime(localNow.DateTime);
-    }
-
-    private static bool ContainsOverlap(IReadOnlyList<AssignmentRange> assignments)
-    {
-        for (var index = 0; index < assignments.Count; index++)
-        {
-            var currentEnd = assignments[index].ValidTo ?? DateOnly.MaxValue;
-            for (var next = index + 1; next < assignments.Count; next++)
-            {
-                if (assignments[next].ValidFrom <= currentEnd)
-                {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
-    private static ApiKeyAssignmentSnapshot MapAssignment(AssignmentProjection assignment) => new(
-        assignment.Id,
-        assignment.PersonId,
-        assignment.PersonCode,
-        assignment.PersonDisplayName,
-        assignment.ValidFrom,
-        assignment.ValidTo,
-        assignment.Revision);
-
-    private sealed record AssignmentProjection(
-        Guid ExternalApiKeyId,
-        Guid Id,
-        Guid PersonId,
-        string PersonCode,
-        string PersonDisplayName,
-        DateOnly ValidFrom,
-        DateOnly? ValidTo,
-        long Revision);
-
-    private sealed record AssignmentRange(
-        Guid ExternalApiKeyId,
-        DateOnly ValidFrom,
-        DateOnly? ValidTo);
 }

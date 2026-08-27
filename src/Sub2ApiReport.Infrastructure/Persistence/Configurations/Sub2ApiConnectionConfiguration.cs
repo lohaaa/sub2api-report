@@ -14,6 +14,12 @@ internal sealed class Sub2ApiConnectionConfiguration : IEntityTypeConfiguration<
         builder.Property(connection => connection.BaseUrl).HasMaxLength(2048).IsRequired();
         builder.Property(connection => connection.AdminApiKeyCiphertext).HasMaxLength(16384);
         builder.Property(connection => connection.AdminApiKeySuffix).HasMaxLength(8);
+        builder.Property(connection => connection.LegacyUserId).HasColumnName("UserId");
+        builder.Property(connection => connection.UserScopeMode)
+            .HasConversion<string>()
+            .HasMaxLength(32)
+            .HasDefaultValue(Sub2ApiReport.Domain.Sub2Api.Sub2ApiUserScopeMode.SelectedUsers)
+            .IsRequired();
         builder.Property(connection => connection.LastTestCode).HasMaxLength(64);
         builder.Property(connection => connection.Revision).IsConcurrencyToken();
         builder.ToTable(table => table.HasCheckConstraint(
@@ -21,7 +27,7 @@ internal sealed class Sub2ApiConnectionConfiguration : IEntityTypeConfiguration<
             $"Id = {Sub2ApiConnection.SingletonId}"));
         builder.ToTable(table => table.HasCheckConstraint(
             "CK_Sub2ApiConnections_UserId",
-            "UserId > 0"));
+            "UserId IS NULL OR UserId > 0"));
         builder.ToTable(table => table.HasCheckConstraint(
             "CK_Sub2ApiConnections_CodexGroupId",
             "CodexGroupId IS NULL OR CodexGroupId > 0"));

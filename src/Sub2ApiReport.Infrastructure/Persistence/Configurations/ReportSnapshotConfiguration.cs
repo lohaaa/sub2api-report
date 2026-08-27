@@ -26,7 +26,7 @@ internal sealed class ReportSnapshotConfiguration : IEntityTypeConfiguration<Rep
             "ConnectionRevision > 0"));
         builder.ToTable(table => table.HasCheckConstraint(
             "CK_ReportSnapshots_Counts",
-            "PersonCount >= 0 AND KeyCount >= 0 AND FailedSegmentCount >= 0 AND UnassignedSegmentCount >= 0"));
+            "UserCount >= 0 AND KeyCount >= 0 AND FailedRangeCount >= 0"));
         builder.ToTable(table => table.HasCheckConstraint(
             "CK_ReportSnapshots_Costs",
             "SevenDayActualCost >= 0 AND ThirtyDayActualCost >= 0"));

@@ -71,8 +71,8 @@ public sealed class ApiSmokeTests(ApiWebApplicationFactory factory)
 
         Assert.Contains("/api/v1/sub2api/connection", document, StringComparison.Ordinal);
         Assert.Contains("/api/v1/sub2api/keys/sync", document, StringComparison.Ordinal);
-        Assert.Contains("/api/v1/people/{personId}", document, StringComparison.Ordinal);
-        Assert.Contains("/api/v1/people/assignments/{assignmentId}", document, StringComparison.Ordinal);
+        Assert.Contains("/api/v1/sub2api/users/scope", document, StringComparison.Ordinal);
+        Assert.Contains("/api/v1/reports/generations", document, StringComparison.Ordinal);
         Assert.Contains("/api/v1/reports/dry-run", document, StringComparison.Ordinal);
         Assert.Contains("/api/v1/reports/{id}/csv", document, StringComparison.Ordinal);
     }

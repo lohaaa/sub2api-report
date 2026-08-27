@@ -12,7 +12,6 @@ public sealed class Sub2ApiDomainTests
             "https://sub2api.example.com",
             "protected-value",
             "1234",
-            42,
             7,
             now);
 
@@ -21,7 +20,6 @@ public sealed class Sub2ApiDomainTests
             null,
             null,
             clearAdminApiKey: true,
-            43,
             null,
             now.AddMinutes(1));
 
@@ -34,7 +32,7 @@ public sealed class Sub2ApiDomainTests
     public void ExternalKeyUpdatesAndReactivatesWithoutChangingIdentity()
     {
         var firstSeen = new DateTimeOffset(2026, 8, 26, 10, 0, 0, TimeSpan.Zero);
-        var key = ExternalApiKey.Create(101, "Original", "active", 7, null, firstSeen);
+        var key = ExternalApiKey.Create(Guid.NewGuid(), 101, "Original", "active", 7, null, firstSeen);
         var id = key.Id;
         Assert.True(key.MarkRetired(firstSeen.AddDays(1)));
 

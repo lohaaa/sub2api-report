@@ -27,6 +27,7 @@ builder.Services.AddSerilog((services, loggerConfiguration) => loggerConfigurati
     .MinimumLevel.ControlledBy(loggingLevelSwitch)
     .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
     .MinimumLevel.Override("Microsoft.EntityFrameworkCore.Database.Command", LogEventLevel.Warning)
+    .MinimumLevel.Override("System.Net.Http.HttpClient.notifications", LogEventLevel.Warning)
     .ReadFrom.Services(services)
     .Enrich.FromLogContext()
     .WriteTo.Console(new RenderedCompactJsonFormatter()));
@@ -91,8 +92,9 @@ builder.Services.ConfigureApplicationCookie(options =>
             NumberStyles.None,
             CultureInfo.InvariantCulture,
             out var startedAt);
+        var timeProvider = context.HttpContext.RequestServices.GetRequiredService<TimeProvider>();
         if (validStartedAt
-            && TimeProvider.System.GetUtcNow() - DateTimeOffset.FromUnixTimeSeconds(startedAt)
+            && timeProvider.GetUtcNow() - DateTimeOffset.FromUnixTimeSeconds(startedAt)
                 <= TimeSpan.FromHours(24))
         {
             return;
@@ -195,8 +197,8 @@ _ = app.MapSecurityEndpoints()
     .MapAuthEndpoints()
     .MapSystemEndpoints()
     .MapSub2ApiEndpoints()
-    .MapPeopleEndpoints()
-    .MapReportEndpoints();
+    .MapReportEndpoints()
+    .MapChannelEndpoints();
 
 app.UseDefaultFiles();
 app.UseStaticFiles(new StaticFileOptions

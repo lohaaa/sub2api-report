@@ -6,12 +6,18 @@ public interface ISub2ApiClient
         Sub2ApiConnectionCredentials connection,
         CancellationToken cancellationToken);
 
+    Task<IReadOnlyList<Sub2ApiExternalUser>> GetUsersAsync(
+        Sub2ApiConnectionCredentials connection,
+        CancellationToken cancellationToken);
+
     Task<IReadOnlyList<Sub2ApiExternalKey>> GetApiKeysAsync(
         Sub2ApiConnectionCredentials connection,
+        long externalUserId,
         CancellationToken cancellationToken);
 
     Task<Sub2ApiUsageStats> GetUsageStatsAsync(
         Sub2ApiConnectionCredentials connection,
+        long externalUserId,
         long externalApiKeyId,
         DateOnly startDate,
         DateOnly endDate,
@@ -19,7 +25,7 @@ public interface ISub2ApiClient
         CancellationToken cancellationToken);
 }
 
-public sealed record Sub2ApiConnectionProbe(long AvailableKeyCount);
+public sealed record Sub2ApiConnectionProbe(long AvailableUserCount);
 
 public sealed record Sub2ApiExternalKey(
     long ExternalId,

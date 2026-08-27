@@ -78,7 +78,9 @@ function StepUpForm() {
     <form className="flex max-w-md flex-col gap-5" onSubmit={form.handleSubmit((values) => mutation.mutate(values))}>
       <div>
         <h3 className="text-sm font-semibold">敏感操作授权</h3>
-        <p className="text-sm text-muted-foreground">确认当前密码后获得 10 分钟高风险操作授权。</p>
+        <p className="text-sm text-muted-foreground">
+          确认当前密码后获得 10 分钟授权，用于保存 Sub2API 连接等敏感操作。
+        </p>
       </div>
       <FormError message={mutation.error instanceof ApiError ? mutation.error.message : null} />
       {mutation.data?.stepUpExpiresAt ? <SuccessAlert message={`授权有效至 ${formatTime(mutation.data.stepUpExpiresAt)}。`} /> : null}

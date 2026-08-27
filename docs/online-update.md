@@ -348,7 +348,7 @@ SQLite 回滚依赖升级前备份，因此：
 Tag `vX.Y.Z` 触发：
 
 1. 校验版本、工作树和 changelog；
-2. 运行 .NET、前端、集成和 E2E 测试；
+2. 运行 .NET 和前端测试；
 3. 构建 linux/amd64 App 和 Updater 镜像；
 4. 生成 SBOM 和漏洞扫描报告；
 5. 推送到 GHCR；

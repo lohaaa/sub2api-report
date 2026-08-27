@@ -17,18 +17,50 @@ public sealed class Sub2ApiClient(HttpClient httpClient, TimeProvider timeProvid
         Sub2ApiConnectionCredentials connection,
         CancellationToken cancellationToken)
     {
-        var page = await GetPageAsync(connection, 1, 1, cancellationToken);
+        var page = await GetUserPageAsync(connection, 1, 1, cancellationToken);
         return new Sub2ApiConnectionProbe(page.Total);
+    }
+
+    public async Task<IReadOnlyList<Sub2ApiExternalUser>> GetUsersAsync(
+        Sub2ApiConnectionCredentials connection,
+        CancellationToken cancellationToken)
+    {
+        var users = new Dictionary<long, Sub2ApiExternalUser>();
+        for (var pageNumber = 1; pageNumber <= MaximumPages; pageNumber++)
+        {
+            var page = await GetUserPageAsync(connection, pageNumber, PageSize, cancellationToken);
+            foreach (var user in page.Items)
+            {
+                if (user.Id <= 0 || string.IsNullOrWhiteSpace(user.Email) || string.IsNullOrWhiteSpace(user.Status))
+                {
+                    throw InvalidResponse();
+                }
+
+                users.TryAdd(user.Id, new Sub2ApiExternalUser(
+                    user.Id,
+                    user.Email.Trim(),
+                    string.IsNullOrWhiteSpace(user.Username) ? null : user.Username.Trim(),
+                    user.Status.Trim()));
+            }
+
+            if (page.Page >= page.Pages)
+            {
+                return users.Values.OrderBy(user => user.ExternalId).ToArray();
+            }
+        }
+
+        throw InvalidResponse();
     }
 
     public async Task<IReadOnlyList<Sub2ApiExternalKey>> GetApiKeysAsync(
         Sub2ApiConnectionCredentials connection,
+        long externalUserId,
         CancellationToken cancellationToken)
     {
         var keys = new Dictionary<long, Sub2ApiExternalKey>();
         for (var pageNumber = 1; pageNumber <= MaximumPages; pageNumber++)
         {
-            var page = await GetPageAsync(connection, pageNumber, PageSize, cancellationToken);
+            var page = await GetPageAsync(connection, externalUserId, pageNumber, PageSize, cancellationToken);
             foreach (var key in page.Items)
             {
                 if (key.Id <= 0 || string.IsNullOrWhiteSpace(key.Name) || string.IsNullOrWhiteSpace(key.Status))
@@ -70,6 +102,7 @@ public sealed class Sub2ApiClient(HttpClient httpClient, TimeProvider timeProvid
 
     public async Task<Sub2ApiUsageStats> GetUsageStatsAsync(
         Sub2ApiConnectionCredentials connection,
+        long externalUserId,
         long externalApiKeyId,
         DateOnly startDate,
         DateOnly endDate,
@@ -87,7 +120,7 @@ public sealed class Sub2ApiClient(HttpClient httpClient, TimeProvider timeProvid
             : string.Empty;
         var path = string.Create(
             CultureInfo.InvariantCulture,
-            $"/api/v1/admin/usage/stats?user_id={connection.UserId}&api_key_id={externalApiKeyId}{groupQuery}&start_date={startDate:yyyy-MM-dd}&end_date={endDate:yyyy-MM-dd}&timezone={Uri.EscapeDataString(timezone.Trim())}&nocache=true");
+            $"/api/v1/admin/usage/stats?user_id={externalUserId}&api_key_id={externalApiKeyId}{groupQuery}&start_date={startDate:yyyy-MM-dd}&end_date={endDate:yyyy-MM-dd}&timezone={Uri.EscapeDataString(timezone.Trim())}&nocache=true");
         var endpoint = new Uri($"{connection.BaseUrl.TrimEnd('/')}{path}", UriKind.Absolute);
         var stats = await GetDataAsync<UpstreamUsageStats>(connection, endpoint, cancellationToken);
         if (stats.TotalRequests < 0
@@ -119,13 +152,25 @@ public sealed class Sub2ApiClient(HttpClient httpClient, TimeProvider timeProvid
 
     private Task<UpstreamPage> GetPageAsync(
         Sub2ApiConnectionCredentials connection,
+        long externalUserId,
         int page,
         int pageSize,
         CancellationToken cancellationToken)
     {
-        var path = $"/api/v1/admin/users/{connection.UserId}/api-keys?page={page}&page_size={pageSize}&sort_by=id&sort_order=asc";
+        var path = $"/api/v1/admin/users/{externalUserId}/api-keys?page={page}&page_size={pageSize}&sort_by=id&sort_order=asc";
         var endpoint = new Uri($"{connection.BaseUrl.TrimEnd('/')}{path}", UriKind.Absolute);
         return GetDataAsync<UpstreamPage>(connection, endpoint, cancellationToken);
+    }
+
+    private Task<UpstreamUserPage> GetUserPageAsync(
+        Sub2ApiConnectionCredentials connection,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var path = $"/api/v1/admin/users?page={page}&page_size={pageSize}&sort_by=id&sort_order=asc";
+        var endpoint = new Uri($"{connection.BaseUrl.TrimEnd('/')}{path}", UriKind.Absolute);
+        return GetDataAsync<UpstreamUserPage>(connection, endpoint, cancellationToken);
     }
 
     private async Task<T> GetDataAsync<T>(
@@ -281,6 +326,20 @@ public sealed class Sub2ApiClient(HttpClient httpClient, TimeProvider timeProvid
         [property: JsonPropertyName("total")] long Total,
         [property: JsonPropertyName("page")] int Page,
         [property: JsonPropertyName("pages")] int Pages);
+
+    [method: JsonConstructor]
+    private sealed record UpstreamUserPage(
+        [property: JsonPropertyName("items")] IReadOnlyList<UpstreamUser> Items,
+        [property: JsonPropertyName("total")] long Total,
+        [property: JsonPropertyName("page")] int Page,
+        [property: JsonPropertyName("pages")] int Pages);
+
+    [method: JsonConstructor]
+    private sealed record UpstreamUser(
+        [property: JsonPropertyName("id")] long Id,
+        [property: JsonPropertyName("email")] string Email,
+        [property: JsonPropertyName("username")] string? Username,
+        [property: JsonPropertyName("status")] string Status);
 
     [method: JsonConstructor]
     private sealed record UpstreamUsageStats(

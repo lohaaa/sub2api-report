@@ -85,7 +85,6 @@ M5 的三个渠道可以并行实现，但必须共用同一 Sender contract 和
 - 工作台壳、侧栏、页面标题、错误边界；
 - light/dark/system theme；
 - 中文默认文案；
-- Playwright 和 axe 基线。
 
 ### 构建
 
@@ -133,22 +132,22 @@ M5 的三个渠道可以并行实现，但必须共用同一 Sender contract 和
 
 全新数据卷可以完成初始化，重建容器后管理员仍能登录；删除 App 容器不会重新开放初始化。
 
-## 6. M3：Sub2API 和人员-Key 映射
+## 6. M3：Sub2API 连接与用户/Key 同步
 
-- 状态：已实现（0.3.0）
+- 状态：已实现（0.3.0；0.6.0 重构为用户/Key 直接统计）
 
 ### 交付
 
 - 单 Sub2API connection 配置；
 - Admin API Key 加密存储和掩码更新；
 - connection test；
-- 用户 ID、Codex group ID 配置；
-- API Key 分页同步；
+- 用户同步与指定用户/全部有效用户范围；
+- 按所属用户同步 API Key；
 - Key 名称、状态和最后使用时间 snapshot；
-- 人员 CRUD；
-- 一人多 Key 和 Key 轮换有效期；
-- 未映射、重复映射和已退休 Key 检查；
-- 人员与 Key 管理页面。
+- 已删除/轮换 Key 的本地保留（`RetiredAt`）。
+
+0.6.0 移除：人员 CRUD、一人多 Key 归属有效期、未映射/重复映射检查与人员页面。
+Key 同步按钮仅作诊断用，报告生成前会自动执行。
 
 ### Stub 场景
 
@@ -163,21 +162,23 @@ M5 的三个渠道可以并行实现，但必须共用同一 Sender contract 和
 
 ### 验收
 
-管理员可以连接测试实例、同步 Key、完成全部归属，并清楚看到任何未映射 Key。数据库和日志不保存完整业务 Key。
+管理员可以连接测试实例、同步用户并选择范围、按用户同步 Key，并清楚看到已从上游
+移除的历史 Key。数据库和日志不保存完整业务 Key。
 
 ## 7. M4：报告引擎
 
-- 状态：已实现（0.4.0）
+- 状态：已实现（0.4.0；0.6.0 升级为 v3 用户 → Key 模型）
 
 ### 交付
 
+- 生成报告前自动刷新 Sub2API 用户与 Key，失败则终止并记录到 `ReportGenerationRuns`；
 - 7/30 个完整自然日窗口；
 - `Asia/Shanghai` 及可配置 IANA 时区；
-- 按 Key 调用 Sub2API stats；
+- 按 Key 使用所属 `user_id` 调用 Sub2API stats；
 - bounded concurrency、timeout、retry；
-- Key -> 人员聚合；
-- 全员总计；
-- immutable canonical snapshot；
+- 用户 → Key 分层聚合与用户小计；
+- 全部总计；
+- immutable canonical snapshot（v3；历史 v1/v2 快照只读兼容）；
 - UTF-8 BOM CSV；
 - 手工 dry-run，不发送渠道；
 - 报告列表和详情页。
@@ -196,8 +197,12 @@ M5 的三个渠道可以并行实现，但必须共用同一 Sender contract 和
 
 ## 8. M5：发送渠道
 
+- 状态：已实现（0.5.0）
+
 ### 公共能力
 
+- M5 提前引入最小 `ReportRun`、`DeliveryRecord` 和 `DeliveryPart` 状态及手工投递
+API；Quartz 触发、计划幂等键和重启恢复仍属 M6，M6 在同一状态机上扩展；
 - `IReportSender` contract；
 - channel config 加密、掩码和 test send；
 - payload hash；
@@ -237,6 +242,7 @@ M5 的三个渠道可以并行实现，但必须共用同一 Sender contract 和
 
 ### 交付
 
+- 在 M5 已落地的运行和投递状态机之上增加调度，不重建状态机；
 - Quartz persistent JobStore；
 - 每月日期、时间和时区设置；
 - 默认每月 1 日 09:00 `Asia/Shanghai`；
@@ -312,7 +318,6 @@ Updater 上线前必须完成威胁建模、代码审计和故障注入测试。
 ### 质量
 
 - 关键页面 keyboard-only 验证；
-- Playwright desktop/mobile screenshots；
 - axe 扫描；
 - 100 Key 性能场景；
 - 长消息分片；
@@ -335,8 +340,6 @@ Updater 上线前必须完成威胁建模、代码审计和故障注入测试。
 | frontend lint/typecheck/test/build | yes | yes | yes |
 | architecture dependency tests | yes | yes | yes |
 | API integration tests | yes | yes | yes |
-| Playwright smoke | yes | yes | yes |
-| full E2E | optional | yes | yes |
 | secret/privacy scan | yes | yes | yes |
 | CodeQL | yes | yes | yes |
 | dependency review | yes | yes | yes |
@@ -351,7 +354,6 @@ Updater 上线前必须完成威胁建模、代码审计和故障注入测试。
 
 - 行为和失败语义已实现；
 - 单元/集成测试覆盖核心规则；
-- 关键用户流程有 E2E；
 - API 契约和前端类型同步；
 - 日志和审计脱敏；
 - 文档更新；

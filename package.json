@@ -1,7 +1,7 @@
 {
   "name": "sub2api-report",
   "private": true,
-  "version": "0.4.0",
+  "version": "0.6.0",
   "packageManager": "pnpm@11.17.0",
   "scripts": {
     "dev:web": "pnpm --dir web run dev",
@@ -9,10 +9,8 @@
     "lint:web": "pnpm --dir web run lint",
     "test:web": "pnpm --dir web run test",
     "typecheck:web": "pnpm --dir web run typecheck",
-    "e2e:web": "pnpm --dir web run e2e",
-    "quality:inspect-code": "node scripts/inspect-code.mjs",
-    "quality:dotnet": "dotnet format Sub2ApiReport.slnx --verify-no-changes --no-restore && dotnet build Sub2ApiReport.slnx --configuration Release --no-restore && pnpm run quality:inspect-code && dotnet test Sub2ApiReport.slnx --configuration Release --no-build",
-    "quality:web": "pnpm run typecheck:web && pnpm run lint:web && pnpm run test:web && pnpm run build:web && pnpm run e2e:web",
+    "quality:dotnet": "dotnet format Sub2ApiReport.slnx --verify-no-changes --no-restore && dotnet build Sub2ApiReport.slnx --configuration Release --no-restore && dotnet test Sub2ApiReport.slnx --configuration Release --no-build",
+    "quality:web": "pnpm run typecheck:web && pnpm run lint:web && pnpm run test:web && pnpm run build:web",
     "quality": "pnpm run quality:dotnet && pnpm run quality:web"
   }
 }

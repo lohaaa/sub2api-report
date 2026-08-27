@@ -16,9 +16,15 @@ public sealed class Sub2ApiConnection
 
     public string? AdminApiKeySuffix { get; private set; }
 
-    public long UserId { get; private set; }
+    public long? LegacyUserId { get; private init; }
+
+    public Sub2ApiUserScopeMode UserScopeMode { get; private set; } = Sub2ApiUserScopeMode.SelectedUsers;
 
     public long? CodexGroupId { get; private set; }
+
+    public DateTimeOffset? LastUsersSynchronizedAt { get; private set; }
+
+    public int? LastSynchronizedUserCount { get; private set; }
 
     public long Revision { get; private set; } = 1;
 
@@ -38,14 +44,12 @@ public sealed class Sub2ApiConnection
         string baseUrl,
         string adminApiKeyCiphertext,
         string adminApiKeySuffix,
-        long userId,
         long? codexGroupId,
         DateTimeOffset createdAt) => new()
         {
             BaseUrl = ValidateBaseUrl(baseUrl),
             AdminApiKeyCiphertext = ValidateCiphertext(adminApiKeyCiphertext),
             AdminApiKeySuffix = ValidateSuffix(adminApiKeySuffix),
-            UserId = ValidatePositiveId(userId, nameof(userId)),
             CodexGroupId = ValidateOptionalPositiveId(codexGroupId, nameof(codexGroupId)),
             UpdatedAt = createdAt,
         };
@@ -55,7 +59,6 @@ public sealed class Sub2ApiConnection
         string? adminApiKeyCiphertext,
         string? adminApiKeySuffix,
         bool clearAdminApiKey,
-        long userId,
         long? codexGroupId,
         DateTimeOffset updatedAt)
     {
@@ -65,7 +68,6 @@ public sealed class Sub2ApiConnection
         }
 
         BaseUrl = ValidateBaseUrl(baseUrl);
-        UserId = ValidatePositiveId(userId, nameof(userId));
         CodexGroupId = ValidateOptionalPositiveId(codexGroupId, nameof(codexGroupId));
         if (clearAdminApiKey)
         {
@@ -89,6 +91,20 @@ public sealed class Sub2ApiConnection
         LastTestedAt = testedAt;
     }
 
+    public void UpdateUserScope(Sub2ApiUserScopeMode mode, DateTimeOffset updatedAt)
+    {
+        UserScopeMode = mode;
+        UpdatedAt = updatedAt;
+        Revision++;
+    }
+
+    public void RecordUserSynchronization(int userCount, DateTimeOffset synchronizedAt)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(userCount);
+        LastSynchronizedUserCount = userCount;
+        LastUsersSynchronizedAt = synchronizedAt;
+    }
+
     public void RecordSynchronization(int keyCount, DateTimeOffset synchronizedAt)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(keyCount);
@@ -110,13 +126,11 @@ public sealed class Sub2ApiConnection
             : throw new ArgumentException("The secret suffix cannot exceed 8 characters.", nameof(value));
     }
 
-    private static long ValidatePositiveId(long value, string parameterName) => value > 0
-        ? value
-        : throw new ArgumentOutOfRangeException(parameterName, "The identifier must be positive.");
-
     private static long? ValidateOptionalPositiveId(long? value, string parameterName) => value is null
         ? null
-        : ValidatePositiveId(value.Value, parameterName);
+        : value.Value > 0
+            ? value
+            : throw new ArgumentOutOfRangeException(parameterName, "The identifier must be positive.");
 
     private static string ValidateText(string value, int maximumLength, string parameterName)
     {

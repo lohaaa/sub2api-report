@@ -15,21 +15,20 @@ internal static class ReportCsvSerializer
         AppendRow(builder, "时区", report.Timezone);
         AppendRow(builder, "7 日窗口", $"{FormatDate(report.SevenDayWindow.StartDate)} 至 {FormatDate(report.SevenDayWindow.EndDate)}");
         AppendRow(builder, "30 日窗口", $"{FormatDate(report.ThirtyDayWindow.StartDate)} 至 {FormatDate(report.ThirtyDayWindow.EndDate)}");
-        AppendRow(builder, "失败区间", report.Diagnostics.FailedSegments.Count.ToString(CultureInfo.InvariantCulture));
-        AppendRow(builder, "未归属区间", report.Diagnostics.UnassignedSegments.Count.ToString(CultureInfo.InvariantCulture));
+        AppendRow(builder, "失败区间", report.Diagnostics.FailedRanges.Count.ToString(CultureInfo.InvariantCulture));
         builder.Append("\r\n");
         AppendRow(
             builder,
-            "人员编码",
-            "人员",
-            "Key 数量",
+            "Sub2API 用户",
+            "Key 名称",
+            "Key ID",
+            "状态",
             "7 日请求数",
             "7 日输入 Token",
             "7 日输出 Token",
             "7 日缓存创建 Token",
             "7 日缓存读取 Token",
             "7 日总 Token",
-            "7 日标准费用",
             "7 日实际费用",
             "30 日请求数",
             "30 日输入 Token",
@@ -37,20 +36,39 @@ internal static class ReportCsvSerializer
             "30 日缓存创建 Token",
             "30 日缓存读取 Token",
             "30 日总 Token",
-            "30 日标准费用",
             "30 日实际费用",
             "30 日日均实际费用");
 
-        foreach (var person in report.People)
+        foreach (var key in report.Keys)
         {
-            AppendUsageRow(builder, person.Code, person.DisplayName, person.KeyCount, person.SevenDay, person.ThirtyDay);
+            AppendKeyRow(
+                builder,
+                key.SourceUserEmail ?? "未知用户",
+                key.Name,
+                key.ExternalId,
+                key.Status,
+                key.SevenDay,
+                key.ThirtyDay);
+        }
+
+        foreach (var user in report.Users)
+        {
+            AppendUsageRow(
+                builder,
+                user.Email,
+                "（用户小计）",
+                string.Empty,
+                string.Empty,
+                user.SevenDay,
+                user.ThirtyDay);
         }
 
         AppendUsageRow(
             builder,
             "TOTAL",
-            "全员总计",
-            report.Keys.Count,
+            "全部总计",
+            string.Empty,
+            string.Empty,
             report.SevenDayTotal,
             report.ThirtyDayTotal);
 
@@ -62,24 +80,41 @@ internal static class ReportCsvSerializer
         return output;
     }
 
+    private static void AppendKeyRow(
+        StringBuilder builder,
+        string email,
+        string name,
+        string externalId,
+        string status,
+        ReportUsageMetrics sevenDay,
+        ReportUsageMetrics thirtyDay) => AppendUsageRow(
+            builder,
+            email,
+            name,
+            externalId,
+            status,
+            sevenDay,
+            thirtyDay);
+
     private static void AppendUsageRow(
         StringBuilder builder,
-        string code,
-        string displayName,
-        int keyCount,
+        string email,
+        string name,
+        string externalId,
+        string status,
         ReportUsageMetrics sevenDay,
         ReportUsageMetrics thirtyDay) => AppendRow(
             builder,
-            code,
-            displayName,
-            keyCount.ToString(CultureInfo.InvariantCulture),
+            email,
+            name,
+            externalId,
+            status,
             sevenDay.TotalRequests.ToString(CultureInfo.InvariantCulture),
             sevenDay.TotalInputTokens.ToString(CultureInfo.InvariantCulture),
             sevenDay.TotalOutputTokens.ToString(CultureInfo.InvariantCulture),
             sevenDay.TotalCacheCreationTokens.ToString(CultureInfo.InvariantCulture),
             sevenDay.TotalCacheReadTokens.ToString(CultureInfo.InvariantCulture),
             sevenDay.TotalTokens.ToString(CultureInfo.InvariantCulture),
-            FormatDecimal(sevenDay.TotalCost),
             FormatDecimal(sevenDay.TotalActualCost),
             thirtyDay.TotalRequests.ToString(CultureInfo.InvariantCulture),
             thirtyDay.TotalInputTokens.ToString(CultureInfo.InvariantCulture),
@@ -87,7 +122,6 @@ internal static class ReportCsvSerializer
             thirtyDay.TotalCacheCreationTokens.ToString(CultureInfo.InvariantCulture),
             thirtyDay.TotalCacheReadTokens.ToString(CultureInfo.InvariantCulture),
             thirtyDay.TotalTokens.ToString(CultureInfo.InvariantCulture),
-            FormatDecimal(thirtyDay.TotalCost),
             FormatDecimal(thirtyDay.TotalActualCost),
             FormatDecimal(thirtyDay.TotalActualCost / 30m));
 

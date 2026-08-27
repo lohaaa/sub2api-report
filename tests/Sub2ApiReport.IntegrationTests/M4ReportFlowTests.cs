@@ -44,7 +44,7 @@ public sealed class M4ReportFlowTests
     }
 
     [Fact]
-    public async Task DryRunSplitsOwnershipPersistsCanonicalSnapshotAndExportsBomCsv()
+    public async Task DryRunAutoRefreshesPersistsCanonicalSnapshotAndExportsBomCsv()
     {
         var upstream = new StubSub2ApiClient
         {
@@ -54,15 +54,7 @@ public sealed class M4ReportFlowTests
         await InitializeAsync(factory);
         using var client = CreateClient(factory);
         await LoginAsync(client);
-        await ConfigureAndSynchronizeAsync(client);
-
-        var personA = await CreatePersonAsync(client, "person-a", "合成人员 A");
-        var personB = await CreatePersonAsync(client, "person-b", "合成人员 B");
-        var inventory = await client.GetFromJsonAsync<ApiKeyInventoryPageResponse>(
-            "/api/v1/sub2api/keys?page=1&pageSize=50");
-        var key = Assert.Single(Assert.IsType<ApiKeyInventoryPageResponse>(inventory).Items);
-        await CreateAssignmentAsync(client, personA.Id, key.Id, "2026-01-01", "2026-08-20");
-        await CreateAssignmentAsync(client, personB.Id, key.Id, "2026-08-21", null);
+        await ConfigureConnectionAsync(client);
 
         using var generateResponse = await SendJsonAsync(
             client,
@@ -74,29 +66,34 @@ public sealed class M4ReportFlowTests
             await generateResponse.Content.ReadFromJsonAsync<ReportDetailResponse>(JsonOptions));
         Assert.Equal($"/api/v1/reports/{report.ReportId:D}", generateResponse.Headers.Location?.OriginalString);
         Assert.Equal(ReportStatus.Complete, report.Status);
+        Assert.Equal(3, report.SchemaVersion);
         Assert.Equal(new DateOnly(2026, 8, 19), report.SevenDayWindow.StartDate);
         Assert.Equal(new DateOnly(2026, 7, 27), report.ThirtyDayWindow.StartDate);
         Assert.Equal("7", report.SevenDayTotal.TotalRequests);
         Assert.Equal("30", report.ThirtyDayTotal.TotalRequests);
         Assert.Equal("3", report.ThirtyDayTotal.TotalActualCost);
-        Assert.Equal(3, upstream.Calls.Count);
+        Assert.Equal(2, upstream.Calls.Count);
         Assert.All(upstream.Calls, call => Assert.Equal("Asia/Shanghai", call.Timezone));
 
-        var usageA = report.People.Single(person => person.Code == "person-a");
-        var usageB = report.People.Single(person => person.Code == "person-b");
-        Assert.Equal("25", usageA.ThirtyDay.TotalRequests);
-        Assert.Equal("2", usageA.SevenDay.TotalRequests);
-        Assert.Equal("5", usageB.ThirtyDay.TotalRequests);
-        Assert.Equal("5", usageB.SevenDay.TotalRequests);
-        Assert.Empty(report.Diagnostics.FailedSegments);
-        Assert.Empty(report.Diagnostics.UnassignedSegments);
+        var user = Assert.Single(report.Users);
+        Assert.Equal("user@example.com", user.Email);
+        Assert.Equal(1, user.KeyCount);
+        Assert.Equal("30", user.ThirtyDay.TotalRequests);
+        var key = Assert.Single(report.Keys);
+        Assert.Equal("Rotated Key", key.Name);
+        Assert.Equal("7", key.SevenDay.TotalRequests);
+        Assert.Equal("30", key.ThirtyDay.TotalRequests);
+        Assert.Empty(report.Diagnostics.FailedRanges);
 
         using var listResponse = await client.GetAsync("/api/v1/reports?page=1&pageSize=25");
         Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
         var page = Assert.IsType<ReportPageResponse>(
             await listResponse.Content.ReadFromJsonAsync<ReportPageResponse>(JsonOptions));
         Assert.Equal(1, page.Total);
-        Assert.Equal(report.ReportId, Assert.Single(page.Items).Id);
+        var listItem = Assert.Single(page.Items);
+        Assert.Equal(report.ReportId, listItem.Id);
+        Assert.Equal(1, listItem.UserCount);
+        Assert.Equal(1, listItem.KeyCount);
 
         using var detailResponse = await client.GetAsync($"/api/v1/reports/{report.ReportId:D}");
         Assert.Equal(HttpStatusCode.OK, detailResponse.StatusCode);
@@ -112,9 +109,9 @@ public sealed class M4ReportFlowTests
         var csv = await csvResponse.Content.ReadAsByteArrayAsync();
         Assert.True(csv.AsSpan().StartsWith(Encoding.UTF8.GetPreamble()));
         var csvText = Encoding.UTF8.GetString(csv[Encoding.UTF8.GetPreamble().Length..]);
-        Assert.Contains("人员编码,人员,Key 数量", csvText, StringComparison.Ordinal);
-        Assert.Contains("person-a,合成人员 A,1", csvText, StringComparison.Ordinal);
-        Assert.Contains("TOTAL,全员总计,1", csvText, StringComparison.Ordinal);
+        Assert.Contains("Sub2API 用户,Key 名称,Key ID,状态", csvText, StringComparison.Ordinal);
+        Assert.Contains("user@example.com,Rotated Key,101,active", csvText, StringComparison.Ordinal);
+        Assert.Contains("TOTAL,全部总计", csvText, StringComparison.Ordinal);
 
         string originalCanonicalJson;
         await using (var scope = factory.Services.CreateAsyncScope())
@@ -126,8 +123,7 @@ public sealed class M4ReportFlowTests
             Assert.Equal(3m, stored.ThirtyDayActualCost);
         }
 
-        upstream.Keys = [Key(101, "Rotated Key"), Key(102, "Unassigned Key")];
-        await SynchronizeAsync(client);
+        upstream.Keys = [Key(101, "Rotated Key"), Key(102, "New Key")];
         upstream.FailurePredicate = call =>
             call.ExternalApiKeyId == 101 && call.StartDate == new DateOnly(2026, 8, 19);
         using var partialResponse = await SendJsonAsync(
@@ -139,8 +135,9 @@ public sealed class M4ReportFlowTests
         var partial = Assert.IsType<ReportDetailResponse>(
             await partialResponse.Content.ReadFromJsonAsync<ReportDetailResponse>(JsonOptions));
         Assert.Equal(ReportStatus.Partial, partial.Status);
-        Assert.Single(partial.Diagnostics.FailedSegments);
-        Assert.Equal(2, partial.Diagnostics.UnassignedSegments.Count);
+        Assert.Single(partial.Diagnostics.FailedRanges);
+        Assert.Equal(2, partial.Keys.Count);
+        Assert.Equal(2, upstream.Calls.Count(call => call.ExternalApiKeyId == 102));
 
         await using var verificationScope = factory.Services.CreateAsyncScope();
         var verificationContext = verificationScope.ServiceProvider.GetRequiredService<ReportDbContext>();
@@ -150,6 +147,46 @@ public sealed class M4ReportFlowTests
             verificationContext.ReportSnapshots.Single(item => item.Id == report.ReportId).CanonicalJson);
         Assert.Contains(verificationContext.AuditEvents, audit => audit is
         { Action: "report.generate.dry-run", Result: "succeeded" });
+        Assert.Contains(verificationContext.ReportGenerationRuns, item => item.Status == ReportGenerationStatus.Succeeded);
+    }
+
+    [Fact]
+    public async Task DryRunRecordsRefreshFailuresForBackgroundDisplay()
+    {
+        var upstream = new StubSub2ApiClient
+        {
+            Keys = [Key(101, "Alpha")],
+        };
+        await using var factory = CreateFactory(upstream);
+        await InitializeAsync(factory);
+        using var client = CreateClient(factory);
+        await LoginAsync(client);
+        await ConfigureConnectionAsync(client);
+
+        upstream.Failure = new Sub2ApiClientException(
+            Sub2ApiFailureKind.Unavailable,
+            "synthetic refresh failure");
+
+        using var failedResponse = await SendJsonAsync(
+            client,
+            HttpMethod.Post,
+            "/api/v1/reports/dry-run",
+            new { cutoffDate = "2026-08-25" });
+        Assert.Equal(HttpStatusCode.BadGateway, failedResponse.StatusCode);
+
+        using var runsResponse = await client.GetAsync("/api/v1/reports/generations");
+        Assert.Equal(HttpStatusCode.OK, runsResponse.StatusCode);
+        var runs = Assert.IsType<ReportGenerationRunPageResponse>(
+            await runsResponse.Content.ReadFromJsonAsync<ReportGenerationRunPageResponse>(JsonOptions));
+        var failedRun = Assert.Single(runs.Items);
+        Assert.Equal(ReportGenerationStatus.Failed, failedRun.Status);
+        Assert.Equal("user_sync", failedRun.Stage);
+        Assert.Equal("unavailable", failedRun.ErrorCode);
+        Assert.Null(failedRun.ReportSnapshotId);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<ReportDbContext>();
+        Assert.Empty(dbContext.ReportSnapshots);
     }
 
     [Fact]
@@ -163,12 +200,7 @@ public sealed class M4ReportFlowTests
         await InitializeAsync(factory);
         using var client = CreateClient(factory);
         await LoginAsync(client);
-        await ConfigureAndSynchronizeAsync(client);
-        var person = await CreatePersonAsync(client, "person-a", "合成人员 A");
-        var inventory = await client.GetFromJsonAsync<ApiKeyInventoryPageResponse>(
-            "/api/v1/sub2api/keys?page=1&pageSize=50");
-        var key = Assert.Single(Assert.IsType<ApiKeyInventoryPageResponse>(inventory).Items);
-        await CreateAssignmentAsync(client, person.Id, key.Id, "2024-01-01", null);
+        await ConfigureConnectionAsync(client);
 
         using var response = await SendJsonAsync(
             client,
@@ -200,7 +232,7 @@ public sealed class M4ReportFlowTests
         await InitializeAsync(factory);
         using var client = CreateClient(factory);
         await LoginAsync(client);
-        await ConfigureAndSynchronizeAsync(client);
+        await ConfigureConnectionAsync(client);
         var settings = await client.GetFromJsonAsync<SystemSettingsResponse>("/api/v1/system/settings");
         Assert.NotNull(settings);
         using (var settingsResponse = await SendJsonAsync(
@@ -243,7 +275,7 @@ public sealed class M4ReportFlowTests
             services.AddSingleton<TimeProvider>(new FixedTimeProvider(Now));
         });
 
-    private static async Task ConfigureAndSynchronizeAsync(HttpClient client)
+    private static async Task ConfigureConnectionAsync(HttpClient client)
     {
         await StepUpAsync(client);
         using var saveResponse = await SendJsonAsync(
@@ -255,51 +287,21 @@ public sealed class M4ReportFlowTests
                 baseUrl = "https://sub2api.example.com",
                 adminApiKey = AdminApiKey,
                 clearAdminApiKey = false,
-                userId = "42",
                 codexGroupId = "7",
                 revision = 0,
             });
         Assert.Equal(HttpStatusCode.OK, saveResponse.StatusCode);
-        await SynchronizeAsync(client);
-    }
-
-    private static async Task SynchronizeAsync(HttpClient client)
-    {
-        using var response = await SendJsonAsync<object?>(
+        using var sync = await SendJsonAsync<object?>(client, HttpMethod.Post, "/api/v1/sub2api/users/sync", null);
+        Assert.Equal(HttpStatusCode.OK, sync.StatusCode);
+        var scope = Assert.IsType<Sub2ApiUserScopeResponse>(
+            await client.GetFromJsonAsync<Sub2ApiUserScopeResponse>("/api/v1/sub2api/users"));
+        var user = Assert.Single(scope.Users);
+        using var update = await SendJsonAsync(
             client,
-            HttpMethod.Post,
-            "/api/v1/sub2api/keys/sync",
-            null);
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-    }
-
-    private static async Task<PersonResponse> CreatePersonAsync(
-        HttpClient client,
-        string code,
-        string displayName)
-    {
-        using var response = await SendJsonAsync(
-            client,
-            HttpMethod.Post,
-            "/api/v1/people",
-            new { code, displayName });
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        return Assert.IsType<PersonResponse>(await response.Content.ReadFromJsonAsync<PersonResponse>());
-    }
-
-    private static async Task CreateAssignmentAsync(
-        HttpClient client,
-        Guid personId,
-        Guid keyId,
-        string validFrom,
-        string? validTo)
-    {
-        using var response = await SendJsonAsync(
-            client,
-            HttpMethod.Post,
-            $"/api/v1/people/{personId:D}/assignments",
-            new { externalApiKeyId = keyId, validFrom, validTo });
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            HttpMethod.Put,
+            "/api/v1/sub2api/users/scope",
+            new { mode = "SelectedUsers", selectedUserIds = new[] { user.Id }, revision = scope.ConnectionRevision });
+        Assert.Equal(HttpStatusCode.OK, update.StatusCode);
     }
 
     private static Sub2ApiExternalKey Key(long id, string name) => new(
@@ -379,6 +381,8 @@ public sealed class M4ReportFlowTests
 
         public Func<UsageCall, bool>? FailurePredicate { get; set; }
 
+        public Sub2ApiClientException? Failure { get; set; }
+
         public TimeSpan Delay { get; init; }
 
         public int MaxConcurrentCalls => _maxConcurrentCalls;
@@ -390,13 +394,23 @@ public sealed class M4ReportFlowTests
             CancellationToken cancellationToken) =>
             Task.FromResult(new Sub2ApiConnectionProbe(Keys.Length));
 
+        public Task<IReadOnlyList<Sub2ApiExternalUser>> GetUsersAsync(
+            Sub2ApiConnectionCredentials connection,
+            CancellationToken cancellationToken) => Failure is null
+            ? Task.FromResult<IReadOnlyList<Sub2ApiExternalUser>>(
+                [new Sub2ApiExternalUser(42, "user@example.com", "synthetic-user", "active")])
+            : Task.FromException<IReadOnlyList<Sub2ApiExternalUser>>(Failure);
+
         public Task<IReadOnlyList<Sub2ApiExternalKey>> GetApiKeysAsync(
             Sub2ApiConnectionCredentials connection,
-            CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyList<Sub2ApiExternalKey>>(Keys);
+            long externalUserId,
+            CancellationToken cancellationToken) => Failure is null
+            ? Task.FromResult<IReadOnlyList<Sub2ApiExternalKey>>(Keys)
+            : Task.FromException<IReadOnlyList<Sub2ApiExternalKey>>(Failure);
 
         public async Task<Sub2ApiUsageStats> GetUsageStatsAsync(
             Sub2ApiConnectionCredentials connection,
+            long externalUserId,
             long externalApiKeyId,
             DateOnly startDate,
             DateOnly endDate,

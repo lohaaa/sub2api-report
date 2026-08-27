@@ -7,9 +7,9 @@
 
 Sub2API Report 是一个单管理员、单实例的内部运营工具，用于：
 
-- 将 Sub2API API Key 映射到实际人员；
-- 统计每个人最近 7 天和 30 天的 Codex 用量；
-- 每月 1 日自动生成报告；
+- 按 Sub2API 用户展示账号下的 API Key；
+- 统计每个 API Key 最近 7 天和 30 天的 Codex 用量，并按用户小计；
+- 每次生成报告前自动刷新 Sub2API 用户与 Key，刷新失败则终止并记录错误；
 - 通过邮箱、钉钉、飞书任意组合发送；
 - 留存报告、发送结果和操作审计；
 - 在管理页面检查并一键升级系统。
@@ -102,7 +102,6 @@ Browser
 │  ├─ Sub2ApiReport.UnitTests/
 │  ├─ Sub2ApiReport.IntegrationTests/
 │  ├─ Sub2ApiReport.ArchitectureTests/
-│  └─ e2e/                           # Playwright
 ├─ deploy/
 │  ├─ compose.yaml
 │  ├─ .env.example
@@ -141,9 +140,8 @@ Updater 不引用业务 Infrastructure，不读取业务实体，也不能调用
 | --- | --- |
 | Setup | 初始化状态、一次性初始化码、首个管理员创建 |
 | Identity | 登录、登出、修改密码、会话和安全审计 |
-| Sub2Api | 连接配置、连通性检查、Key 同步、用量查询 |
-| People | 人员档案、Key 归属、轮换和未映射检查 |
-| Reports | 日期窗口、采集、聚合、快照、CSV/HTML 渲染 |
+| Sub2Api | 连接配置、连通性检查、用户/Key 同步、用量查询 |
+| Reports | 日期窗口、自动刷新、采集、聚合、快照、CSV/HTML 渲染 |
 | Scheduling | 月报计划、Quartz Trigger、手工运行、补跑 |
 | Notifications | 邮件、钉钉、飞书配置、测试和投递 |
 | Updates | 版本检查、升级授权、状态查询、历史记录 |
@@ -200,6 +198,10 @@ Queued -> Collecting -> Rendering -> Delivering -> Succeeded
           \-> Failed
 ```
 
+0.5.0 的手工投递只使用该状态机的尾部：运行从 `Running` 进入，全部渠道成功
+为 `Succeeded`，存在失败渠道为 `PartialFailed`，全部失败为 `Failed`。`Queued`、
+`Collecting`、`Rendering` 和幂等键唯一索引由 M6 的计划运行启用，不重建状态机。
+
 `Delivery` 状态：
 
 ```text
@@ -243,24 +245,26 @@ Pending -> Sending -> Succeeded
 | `AdminUsers` + Identity tables | `Id`, `UserName`, `PasswordHash` | 唯一管理员；数据库约束只允许一个活动管理员 |
 | `SystemSettings` | `InitializedAt`, `Timezone`, `ReleaseChannel`, `LogLevel`, retention fields, `Revision` | 可动态更新的单例系统设置 |
 | `SetupChallenges` | `CodeHash`, `ExpiresAt`, `ConsumedAt` | 只保存初始化码哈希 |
-| `Sub2ApiConnections` | `BaseUrl`, `AdminKeyCiphertext`, `UserId`, `CodexGroupId` | 当前只允许一个活动连接 |
-| `People` | `Id`, `Code`, `DisplayName`, `Active` | 人员档案 |
-| `ExternalApiKeys` | `ExternalId`, `NameSnapshot`, `Status`, `LastSeenAt`, `RetiredAt` | Sub2API Key 本地清单，不保存完整 Key |
-| `PersonApiKeyAssignments` | `PersonId`, `ExternalApiKeyId`, `ValidFrom`, `ValidTo` | 支持 Key 轮换和一人多 Key |
+| `Sub2ApiConnections` | `BaseUrl`, `AdminKeyCiphertext`, `LegacyUserId`, `UserScopeMode`, `CodexGroupId` | 当前只允许一个活动连接 |
+| `Sub2ApiUsers` | `ExternalId`, `EmailSnapshot`, `Status`, `IsSelected` | 同步的上游用户快照与报告范围 |
+| `ExternalApiKeys` | `ExternalId`, `Sub2ApiUserId`, `NameSnapshot`, `Status`, `GroupId`, `RetiredAt` | Sub2API Key 本地缓存，稳定标识为 `user_id + api_key_id`；报告生成前自动刷新 |
+| `ReportGenerationRuns` | `Trigger`, `Status`, `Stage`, `ErrorCode`, `ErrorMessage` | 每次报告生成尝试，包含自动刷新失败信息 |
 | `ReportSnapshots` | `Id`, `SchemaVersion`, `CutoffDate`, `Status`, `CanonicalJson`, cost summaries | M4 不可变报告快照；列表字段单独索引，明细只保留一份 canonical JSON |
 | `ReportSchedules` | `DayOfMonth`, `LocalTime`, `Timezone`, `Enabled` | M6 计划任务，MVP 只有一条月报计划 |
 | `NotificationChannels` | `Type`, `Name`, `Enabled`, `ConfigCiphertext` | M5 邮件、钉钉、飞书实例 |
-| `ReportRuns` | `Id`, `IdempotencyKey`, `PeriodEnd`, `Status`, `SnapshotId` | M6 运行和调度幂等状态 |
-| `DeliveryRecords` | `RunId`, `ChannelId`, `PayloadHash`, `Status`, `Attempts` | M5/M6 分渠道幂等与错误信息 |
+| `ReportRuns` | `Id`, `SnapshotId`, `Trigger`, `Status`, `IdempotencyKey` | M5 手工投递运行（Trigger=ManualDelivery）；M6 增加计划触发并启用幂等键 |
+| `DeliveryRecords` | `RunId`, `ChannelId`, `PayloadHash`, `Status`, `Attempts` | M5 手工投递逐渠道状态；M6 计划投递复用同一状态机 |
+| `DeliveryParts` | `DeliveryId`, `PartIndex`, `PayloadHash`, `Status`, `Attempts` | M5 分片消息逐片状态，补发只重试失败分片 |
 | `UpdateRecords` | `FromVersion`, `ToVersion`, `Status`, timestamps | 升级历史 |
 | `AuditEvents` | `Actor`, `Action`, `Target`, `Result`, `MetadataJson` | 不保存密钥和密码 |
 
 关键约束：
 
-- 一个外部 Key 在同一时间只能归属一个人员。
-- `ExternalApiKeys.ExternalId` 唯一。
-- 计划报告 `IdempotencyKey` 唯一。
-- `DeliveryRecords(RunId, ChannelId)` 唯一。
+- 一个 Key 的用量始终使用其所属 Sub2API 用户的 `user_id` 查询；
+- `ExternalApiKeys.ExternalId` 在同一用户下唯一；
+- 0.6.0 起 `People`、`PersonApiKeyAssignments` 表已删除，历史报告快照保持不可变；
+- 计划报告 `IdempotencyKey` 唯一；
+- `DeliveryRecords(RunId, ChannelId)` 唯一；
 - 报表快照生成后不可修改，只能生成新的补跑记录。
 
 ### 6.3 机密数据
@@ -362,8 +366,14 @@ POST /api/v1/channels/{id}/test
 GET  /api/v1/reports
 GET  /api/v1/reports/{id}
 GET  /api/v1/reports/{id}/csv
-POST /api/v1/reports/run
-POST /api/v1/reports/{id}/deliveries/{channelId}/retry
+POST /api/v1/reports/dry-run
+
+GET/POST/PUT/DELETE /api/v1/channels
+POST /api/v1/channels/{id}/test
+
+GET  /api/v1/reports/{id}/deliveries
+POST /api/v1/reports/{id}/deliveries
+POST /api/v1/reports/{id}/deliveries/{runId}/retry
 
 GET  /api/v1/system/version
 GET  /api/v1/system/settings
@@ -391,7 +401,6 @@ GET  /health/ready
 - Lucide React 图标。
 - Recharts 仅用于确实需要的趋势图；所有图表提供数据表替代。
 - Vitest + Testing Library + MSW。
-- Playwright + axe-core 做关键流程和可访问性验证。
 
 ### 9.2 页面信息架构
 
@@ -399,7 +408,7 @@ GET  /health/ready
 
 ```text
 工作台
-人员与 Key
+API Keys
 报告记录
 发送渠道
 计划任务
@@ -428,7 +437,7 @@ GET  /health/ready
 
 1. 输入 Docker 日志初始化码；
 2. 创建管理员用户名和密码；
-3. 登录后进入配置清单：连接 Sub2API、同步 Key、配置人员、配置渠道、确认计划。
+3. 登录后进入配置清单：连接 Sub2API、同步用户并选择范围、配置渠道、确认计划。
 
 步骤使用有语义的进度导航，表单有显式 label、错误摘要和焦点管理。初始化码使用 `autocomplete="one-time-code"`，用户名和密码使用正确 autocomplete 属性。
 
@@ -509,8 +518,6 @@ MVP 不强制引入 Prometheus；保留 OpenTelemetry 接入点。
 - 三渠道组合和失败补发；
 - 更新检查和升级确认流程。
 
-桌面与移动视口均运行 Playwright 截图、布局溢出和 axe 检查。
-
 ## 13. 非功能目标
 
 | 指标 | MVP 目标 |
@@ -544,12 +551,12 @@ MVP 不包含：
 
 1. 建立 monorepo、后端分层、React SPA 和统一构建。
 2. 实现 Migrator、SQLite、Identity 和日志初始化码。
-3. 实现 Sub2API 连接、Key 同步、人员映射。
-4. 实现报表聚合、快照、CSV 和手工 dry-run。
+3. 实现 Sub2API 连接、用户与 Key 自动同步。
+4. 实现报表聚合（用户 → Key）、快照、CSV 和手工 dry-run。
 5. 实现邮箱、钉钉、飞书及组合发送。
 6. 接入 Quartz 月报计划、幂等和补发。
 7. 完成 Docker Compose、备份和 GitHub Release CI。
 8. 实现 updater、签名验证、健康检查和自动回滚。
-9. 完成安全加固、E2E、发布文档和首个稳定版本。
+9. 完成安全加固、发布文档和首个稳定版本。
 
 在线升级安排在业务闭环之后，但发布契约、数据目录和镜像标签必须从第一阶段就按升级方案设计，避免后期重构部署方式。

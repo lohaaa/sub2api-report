@@ -52,7 +52,6 @@ internal sealed class DatabaseSub2ApiConnectionService(
                 baseUrl,
                 _protector.Protect(secret),
                 CreateSuffix(secret),
-                command.UserId,
                 command.CodexGroupId,
                 timeProvider.GetUtcNow());
             dbContext.Sub2ApiConnections.Add(connection);
@@ -71,7 +70,6 @@ internal sealed class DatabaseSub2ApiConnectionService(
                 secret is null ? null : _protector.Protect(secret),
                 secret is null ? null : CreateSuffix(secret),
                 command.ClearAdminApiKey,
-                command.UserId,
                 command.CodexGroupId,
                 timeProvider.GetUtcNow());
         }
@@ -106,7 +104,6 @@ internal sealed class DatabaseSub2ApiConnectionService(
         return new Sub2ApiConnectionCredentials(
             connection.BaseUrl,
             _protector.Unprotect(connection.AdminApiKeyCiphertext),
-            connection.UserId,
             connection.CodexGroupId,
             connection.Revision);
     }
@@ -141,13 +138,15 @@ internal sealed class DatabaseSub2ApiConnectionService(
         connection.BaseUrl,
         connection.AdminApiKeyCiphertext is not null,
         connection.AdminApiKeySuffix is null ? null : $"****{connection.AdminApiKeySuffix}",
-        connection.UserId,
+        connection.UserScopeMode,
         connection.CodexGroupId,
         connection.Revision,
         connection.UpdatedAt,
         connection.LastTestedAt,
         connection.LastTestSucceeded,
         connection.LastTestCode,
+        connection.LastUsersSynchronizedAt,
+        connection.LastSynchronizedUserCount,
         connection.LastSynchronizedAt,
         connection.LastSynchronizedKeyCount);
 

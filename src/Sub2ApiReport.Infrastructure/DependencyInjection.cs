@@ -2,14 +2,13 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Sub2ApiReport.Application.Audit;
-using Sub2ApiReport.Application.People;
+using Sub2ApiReport.Application.Notifications;
 using Sub2ApiReport.Application.Reports;
 using Sub2ApiReport.Application.Security;
 using Sub2ApiReport.Application.Sub2Api;
 using Sub2ApiReport.Application.System;
 using Sub2ApiReport.Infrastructure.Audit;
 using Sub2ApiReport.Infrastructure.Identity;
-using Sub2ApiReport.Infrastructure.People;
 using Sub2ApiReport.Infrastructure.Persistence;
 using Sub2ApiReport.Infrastructure.Reports;
 using Sub2ApiReport.Infrastructure.Security;
@@ -48,8 +47,8 @@ public static class DependencyInjection
         services.AddScoped<IAuditWriter, DatabaseAuditWriter>();
         services.AddScoped<ISetupService, DatabaseSetupService>();
         services.AddScoped<IRecoveryService, DatabaseRecoveryService>();
-        services.AddScoped<IPeopleService, DatabasePeopleService>();
         services.AddScoped<ISub2ApiConnectionService, DatabaseSub2ApiConnectionService>();
+        services.AddScoped<ISub2ApiUserService, DatabaseSub2ApiUserService>();
         services.AddScoped<IKeyInventoryService, DatabaseKeyInventoryService>();
         services.AddScoped<IReportService, DatabaseReportService>();
         services.AddHttpClient<ISub2ApiClient, Sub2ApiClient>(client =>
@@ -60,6 +59,20 @@ public static class DependencyInjection
             })
             .RedactLoggedHeaders(["x-api-key"]);
         services.AddScoped<ISystemSettingsService, DatabaseSystemSettingsService>();
+        services.AddSingleton<Notifications.ChannelSecretProtector>();
+        services.AddSingleton<IReportSender, Notifications.EmailReportSender>();
+        services.AddSingleton<IReportSender, Notifications.DingTalkReportSender>();
+        services.AddSingleton<IReportSender, Notifications.FeishuReportSender>();
+        services.AddScoped<INotificationChannelService, Notifications.DatabaseNotificationChannelService>();
+        services.AddScoped<IReportDeliveryService, Notifications.DatabaseReportDeliveryService>();
+        services.AddHttpClient(Notifications.WebhookReportSender.HttpClientName, client =>
+            {
+                client.Timeout = Timeout.InfiniteTimeSpan;
+            })
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+            {
+                AllowAutoRedirect = false,
+            });
         return services;
     }
 }

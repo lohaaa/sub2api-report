@@ -130,7 +130,11 @@ export type KeySynchronization = {
 };
 
 export type ReportStatus = "Complete" | "Partial";
-export type ReportTrigger = "ManualDryRun";
+export type ReportTrigger =
+  | "ManualDryRun"
+  | "Scheduled"
+  | "ManualScheduled"
+  | "Retry";
 
 export type ReportUsageMetrics = {
   totalRequests: string;
@@ -145,10 +149,89 @@ export type ReportUsageMetrics = {
   averageDurationMs: string;
 };
 
-export type ReportWindow = {
-  days: number;
+export type DayOfWeek =
+  | "Sunday"
+  | "Monday"
+  | "Tuesday"
+  | "Wednesday"
+  | "Thursday"
+  | "Friday"
+  | "Saturday";
+
+export type ReportWindowKind =
+  | "RollingDays"
+  | "PreviousCalendarWeek"
+  | "PreviousCalendarMonth"
+  | "CustomRange";
+
+export type ReportWindowSpec = {
+  key: string;
+  kind: ReportWindowKind;
+  rollingDays: number | null;
+  weekStartsOn: DayOfWeek | null;
+  customStartDate: string | null;
+  customEndDate: string | null;
+};
+
+export const reportWindowKeys = {
+  rollingSevenDays: "rolling_7_days",
+  rollingThirtyDays: "rolling_30_days",
+  previousCalendarWeek: "previous_calendar_week",
+  previousCalendarMonth: "previous_calendar_month",
+  customRange: "custom_range",
+} as const;
+
+export function createDefaultReportWindowSpecs(): ReportWindowSpec[] {
+  return [
+    {
+      key: reportWindowKeys.rollingSevenDays,
+      kind: "RollingDays",
+      rollingDays: 7,
+      weekStartsOn: null,
+      customStartDate: null,
+      customEndDate: null,
+    },
+    {
+      key: reportWindowKeys.rollingThirtyDays,
+      kind: "RollingDays",
+      rollingDays: 30,
+      weekStartsOn: null,
+      customStartDate: null,
+      customEndDate: null,
+    },
+    {
+      key: reportWindowKeys.previousCalendarWeek,
+      kind: "PreviousCalendarWeek",
+      rollingDays: null,
+      weekStartsOn: "Monday",
+      customStartDate: null,
+      customEndDate: null,
+    },
+    {
+      key: reportWindowKeys.previousCalendarMonth,
+      kind: "PreviousCalendarMonth",
+      rollingDays: null,
+      weekStartsOn: null,
+      customStartDate: null,
+      customEndDate: null,
+    },
+  ];
+}
+
+export type ReportWindowDescriptor = {
+  key: string;
+  kind: ReportWindowKind;
+  rollingDays: number | null;
+  weekStartsOn: DayOfWeek | null;
   startDate: string;
-  endDate: string;
+  endDateExclusive: string;
+  dayCount: number;
+  label: string;
+};
+
+export type ReportWindowMetrics = {
+  windowKey: string;
+  metrics: ReportUsageMetrics;
 };
 
 export type ReportUserUsage = {
@@ -157,8 +240,7 @@ export type ReportUserUsage = {
   username: string | null;
   email: string;
   keyCount: number;
-  sevenDay: ReportUsageMetrics;
-  thirtyDay: ReportUsageMetrics;
+  windows: ReportWindowMetrics[];
 };
 
 export type ReportKeyUsage = {
@@ -170,8 +252,7 @@ export type ReportKeyUsage = {
   status: string;
   lastUsedAt: string | null;
   retiredAt: string | null;
-  sevenDay: ReportUsageMetrics;
-  thirtyDay: ReportUsageMetrics;
+  windows: ReportWindowMetrics[];
 };
 
 export type ReportRangeFailure = {
@@ -179,8 +260,9 @@ export type ReportRangeFailure = {
   userEmail: string;
   externalKeyId: number;
   keyName: string;
+  windowKey: string;
   startDate: string;
-  endDate: string;
+  endDateExclusive: string;
   failureKind: string | null;
   errorCode: string | null;
 };
@@ -193,10 +275,8 @@ export type ReportDetail = {
   generatedAt: string;
   timezone: string;
   connectionRevision: number;
-  sevenDayWindow: ReportWindow;
-  thirtyDayWindow: ReportWindow;
-  sevenDayTotal: ReportUsageMetrics;
-  thirtyDayTotal: ReportUsageMetrics;
+  windows: ReportWindowDescriptor[];
+  windowTotals: ReportWindowMetrics[];
   users: ReportUserUsage[];
   keys: ReportKeyUsage[];
   diagnostics: {
@@ -204,6 +284,14 @@ export type ReportDetail = {
   };
 };
 
+export type ReportWindowListSummary = {
+  key: string;
+  label: string;
+  startDate: string;
+  endDateExclusive: string;
+  dayCount: number;
+  totalActualCost: string;
+};
 
 export type ReportListItem = {
   id: string;
@@ -218,7 +306,15 @@ export type ReportListItem = {
   failedRangeCount: number;
   sevenDayActualCost: string;
   thirtyDayActualCost: string;
+  windows: ReportWindowListSummary[];
 };
+
+export function getReportWindowMetrics(
+  metrics: readonly ReportWindowMetrics[],
+  windowKey: string,
+): ReportUsageMetrics | null {
+  return metrics.find((item) => item.windowKey === windowKey)?.metrics ?? null;
+}
 
 export type ReportGenerationStatus = "Running" | "Succeeded" | "Failed";
 
@@ -525,10 +621,13 @@ export function getReport(id: string, signal?: AbortSignal) {
   });
 }
 
-export function generateReport(cutoffDate: string | null) {
+export function generateReport(
+  cutoffDate: string | null,
+  windows: ReportWindowSpec[] | null,
+) {
   return apiRequest<ReportDetail>("/api/v1/reports/dry-run", {
     method: "POST",
-    body: { cutoffDate },
+    body: { cutoffDate, windows },
   });
 }
 
@@ -537,6 +636,108 @@ export function getReportGenerationRuns(page: number, signal?: AbortSignal) {
   return apiRequest<ReportGenerationRunPage>(
     `/api/v1/reports/generations?${query}`,
     { signal },
+  );
+}
+
+export type ReportSchedule = {
+  enabled: boolean;
+  dayOfMonth: number;
+  localTime: string;
+  timezone: string;
+  windows: ReportWindowSpec[];
+  revision: number;
+  updatedAt: string | null;
+  nextRunAt: string | null;
+  synchronized: boolean;
+  synchronizationErrorCode: string | null;
+};
+
+export type ReportTaskTrigger =
+  | "Scheduled"
+  | "ManualScheduled"
+  | "Retry";
+export type ReportTaskStatus =
+  | "Queued"
+  | "Collecting"
+  | "Rendering"
+  | "Delivering"
+  | "Succeeded"
+  | "PartialFailed"
+  | "Failed";
+
+export type ReportTaskRun = {
+  id: string;
+  trigger: ReportTaskTrigger;
+  status: ReportTaskStatus;
+  reportId: string | null;
+  periodEnd: string | null;
+  timezone: string | null;
+  scheduleRevision: number | null;
+  retryOfRunId: string | null;
+  attempt: number;
+  startedAt: string;
+  collectingAt: string | null;
+  renderingAt: string | null;
+  deliveringAt: string | null;
+  completedAt: string | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+  deliveryCount: number;
+  succeededDeliveryCount: number;
+  failedDeliveryCount: number;
+  hasOutcomeUnknown: boolean;
+  canRetry: boolean;
+};
+
+export type ReportTaskRunPage = {
+  items: ReportTaskRun[];
+  total: number;
+  page: number;
+  pageSize: number;
+  pages: number;
+};
+
+export function getReportSchedule(signal?: AbortSignal) {
+  return apiRequest<ReportSchedule>("/api/v1/schedule", { signal });
+}
+
+export function updateReportSchedule(input: {
+  enabled: boolean;
+  dayOfMonth: number;
+  localTime: string;
+  timezone: string;
+  windows: ReportWindowSpec[];
+  revision: number;
+}) {
+  return apiRequest<ReportSchedule>("/api/v1/schedule", {
+    method: "PUT",
+    body: input,
+  });
+}
+
+export function runReportScheduleNow() {
+  return apiRequest<ReportTaskRun>("/api/v1/schedule/run", {
+    method: "POST",
+  });
+}
+
+export function getReportTaskRuns(page: number, signal?: AbortSignal) {
+  const query = new URLSearchParams({ page: String(page), pageSize: "20" });
+  return apiRequest<ReportTaskRunPage>(`/api/v1/schedule/runs?${query}`, {
+    signal,
+  });
+}
+
+export function retryReportTaskRun(
+  runId: string,
+  confirmOutcomeUnknown: boolean,
+) {
+  return apiRequest<ReportTaskRun>(
+    `/api/v1/schedule/runs/${encodeURIComponent(runId)}/retry`,
+    {
+      method: "POST",
+      body: { confirmOutcomeUnknown },
+    },
   );
 }
 

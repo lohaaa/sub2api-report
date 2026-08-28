@@ -60,7 +60,7 @@ dotnet run --project src/Sub2ApiReport.Cli -- admin create-reset-code
 2. 在“Sub2API 连接”填写 Base URL 和 Admin API Key，可选填写 Codex Group ID；
 3. 保存后先同步用户，再选择指定用户或“全部有效用户”；
 4. 打开“API Keys”页面核对同步结果；报告生成前会自动刷新用户与 Key；
-5. 在报告页面手工生成 7/30 日报告，按 Sub2API 用户 → Key 查看用量。
+5. 在报告页面选择滚动 7 日、滚动 30 日、上一完整自然周、上一完整自然月或手工自定义区间，按 Sub2API 用户 → Key 查看用量。
 
 各字段可在 Sub2API 管理后台获取：Base URL 是访问站点的地址（不含 `/admin`、`/api/v1`
 路径）；Admin API Key 在系统设置 → 常规中创建或重新生成，生成后立即复制；用户 ID
@@ -73,7 +73,7 @@ Key 还访问其他平台时才需要填写。页面上的“获取指南”按�
 
 升级到 0.4.0 后运行 Migrator，应用 `AddReportSnapshots`。报告页面支持指定统计截止日；留空时使用配置时区中昨天，确保不包含运行当天的部分数据。每次手工生成会保存独立的 immutable canonical snapshot，不发送任何渠道。
 
-报告引擎在生成前自动刷新用户与 Key，然后对每个 Key 使用其所属 `user_id` 直接调用 7 日与 30 日 stats（`ReportConcurrency` 并发上限）。任一区间采集失败时报告状态为部分完成并逐项列出；用户或 Key 刷新失败时整次报告终止，错误记录在“最近生成记录”中展示。CSV 从已保存快照生成，使用 UTF-8 BOM，并对可能触发电子表格公式的文本加前缀保护。
+报告引擎在生成前自动刷新用户与 Key，然后按每个 Key × 去重后的解析窗口调用 stats（`ReportConcurrency` 并发上限）。默认窗口为滚动 7/30 日、上一完整自然周和上一完整自然月；手工报告可添加自定义区间，计划配置保存在 SQLite 并在任务入队时冻结。任一区间采集失败时报告状态为部分完成并逐项列出；用户或 Key 刷新失败时整次报告终止。CSV 从已保存 schema v4 canonical snapshot 生成动态长表，使用 UTF-8 BOM，并对可能触发电子表格公式的文本加前缀保护。schema v1-v3 历史快照继续可读。
 
 ## 发送渠道与报告投递
 
@@ -85,6 +85,30 @@ Key 还访问其他平台时才需要填写。页面上的“获取指南”按�
 单渠道失败不阻断其他渠道；分片消息逐片记录状态，补发只重试失败渠道与失败分片。
 Webhook 只接受钉钉和飞书官方 HTTPS 地址，且不跟随重定向；HTTP 200 中的业务错误码
 视为失败。投递运行状态与 payload 哈希保存在 SQLite 中，用于审计与避免重复发送。
+
+## 计划任务与执行记录
+
+升级到 0.7.0 后运行 Migrator。Migrator 依次应用 `AddReportScheduling` 和
+`AddUnixTimeColumns` 和 `AddUnixTimeMigrationGuard`，创建 `ReportSchedules`、任务执行
+扩展字段、Quartz SQLite JobStore 表、Unix 毫秒 companion 列和待完成 guard；随后在
+事务中把旧 ISO 8601 TEXT 时间严格解析并回填为 UTC Unix 毫秒，同时完成 guard。
+`ValidateUnixTimeBackfill` 会在任何删列前验证 guard，最后
+`CompleteUnixTimeStorage` 删除旧时间列并收紧约束。任一旧值无法解析时升级终止且
+回填事务回滚，API 不会启动。直接执行 `dotnet ef database update` 会因未完成 guard
+失败，时间存储升级必须通过 Migrator。曾在 0.7.0 开发阶段
+应用旧 `AddReportScheduling` migration 的本地数据库会先验证调度 schema，再迁移其
+history 标识，不会重复创建调度表。API 自身只校验 schema 并对账 trigger，不隐式执行
+migration。
+
+计划任务页可配置每月 1-28 日、`HH:mm` 时间和 IANA 时区，默认每月 1 日 09:00
+`Asia/Shanghai`。启用后运行时使用全部已启用发送渠道；修改配置会立即重建持久化
+trigger，页面显示同步状态与下次运行时间。应用错过运行时间后只补一次，不连续补发
+所有错过的月份。
+
+“立即运行”和自动触发都会先创建规范化执行记录，再异步进入采集、快照和投递阶段。
+失败重试创建关联原执行的新尝试，不覆盖历史结果。部分报告保存快照但不自动发送；
+进程重启后无法确认结果的渠道标记为 `outcome_unknown`，必须在计划任务页显式确认后
+重试，普通渠道补发不会静默重发这些记录。
 
 ## 启动前端
 

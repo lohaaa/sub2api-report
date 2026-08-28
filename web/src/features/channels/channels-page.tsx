@@ -233,6 +233,7 @@ export function ChannelsPage() {
         open={editorOpen}
         onOpenChange={setEditorOpen}
         channelType={editorType}
+        onChannelTypeChange={setEditorType}
         existing={editing}
         onSaved={async () => {
           await queryClient.invalidateQueries({ queryKey: ["channels"] });

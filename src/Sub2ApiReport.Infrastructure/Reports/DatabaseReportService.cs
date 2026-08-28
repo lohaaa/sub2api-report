@@ -21,32 +21,78 @@ internal sealed class DatabaseReportService(
         GenerateReportCommand command,
         CancellationToken cancellationToken)
     {
-        var run = dbContext.ReportGenerationRuns.Add(ReportGenerationRun.Start(
+        var settings = await settingsService.GetAsync(cancellationToken);
+        var timezone = ResolveTimezone(settings.Timezone);
+        var localToday = DateOnly.FromDateTime(
+            TimeZoneInfo.ConvertTime(timeProvider.GetUtcNow(), timezone).Date);
+        var latestCutoffDate = localToday.AddDays(-1);
+        var cutoffDate = command.CutoffDate ?? latestCutoffDate;
+        if (cutoffDate > latestCutoffDate)
+        {
+            throw new ReportGenerationPreconditionException(
+                "The report cutoff date must be earlier than the current local date.");
+        }
+
+        var windows = ReportWindows.Resolve(command.Windows ?? ReportWindows.Default, cutoffDate, true);
+        return await GenerateAsync(
+            settings,
+            cutoffDate,
+            settings.Timezone,
+            windows,
             ReportTrigger.ManualDryRun,
+            null,
+            cancellationToken);
+    }
+
+    public Task<ReportDocument> GenerateTaskReportAsync(
+        GenerateTaskReportCommand command,
+        CancellationToken cancellationToken)
+    {
+        if (command.Trigger is ReportTrigger.ManualDryRun || command.ReportRunId == Guid.Empty)
+        {
+            throw new ArgumentException("The task report trigger is invalid.", nameof(command));
+        }
+
+        var timezone = ResolveTimezone(command.Timezone);
+        var localToday = DateOnly.FromDateTime(
+            TimeZoneInfo.ConvertTime(timeProvider.GetUtcNow(), timezone).Date);
+        var latestCutoffDate = localToday.AddDays(-1);
+        if (command.CutoffDate > latestCutoffDate)
+        {
+            throw new ReportGenerationPreconditionException(
+                "The report cutoff date must be earlier than the current local date.");
+        }
+
+        var windows = ValidateFrozenWindows(command.Windows);
+        return GenerateAsync(
+            settings: null,
+            command.CutoffDate,
+            command.Timezone,
+            windows,
+            command.Trigger,
+            command.ReportRunId,
+            cancellationToken);
+    }
+
+    private async Task<ReportDocument> GenerateAsync(
+        SystemSettingsSnapshot? settings,
+        DateOnly cutoffDate,
+        string timezoneName,
+        IReadOnlyList<ResolvedReportWindow> windows,
+        ReportTrigger trigger,
+        Guid? reportRunId,
+        CancellationToken cancellationToken)
+    {
+        settings ??= await settingsService.GetAsync(cancellationToken);
+        var run = dbContext.ReportGenerationRuns.Add(ReportGenerationRun.Start(
+            trigger,
             0,
-            timeProvider.GetUtcNow())).Entity;
+            timeProvider.GetUtcNow(),
+            reportRunId)).Entity;
         await dbContext.SaveChangesAsync(cancellationToken);
         var stage = "prepare";
         try
         {
-            var settings = await settingsService.GetAsync(cancellationToken);
-            var timezone = ResolveTimezone(settings.Timezone);
-            var localToday = DateOnly.FromDateTime(
-                TimeZoneInfo.ConvertTime(timeProvider.GetUtcNow(), timezone).Date);
-            var latestCutoffDate = localToday.AddDays(-1);
-            var cutoffDate = command.CutoffDate ?? latestCutoffDate;
-            if (cutoffDate > latestCutoffDate)
-            {
-                throw new ReportGenerationPreconditionException(
-                    "The report cutoff date must be earlier than the current local date.");
-            }
-
-            if (cutoffDate.DayNumber < 29)
-            {
-                throw new ReportGenerationPreconditionException(
-                    "The report cutoff date is too early to form a 30-day window.");
-            }
-
             var credentials = await connectionService.GetCredentialsAsync(cancellationToken);
             run.MarkConnectionRevision(credentials.Revision);
             await dbContext.SaveChangesAsync(cancellationToken);
@@ -65,32 +111,48 @@ internal sealed class DatabaseReportService(
                     "所选 Sub2API 用户暂无 API Key，请检查统计用户范围。");
             }
 
-            var thirtyDayStart = cutoffDate.AddDays(-29);
-            var sevenDayStart = cutoffDate.AddDays(-6);
             var results = await CollectAsync(
                 keys,
                 credentials,
-                settings.Timezone,
+                timezoneName,
                 settings.ReportConcurrency,
-                sevenDayStart,
-                thirtyDayStart,
-                cutoffDate,
+                windows,
                 cancellationToken);
 
             stage = "snapshot";
+            ReportRun? taskRun = null;
+            if (reportRunId is not null)
+            {
+                taskRun = await dbContext.ReportRuns.FindAsync([reportRunId.Value], cancellationToken)
+                    ?? throw new InvalidOperationException("The report task run no longer exists.");
+                taskRun.BeginRendering(timeProvider.GetUtcNow());
+                await dbContext.SaveChangesAsync(cancellationToken);
+            }
+
             var generatedAt = timeProvider.GetUtcNow();
             var reportId = Guid.NewGuid();
             var document = BuildDocument(
                 reportId,
                 generatedAt,
-                settings.Timezone,
+                timezoneName,
                 credentials.Revision,
-                sevenDayStart,
-                thirtyDayStart,
+                trigger,
                 cutoffDate,
+                windows,
                 keys,
                 results);
             var canonicalJson = ReportCanonicalSerializer.Serialize(document);
+            var windowSummaries = document.Windows
+                .Select(window => new ReportWindowSummary(
+                    window.Key,
+                    window.Label,
+                    window.StartDate,
+                    window.EndDateExclusive,
+                    window.DayCount,
+                    document.WindowTotals
+                        .FirstOrDefault(total => total.WindowKey == window.Key)
+                        ?.Metrics.TotalActualCost ?? 0m))
+                .ToArray();
             var report = ReportSnapshot.Create(
                 document.ReportId,
                 document.Status,
@@ -102,10 +164,12 @@ internal sealed class DatabaseReportService(
                 document.Users.Count,
                 document.Keys.Count,
                 document.Diagnostics.FailedRanges.Count,
-                document.SevenDayTotal.TotalActualCost,
-                document.ThirtyDayTotal.TotalActualCost,
+                document.SevenDayActualCost,
+                document.ThirtyDayActualCost,
+                ReportWindowSummaryJson.Serialize(windowSummaries),
                 canonicalJson);
             dbContext.ReportSnapshots.Add(report);
+            taskRun?.AttachSnapshot(report.Id);
             run.MarkSucceeded(report.Id, timeProvider.GetUtcNow());
             await dbContext.SaveChangesAsync(cancellationToken);
             return document;
@@ -126,6 +190,28 @@ internal sealed class DatabaseReportService(
             await dbContext.SaveChangesAsync(cancellationToken);
             throw;
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            run.MarkFailed(
+                stage,
+                "cancelled",
+                "报告生成已中断。",
+                run.ConnectionRevision,
+                timeProvider.GetUtcNow());
+            await dbContext.SaveChangesAsync(CancellationToken.None);
+            throw;
+        }
+        catch (Exception)
+        {
+            run.MarkFailed(
+                stage,
+                "internal_error",
+                "报告生成因内部错误终止。",
+                run.ConnectionRevision,
+                timeProvider.GetUtcNow());
+            await dbContext.SaveChangesAsync(CancellationToken.None);
+            throw;
+        }
     }
 
     public async Task<ReportPage> GetPageAsync(
@@ -141,7 +227,7 @@ internal sealed class DatabaseReportService(
         var total = await dbContext.ReportSnapshots.CountAsync(cancellationToken);
         var items = await dbContext.ReportSnapshots
             .AsNoTracking()
-            .OrderByDescending(report => report.GeneratedAtUnixMilliseconds)
+            .OrderByDescending(report => report.GeneratedAt)
             .ThenByDescending(report => report.Id)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
@@ -157,7 +243,8 @@ internal sealed class DatabaseReportService(
                 report.KeyCount,
                 report.FailedRangeCount,
                 report.SevenDayActualCost,
-                report.ThirtyDayActualCost))
+                report.ThirtyDayActualCost,
+                report.WindowSummaryJson))
             .ToListAsync(cancellationToken);
         var pages = total == 0 ? 0 : (int)Math.Ceiling(total / (double)pageSize);
         return new ReportPage(items, total, page, pageSize, pages);
@@ -176,7 +263,7 @@ internal sealed class DatabaseReportService(
         var total = await dbContext.ReportGenerationRuns.CountAsync(cancellationToken);
         var items = await dbContext.ReportGenerationRuns
             .AsNoTracking()
-            .OrderByDescending(item => item.StartedAtUnixMilliseconds)
+            .OrderByDescending(item => item.StartedAt)
             .ThenByDescending(item => item.Id)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
@@ -208,10 +295,7 @@ internal sealed class DatabaseReportService(
             return null;
         }
 
-        return snapshot.SchemaVersion >= ReportSnapshot.CurrentSchemaVersion
-            ? ReportCanonicalSerializer.Deserialize(snapshot.CanonicalJson)
-            : LegacyReportDocumentMapper.MapFromLegacy(
-                ReportCanonicalSerializer.DeserializeLegacy(snapshot.CanonicalJson));
+        return ReportCanonicalSerializer.Deserialize(snapshot.CanonicalJson, snapshot.SchemaVersion);
     }
 
     public async Task<ReportCsv?> GetCsvAsync(Guid id, CancellationToken cancellationToken)
@@ -223,7 +307,43 @@ internal sealed class DatabaseReportService(
                 ReportCsvSerializer.Serialize(report),
                 string.Create(
                     CultureInfo.InvariantCulture,
-                    $"sub2api-report-{report.ThirtyDayWindow.EndDate:yyyy-MM-dd}.csv"));
+                    $"sub2api-report-{GetCsvDate(report):yyyy-MM-dd}.csv"));
+    }
+
+    private static DateOnly GetCsvDate(ReportDocument report)
+    {
+        if (report.Windows.Count == 0)
+        {
+            return DateOnly.MinValue;
+        }
+
+        return report.Windows.Max(window => window.EndDateExclusive).AddDays(-1);
+    }
+
+    private static IReadOnlyList<ResolvedReportWindow> ValidateFrozenWindows(
+        IReadOnlyList<ResolvedReportWindow> windows)
+    {
+        ArgumentNullException.ThrowIfNull(windows);
+        if (windows.Count is < 1 or > ReportWindows.MaximumWindowCount)
+        {
+            throw new ReportGenerationPreconditionException(
+                "The frozen report window list is invalid.");
+        }
+
+        var keys = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var window in windows)
+        {
+            if (string.IsNullOrWhiteSpace(window.Key)
+                || window.Key.Length > ReportWindows.KeyMaxLength
+                || window.EndDateExclusive <= window.StartDate
+                || !keys.Add(window.Key))
+            {
+                throw new ReportGenerationPreconditionException(
+                    "The frozen report window list is invalid.");
+            }
+        }
+
+        return windows;
     }
 
     private async Task<IReadOnlyList<KeySnapshot>> LoadKeySnapshotsAsync(
@@ -258,28 +378,30 @@ internal sealed class DatabaseReportService(
         return keys;
     }
 
-    private async Task<IReadOnlyList<WindowResult>> CollectAsync(
+    private async Task<IReadOnlyList<CollectionResult>> CollectAsync(
         IReadOnlyList<KeySnapshot> keys,
         Sub2ApiConnectionCredentials credentials,
         string timezone,
         int maximumConcurrency,
-        DateOnly sevenDayStart,
-        DateOnly thirtyDayStart,
-        DateOnly cutoffDate,
+        IReadOnlyList<ResolvedReportWindow> windows,
         CancellationToken cancellationToken)
     {
-        var work = keys
-            .SelectMany(key => new WorkWindow[]
-            {
-                new(key, sevenDayStart, cutoffDate, true),
-                new(key, thirtyDayStart, cutoffDate, false),
-            })
-            .ToArray();
-        using var semaphore = new SemaphoreSlim(maximumConcurrency, maximumConcurrency);
-        var tasks = new Task<WindowResult>[work.Length];
-        for (var index = 0; index < work.Length; index++)
+        var work = new List<CollectionRequest>();
+        foreach (var key in keys)
         {
-            tasks[index] = CollectWindowAsync(
+            foreach (var range in windows
+                .Select(window => (window.StartDate, window.EndDateExclusive))
+                .Distinct())
+            {
+                work.Add(new CollectionRequest(key, range.StartDate, range.EndDateExclusive));
+            }
+        }
+
+        using var semaphore = new SemaphoreSlim(maximumConcurrency, maximumConcurrency);
+        var tasks = new Task<CollectionResult>[work.Count];
+        for (var index = 0; index < work.Count; index++)
+        {
+            tasks[index] = CollectRangeAsync(
                 work[index],
                 credentials,
                 timezone,
@@ -290,8 +412,8 @@ internal sealed class DatabaseReportService(
         return await Task.WhenAll(tasks);
     }
 
-    private async Task<WindowResult> CollectWindowAsync(
-        WorkWindow window,
+    private async Task<CollectionResult> CollectRangeAsync(
+        CollectionRequest request,
         Sub2ApiConnectionCredentials credentials,
         string timezone,
         SemaphoreSlim semaphore,
@@ -302,17 +424,17 @@ internal sealed class DatabaseReportService(
         {
             var stats = await sub2ApiClient.GetUsageStatsAsync(
                 credentials,
-                window.Key.ExternalUserId,
-                window.Key.ExternalId,
-                window.StartDate,
-                window.EndDate,
+                request.Key.ExternalUserId,
+                request.Key.ExternalId,
+                request.StartDate,
+                request.EndDateExclusive.AddDays(-1),
                 timezone,
                 cancellationToken);
-            return new WindowResult(window, Map(stats), null);
+            return new CollectionResult(request, Map(stats), null);
         }
         catch (Sub2ApiClientException exception)
         {
-            return new WindowResult(window, null, exception);
+            return new CollectionResult(request, null, exception);
         }
         finally
         {
@@ -325,38 +447,38 @@ internal sealed class DatabaseReportService(
         DateTimeOffset generatedAt,
         string timezone,
         long connectionRevision,
-        DateOnly sevenDayStart,
-        DateOnly thirtyDayStart,
+        ReportTrigger trigger,
         DateOnly cutoffDate,
+        IReadOnlyList<ResolvedReportWindow> windows,
         IReadOnlyList<KeySnapshot> keys,
-        IReadOnlyList<WindowResult> results)
+        IReadOnlyList<CollectionResult> results)
     {
-        var resultsByKey = results
-            .GroupBy(result => result.Window.Key.Id)
-            .ToDictionary(group => group.Key, group => group.ToArray());
+        var resultsByRange = results.ToDictionary(
+            result => (result.Request.Key.Id, result.Request.StartDate, result.Request.EndDateExclusive));
+        var keyAccumulators = new Dictionary<Guid, Dictionary<string, MetricsAccumulator>>();
         var userAccumulators = new Dictionary<Guid, UserAccumulator>();
-        var keyUsage = keys.Select(key =>
+        foreach (var key in keys)
         {
-            var keyResults = resultsByKey.GetValueOrDefault(key.Id) ?? [];
-            var sevenDay = new MetricsAccumulator();
-            var thirtyDay = new MetricsAccumulator();
-            foreach (var result in keyResults)
+            var windowMetrics = windows.ToDictionary(
+                window => window.Key,
+                _ => new MetricsAccumulator(),
+                StringComparer.Ordinal);
+            foreach (var window in windows)
             {
-                if (result.Metrics is null)
+                if (!resultsByRange.TryGetValue(
+                        (key.Id, window.StartDate, window.EndDateExclusive),
+                        out var result))
                 {
                     continue;
                 }
 
-                if (result.Window.IsSevenDay)
+                if (result.Metrics is not null)
                 {
-                    sevenDay.Add(result.Metrics);
-                }
-                else
-                {
-                    thirtyDay.Add(result.Metrics);
+                    windowMetrics[window.Key].Add(result.Metrics);
                 }
             }
 
+            keyAccumulators[key.Id] = windowMetrics;
             var accumulator = userAccumulators.TryGetValue(key.UserId, out var existing)
                 ? existing
                 : userAccumulators[key.UserId] = new UserAccumulator(
@@ -364,34 +486,34 @@ internal sealed class DatabaseReportService(
                     key.ExternalUserId,
                     key.UserEmail,
                     key.Username);
-            accumulator.SevenDay.Add(sevenDay.ToMetrics(), 1);
-            accumulator.ThirtyDay.Add(thirtyDay.ToMetrics(), 1);
-            return new ReportKeyUsage(
-                key.Id,
-                key.ExternalId.ToString(CultureInfo.InvariantCulture),
-                key.ExternalUserId,
-                key.UserEmail,
-                key.Name,
-                key.Status,
-                key.LastUsedAt,
-                key.RetiredAt,
-                sevenDay.ToMetrics(),
-                thirtyDay.ToMetrics());
-        }).ToArray();
-        var failedRanges = results
-            .Where(result => result.Exception is not null)
-            .Select(result => new ReportRangeFailure(
-                result.Window.Key.ExternalUserId,
-                result.Window.Key.UserEmail,
-                result.Window.Key.ExternalId,
-                result.Window.Key.Name,
-                result.Window.StartDate,
-                result.Window.EndDate,
-                result.Exception!.Kind,
-                DescribeFailureCode(result.Exception.Kind)))
-            .OrderBy(item => item.ExternalUserId)
-            .ThenBy(item => item.ExternalKeyId)
-            .ThenBy(item => item.StartDate)
+            accumulator.AddKey(windowMetrics);
+        }
+
+        var descriptors = windows
+            .Select(window => new ReportWindowDescriptor(
+                window.Key,
+                window.Kind,
+                window.RollingDays,
+                window.WeekStartsOn,
+                window.StartDate,
+                window.EndDateExclusive,
+                window.DayCount,
+                window.Label))
+            .ToArray();
+        var windowKeys = descriptors.Select(window => window.Key).ToArray();
+        var windowTotals = descriptors
+            .Select(window => new ReportWindowMetrics(
+                window.Key,
+                userAccumulators.Values
+                    .Select(user => user.GetWindow(window.Key))
+                    .Aggregate(
+                        new MetricsAccumulator(),
+                        (total, metrics) =>
+                        {
+                            total.Add(metrics.ToMetrics());
+                            return total;
+                        })
+                    .ToMetrics()))
             .ToArray();
         var users = userAccumulators.Values
             .OrderBy(user => user.ExternalUserId)
@@ -400,33 +522,73 @@ internal sealed class DatabaseReportService(
                 user.ExternalUserId,
                 user.Username,
                 user.Email,
-                user.SevenDay.KeyCount,
-                user.SevenDay.ToMetrics(),
-                user.ThirtyDay.ToMetrics()))
+                user.KeyCount,
+                user.ToWindowMetrics(windowKeys)))
             .ToArray();
-        var sevenDayTotal = new MetricsAccumulator();
-        var thirtyDayTotal = new MetricsAccumulator();
-        foreach (var user in users)
-        {
-            sevenDayTotal.Add(user.SevenDay, 0);
-            thirtyDayTotal.Add(user.ThirtyDay, 0);
-        }
-
+        var keyUsage = keys
+            .Select(key => new ReportKeyUsage(
+                key.Id,
+                key.ExternalId.ToString(CultureInfo.InvariantCulture),
+                key.ExternalUserId,
+                key.UserEmail,
+                key.Name,
+                key.Status,
+                key.LastUsedAt,
+                key.RetiredAt,
+                windowKeys
+                    .Select(windowKey => new ReportWindowMetrics(
+                        windowKey,
+                        keyAccumulators[key.Id][windowKey].ToMetrics()))
+                    .ToArray()))
+            .ToArray();
+        var failedRanges = CollectFailedRanges(windows, results)
+            .OrderBy(item => item.ExternalUserId)
+            .ThenBy(item => item.ExternalKeyId)
+            .ThenBy(item => item.WindowKey, StringComparer.Ordinal)
+            .ThenBy(item => item.StartDate)
+            .ToArray();
         return new ReportDocument(
             ReportSnapshot.CurrentSchemaVersion,
             reportId,
             failedRanges.Length == 0 ? ReportStatus.Complete : ReportStatus.Partial,
-            ReportTrigger.ManualDryRun,
+            trigger,
             generatedAt,
             timezone,
             connectionRevision,
-            new ReportWindow(7, sevenDayStart, cutoffDate),
-            new ReportWindow(30, thirtyDayStart, cutoffDate),
-            sevenDayTotal.ToMetrics(),
-            thirtyDayTotal.ToMetrics(),
+            descriptors,
+            windowTotals,
             users,
             keyUsage,
             new ReportDiagnostics(failedRanges));
+    }
+
+    private static IEnumerable<ReportRangeFailure> CollectFailedRanges(
+        IReadOnlyList<ResolvedReportWindow> windows,
+        IReadOnlyList<CollectionResult> results)
+    {
+        foreach (var result in results)
+        {
+            if (result.Exception is null)
+            {
+                continue;
+            }
+
+            foreach (var window in windows.Where(window =>
+                window.StartDate == result.Request.StartDate
+                && window.EndDateExclusive == result.Request.EndDateExclusive))
+            {
+                yield return new ReportRangeFailure(
+                    result.Request.Key.ExternalUserId,
+                    result.Request.Key.UserEmail,
+                    result.Request.Key.ExternalId,
+                    result.Request.Key.Name,
+                    window.Key,
+                    result.Request.StartDate,
+                    result.Request.EndDateExclusive,
+                    result.Exception.Kind,
+                    DescribeFailureCode(result.Exception.Kind));
+            }
+        }
     }
 
     private static ReportUsageMetrics Map(Sub2ApiUsageStats stats) => new(
@@ -504,14 +666,13 @@ internal sealed class DatabaseReportService(
         DateTimeOffset? LastUsedAt,
         DateTimeOffset? RetiredAt);
 
-    private sealed record WorkWindow(
+    private sealed record CollectionRequest(
         KeySnapshot Key,
         DateOnly StartDate,
-        DateOnly EndDate,
-        bool IsSevenDay);
+        DateOnly EndDateExclusive);
 
-    private sealed record WindowResult(
-        WorkWindow Window,
+    private sealed record CollectionResult(
+        CollectionRequest Request,
         ReportUsageMetrics? Metrics,
         Sub2ApiClientException? Exception);
 
@@ -521,6 +682,8 @@ internal sealed class DatabaseReportService(
         string email,
         string? username)
     {
+        private readonly Dictionary<string, MetricsAccumulator> _windows = new(StringComparer.Ordinal);
+
         public Guid UserId { get; } = userId;
 
         public long ExternalUserId { get; } = externalUserId;
@@ -529,9 +692,32 @@ internal sealed class DatabaseReportService(
 
         public string? Username { get; } = username;
 
-        public MetricsAccumulator SevenDay { get; } = new();
+        public int KeyCount { get; private set; }
 
-        public MetricsAccumulator ThirtyDay { get; } = new();
+        public void AddKey(Dictionary<string, MetricsAccumulator> keyWindows)
+        {
+            KeyCount++;
+            foreach (var (windowKey, metrics) in keyWindows)
+            {
+                if (_windows.TryGetValue(windowKey, out var existing))
+                {
+                    existing.Add(metrics.ToMetrics());
+                }
+                else
+                {
+                    _windows[windowKey] = new MetricsAccumulator(metrics.ToMetrics());
+                }
+            }
+        }
+
+        public MetricsAccumulator GetWindow(string windowKey) =>
+            _windows.TryGetValue(windowKey, out var accumulator)
+                ? accumulator
+                : new MetricsAccumulator();
+
+        public ReportWindowMetrics[] ToWindowMetrics(IReadOnlyList<string> windowKeys) => windowKeys
+            .Select(windowKey => new ReportWindowMetrics(windowKey, GetWindow(windowKey).ToMetrics()))
+            .ToArray();
     }
 
     private sealed class MetricsAccumulator
@@ -546,9 +732,12 @@ internal sealed class DatabaseReportService(
         private decimal _totalCost;
         private decimal _totalActualCost;
         private decimal _weightedDuration;
-        private int _keyCount;
 
-        public int KeyCount => _keyCount;
+        public MetricsAccumulator()
+        {
+        }
+
+        public MetricsAccumulator(ReportUsageMetrics metrics) => Add(metrics);
 
         public void Add(ReportUsageMetrics metrics)
         {
@@ -565,12 +754,6 @@ internal sealed class DatabaseReportService(
                 _totalActualCost += metrics.TotalActualCost;
                 _weightedDuration += metrics.AverageDurationMs * metrics.TotalRequests;
             }
-        }
-
-        public void Add(ReportUsageMetrics metrics, int keyCount)
-        {
-            _keyCount += keyCount;
-            Add(metrics);
         }
 
         public ReportUsageMetrics ToMetrics() => new(

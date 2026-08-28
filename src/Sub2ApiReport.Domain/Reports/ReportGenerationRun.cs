@@ -29,24 +29,33 @@ public sealed class ReportGenerationRun
 
     public DateTimeOffset StartedAt { get; private set; }
 
-    public long StartedAtUnixMilliseconds { get; private set; }
-
     public DateTimeOffset? CompletedAt { get; private set; }
 
     public Guid? ReportSnapshotId { get; private set; }
 
+    public Guid? ReportRunId { get; private set; }
+
     public static ReportGenerationRun Start(
         ReportTrigger trigger,
         long connectionRevision,
-        DateTimeOffset startedAt) => new()
+        DateTimeOffset startedAt,
+        Guid? reportRunId = null)
+    {
+        if (reportRunId == Guid.Empty)
+        {
+            throw new ArgumentException("The report run identifier cannot be empty.", nameof(reportRunId));
+        }
+
+        return new ReportGenerationRun
         {
             Id = Guid.NewGuid(),
             Trigger = trigger,
             Status = ReportGenerationStatus.Running,
             ConnectionRevision = connectionRevision,
             StartedAt = startedAt,
-            StartedAtUnixMilliseconds = startedAt.ToUnixTimeMilliseconds(),
+            ReportRunId = reportRunId,
         };
+    }
 
     public bool MarkConnectionRevision(long connectionRevision)
     {

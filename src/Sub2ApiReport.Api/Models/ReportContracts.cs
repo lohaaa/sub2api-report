@@ -1,10 +1,22 @@
+using Sub2ApiReport.Application.Reports;
 using Sub2ApiReport.Application.Sub2Api;
 using Sub2ApiReport.Domain.Reports;
 
 namespace Sub2ApiReport.Api.Models;
 
-/// <summary>Specifies the cutoff date for a manually generated report.</summary>
-public sealed record GenerateReportRequest(DateOnly? CutoffDate);
+/// <summary>Specifies the cutoff date and optional statistics windows for a manually generated report.</summary>
+public sealed record GenerateReportRequest(
+    DateOnly? CutoffDate,
+    IReadOnlyList<ReportWindowSpecRequest>? Windows);
+
+/// <summary>Defines one requested statistics window.</summary>
+public sealed record ReportWindowSpecRequest(
+    string Key,
+    ReportWindowKind Kind,
+    int? RollingDays,
+    DayOfWeek? WeekStartsOn,
+    DateOnly? CustomStartDate,
+    DateOnly? CustomEndDate);
 
 /// <summary>Represents one page of immutable report snapshots.</summary>
 public sealed record ReportPageResponse(
@@ -27,7 +39,17 @@ public sealed record ReportListItemResponse(
     int KeyCount,
     int FailedRangeCount,
     string SevenDayActualCost,
-    string ThirtyDayActualCost);
+    string ThirtyDayActualCost,
+    IReadOnlyList<ReportWindowListSummaryResponse> Windows);
+
+/// <summary>Represents one compact window summary in a report list item.</summary>
+public sealed record ReportWindowListSummaryResponse(
+    string Key,
+    string Label,
+    DateOnly StartDate,
+    DateOnly EndDateExclusive,
+    int DayCount,
+    string TotalActualCost);
 
 /// <summary>Represents an immutable canonical report snapshot.</summary>
 public sealed record ReportDetailResponse(
@@ -38,16 +60,27 @@ public sealed record ReportDetailResponse(
     DateTimeOffset GeneratedAt,
     string Timezone,
     long ConnectionRevision,
-    ReportWindowResponse SevenDayWindow,
-    ReportWindowResponse ThirtyDayWindow,
-    ReportUsageMetricsResponse SevenDayTotal,
-    ReportUsageMetricsResponse ThirtyDayTotal,
+    IReadOnlyList<ReportWindowResponse> Windows,
+    IReadOnlyList<ReportWindowMetricsResponse> WindowTotals,
     IReadOnlyList<ReportUserUsageResponse> Users,
     IReadOnlyList<ReportKeyUsageResponse> Keys,
     ReportDiagnosticsResponse Diagnostics);
 
-/// <summary>Represents an inclusive complete-natural-day report window.</summary>
-public sealed record ReportWindowResponse(int Days, DateOnly StartDate, DateOnly EndDate);
+/// <summary>Represents one resolved complete-natural-day report window with an exclusive end date.</summary>
+public sealed record ReportWindowResponse(
+    string Key,
+    ReportWindowKind Kind,
+    int? RollingDays,
+    DayOfWeek? WeekStartsOn,
+    DateOnly StartDate,
+    DateOnly EndDateExclusive,
+    int DayCount,
+    string Label);
+
+/// <summary>Associates aggregate metrics with a report window.</summary>
+public sealed record ReportWindowMetricsResponse(
+    string WindowKey,
+    ReportUsageMetricsResponse Metrics);
 
 /// <summary>Represents aggregate usage metrics.</summary>
 public sealed record ReportUsageMetricsResponse(
@@ -69,8 +102,7 @@ public sealed record ReportUserUsageResponse(
     string? Username,
     string Email,
     int KeyCount,
-    ReportUsageMetricsResponse SevenDay,
-    ReportUsageMetricsResponse ThirtyDay);
+    IReadOnlyList<ReportWindowMetricsResponse> Windows);
 
 /// <summary>Represents one API Key and its report-window usage.</summary>
 public sealed record ReportKeyUsageResponse(
@@ -82,8 +114,7 @@ public sealed record ReportKeyUsageResponse(
     string Status,
     DateTimeOffset? LastUsedAt,
     DateTimeOffset? RetiredAt,
-    ReportUsageMetricsResponse SevenDay,
-    ReportUsageMetricsResponse ThirtyDay);
+    IReadOnlyList<ReportWindowMetricsResponse> Windows);
 
 /// <summary>Represents completeness diagnostics for a report.</summary>
 public sealed record ReportDiagnosticsResponse(
@@ -95,8 +126,9 @@ public sealed record ReportRangeFailureResponse(
     string UserEmail,
     long ExternalKeyId,
     string KeyName,
+    string WindowKey,
     DateOnly StartDate,
-    DateOnly EndDate,
+    DateOnly EndDateExclusive,
     Sub2ApiFailureKind? FailureKind,
     string? ErrorCode);
 

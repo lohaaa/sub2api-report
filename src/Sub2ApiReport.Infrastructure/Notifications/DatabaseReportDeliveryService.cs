@@ -66,16 +66,29 @@ internal sealed class DatabaseReportDeliveryService(
         var run = await dbContext.ReportRuns
             .Include(item => item.Deliveries)
             .ThenInclude(delivery => delivery.Parts)
+            .AsSplitQuery()
             .SingleOrDefaultAsync(
                 item => item.Id == command.RunId && item.ReportSnapshotId == command.ReportId,
                 cancellationToken)
             ?? throw new ReportRunNotFoundException(command.ReportId, command.RunId);
-        if (!run.IsRetryable)
+        if (!run.IsRetryable
+            || !run.Deliveries.Any(delivery => delivery.Status == DeliveryStatus.Failed))
         {
             throw new ReportRunNotRetryableException(run.Id);
         }
 
-        var report = await LoadReportAsync(run.ReportSnapshotId, cancellationToken);
+        if (run.Deliveries.Any(delivery =>
+            delivery.Status == DeliveryStatus.Failed
+            && delivery.ErrorCode == "outcome_unknown"))
+        {
+            throw new ReportDeliveryPreconditionException(
+                "Deliveries with an unknown outcome require an explicit task retry confirmation.");
+        }
+
+        var report = await LoadReportAsync(
+            run.ReportSnapshotId
+                ?? throw new ReportNotFoundException(command.ReportId),
+            cancellationToken);
         var work = new List<DeliveryWork>();
         foreach (var delivery in run.Deliveries
             .Where(delivery => delivery.Status == DeliveryStatus.Failed)
@@ -119,6 +132,77 @@ internal sealed class DatabaseReportDeliveryService(
         return Map(run);
     }
 
+    public async Task<DeliveryRunDocument> DeliverTaskAsync(
+        DeliverReportTaskCommand command,
+        CancellationToken cancellationToken)
+    {
+        var run = await dbContext.ReportRuns
+            .Include(item => item.Deliveries)
+            .ThenInclude(delivery => delivery.Parts)
+            .AsSplitQuery()
+            .SingleOrDefaultAsync(item => item.Id == command.RunId, cancellationToken)
+            ?? throw new ReportRunNotFoundException(Guid.Empty, command.RunId);
+        if (run.ReportSnapshotId is null)
+        {
+            throw new ReportDeliveryPreconditionException(
+                "The report task has no snapshot to deliver.");
+        }
+
+        var report = await LoadReportAsync(run.ReportSnapshotId.Value, cancellationToken);
+        var work = new List<DeliveryWork>();
+        if (run.Status == ReportRunStatus.Delivering)
+        {
+            if (!command.Recovering)
+            {
+                throw new ReportDeliveryPreconditionException(
+                    "The report task is already delivering.");
+            }
+
+            foreach (var delivery in run.Deliveries.Where(item => item.Status == DeliveryStatus.Sending))
+            {
+                foreach (var part in delivery.Parts.Where(item => item.Status == DeliveryPartStatus.Pending))
+                {
+                    part.MarkFailed("outcome_unknown", null);
+                }
+
+                delivery.MarkFailed("outcome_unknown", null);
+            }
+
+            await dbContext.SaveChangesAsync(CancellationToken.None);
+            await PreparePendingTaskWorkAsync(run, report, work, cancellationToken);
+        }
+        else if (run.Status is ReportRunStatus.Queued or ReportRunStatus.Rendering)
+        {
+            var channelIds = await ResolveTaskChannelIdsAsync(run, cancellationToken);
+            var channels = await LoadChannelsAsync(channelIds, cancellationToken);
+            foreach (var channel in channels)
+            {
+                var context = ChannelRuntimeMapper.CreateContext(channel, protector);
+                var sender = ResolveSender(channel.Type);
+                var parts = sender.Render(report, context);
+                var delivery = DeliveryRecord.Create(
+                    channel.Id,
+                    channel.Type,
+                    channel.Name,
+                    ComputeAggregateHash(parts),
+                    parts.Select(part => DeliveryPart.Create(part.Index, part.Count, part.PayloadHash)).ToArray());
+                run.Deliveries.Add(delivery);
+                work.Add(new DeliveryWork(delivery, context, sender, parts));
+            }
+
+            run.BeginDelivering(timeProvider.GetUtcNow());
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        else
+        {
+            throw new ReportDeliveryPreconditionException(
+                "The report task is not ready for delivery.");
+        }
+
+        await SendAsync(run, work, cancellationToken);
+        return Map(run);
+    }
+
     public async Task<IReadOnlyList<DeliveryRunDocument>> GetRunsAsync(
         Guid reportId,
         CancellationToken cancellationToken)
@@ -127,6 +211,7 @@ internal sealed class DatabaseReportDeliveryService(
             .AsNoTracking()
             .Include(item => item.Deliveries)
             .ThenInclude(delivery => delivery.Parts)
+            .AsSplitQuery()
             .Where(item => item.ReportSnapshotId == reportId)
             .OrderByDescending(item => item.StartedAt)
             .ThenBy(item => item.Id)
@@ -198,7 +283,7 @@ internal sealed class DatabaseReportDeliveryService(
         }
 
         var status = ComputeRunStatus(run.Deliveries);
-        if (run.Status == ReportRunStatus.Running)
+        if (run.Status is ReportRunStatus.Running or ReportRunStatus.Delivering)
         {
             run.Complete(status, timeProvider.GetUtcNow());
         }
@@ -221,14 +306,78 @@ internal sealed class DatabaseReportDeliveryService(
 
     private async Task<ReportDocument> LoadReportAsync(Guid reportId, CancellationToken cancellationToken)
     {
-        var canonicalJson = await dbContext.ReportSnapshots
+        var snapshot = await dbContext.ReportSnapshots
             .AsNoTracking()
             .Where(item => item.Id == reportId)
-            .Select(item => item.CanonicalJson)
+            .Select(item => new { item.SchemaVersion, item.CanonicalJson })
             .SingleOrDefaultAsync(cancellationToken)
             ?? throw new ReportNotFoundException(reportId);
-        return ReportCanonicalSerializer.Deserialize(canonicalJson)
-            ?? throw new ReportNotFoundException(reportId);
+        return ReportCanonicalSerializer.Deserialize(snapshot.CanonicalJson, snapshot.SchemaVersion);
+    }
+
+    private async Task<Guid[]> ResolveTaskChannelIdsAsync(
+        ReportRun run,
+        CancellationToken cancellationToken)
+    {
+        if (run.RetryOfRunId is not null)
+        {
+            var sourceDeliveries = await dbContext.DeliveryRecords
+                .AsNoTracking()
+                .Where(delivery => delivery.RunId == run.RetryOfRunId.Value)
+                .ToListAsync(cancellationToken);
+            if (sourceDeliveries.Count > 0)
+            {
+                return sourceDeliveries
+                    .Where(delivery => delivery.Status == DeliveryStatus.Failed)
+                    .Select(delivery => delivery.ChannelId)
+                    .Distinct()
+                    .ToArray();
+            }
+        }
+
+        return await dbContext.NotificationChannels
+            .AsNoTracking()
+            .Where(channel => channel.Enabled)
+            .OrderBy(channel => channel.CreatedAt)
+            .ThenBy(channel => channel.Id)
+            .Select(channel => channel.Id)
+            .ToArrayAsync(cancellationToken);
+    }
+
+    private async Task PreparePendingTaskWorkAsync(
+        ReportRun run,
+        ReportDocument report,
+        List<DeliveryWork> work,
+        CancellationToken cancellationToken)
+    {
+        foreach (var delivery in run.Deliveries.Where(item => item.Status == DeliveryStatus.Pending))
+        {
+            var channel = await dbContext.NotificationChannels
+                .SingleOrDefaultAsync(item => item.Id == delivery.ChannelId, cancellationToken);
+            if (channel is not { Enabled: true })
+            {
+                delivery.MarkSending();
+                delivery.MarkFailed("channel_unavailable", null);
+                continue;
+            }
+
+            var context = ChannelRuntimeMapper.CreateContext(channel, protector);
+            var sender = ResolveSender(channel.Type);
+            var parts = sender.Render(report, context);
+            if (!string.Equals(
+                delivery.PayloadHash,
+                ComputeAggregateHash(parts),
+                StringComparison.Ordinal))
+            {
+                delivery.MarkSending();
+                delivery.MarkFailed("payload_changed", null);
+                continue;
+            }
+
+            work.Add(new DeliveryWork(delivery, context, sender, parts));
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
     }
 
     private async Task<List<NotificationChannel>> LoadChannelsAsync(
@@ -277,7 +426,8 @@ internal sealed class DatabaseReportDeliveryService(
 
     private static DeliveryRunDocument Map(ReportRun run) => new(
         run.Id,
-        run.ReportSnapshotId,
+        run.ReportSnapshotId
+            ?? throw new InvalidOperationException("A delivery run must reference a report snapshot."),
         run.Status,
         run.StartedAt,
         run.CompletedAt,

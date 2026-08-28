@@ -6,6 +6,7 @@ using Sub2ApiReport.Api.Models;
 using Sub2ApiReport.Application.Audit;
 using Sub2ApiReport.Application.Reports;
 using Sub2ApiReport.Application.Sub2Api;
+using Sub2ApiReport.Domain.Reports;
 
 namespace Sub2ApiReport.Api.Endpoints;
 
@@ -155,7 +156,9 @@ internal static class ReportEndpoints
         try
         {
             var report = await reportService.GenerateDryRunAsync(
-                new GenerateReportCommand(request.CutoffDate),
+                new GenerateReportCommand(
+                    request.CutoffDate,
+                    request.Windows?.Select(Map).ToArray()),
                 cancellationToken);
             await auditWriter.WriteAsync(
                 principal.Identity?.Name,
@@ -166,6 +169,13 @@ internal static class ReportEndpoints
                 $"{{\"status\":\"{report.Status}\",\"failedRanges\":{report.Diagnostics.FailedRanges.Count}}}",
                 cancellationToken);
             return TypedResults.Created($"/api/v1/reports/{report.ReportId:D}", Map(report));
+        }
+        catch (ArgumentException exception)
+        {
+            return TypedResults.ValidationProblem(new Dictionary<string, string[]>
+            {
+                [exception.ParamName ?? "windows"] = [exception.Message],
+            });
         }
         catch (Exception exception) when (exception is ReportGenerationPreconditionException or Sub2ApiConnectionNotConfiguredException or Sub2ApiUserScopeException or Sub2ApiConnectionConflictException)
         {
@@ -416,7 +426,16 @@ internal static class ReportEndpoints
         report.KeyCount,
         report.FailedRangeCount,
         FormatDecimal(report.SevenDayActualCost),
-        FormatDecimal(report.ThirtyDayActualCost));
+        FormatDecimal(report.ThirtyDayActualCost),
+        ReportWindowSummaryJson.Deserialize(report.WindowSummaryJson)
+            .Select(summary => new ReportWindowListSummaryResponse(
+                summary.Key,
+                summary.Label,
+                summary.StartDate,
+                summary.EndDateExclusive,
+                summary.DayCount,
+                FormatDecimal(summary.TotalActualCost)))
+            .ToArray());
 
     private static ReportDetailResponse Map(ReportDocument report) => new(
         report.SchemaVersion,
@@ -426,18 +445,15 @@ internal static class ReportEndpoints
         report.GeneratedAt,
         report.Timezone,
         report.ConnectionRevision,
-        Map(report.SevenDayWindow),
-        Map(report.ThirtyDayWindow),
-        Map(report.SevenDayTotal),
-        Map(report.ThirtyDayTotal),
+        report.Windows.Select(Map).ToArray(),
+        report.WindowTotals.Select(Map).ToArray(),
         report.Users.Select(user => new ReportUserUsageResponse(
             user.UserId,
             user.ExternalUserId,
             user.Username,
             user.Email,
             user.KeyCount,
-            Map(user.SevenDay),
-            Map(user.ThirtyDay))).ToArray(),
+            user.Windows.Select(Map).ToArray())).ToArray(),
         report.Keys.Select(key => new ReportKeyUsageResponse(
             key.KeyId,
             key.ExternalId,
@@ -447,24 +463,40 @@ internal static class ReportEndpoints
             key.Status,
             key.LastUsedAt,
             key.RetiredAt,
-            Map(key.SevenDay),
-            Map(key.ThirtyDay))).ToArray(),
+            key.Windows.Select(Map).ToArray())).ToArray(),
         new ReportDiagnosticsResponse(
             report.Diagnostics.FailedRanges.Select(failure => new ReportRangeFailureResponse(
                 failure.ExternalUserId,
                 failure.UserEmail,
                 failure.ExternalKeyId,
                 failure.KeyName,
+                failure.WindowKey,
                 failure.StartDate,
-                failure.EndDate,
+                failure.EndDateExclusive,
                 failure.FailureKind,
                 failure.ErrorCode)).ToArray()));
 
-    private static ReportWindowResponse Map(ReportWindow window) => new(
-        window.Days,
-        window.StartDate,
-        window.EndDate);
+    private static ReportWindowSpec Map(ReportWindowSpecRequest window) => new(
+        window.Key,
+        window.Kind,
+        window.RollingDays,
+        window.WeekStartsOn,
+        window.CustomStartDate,
+        window.CustomEndDate);
 
+    private static ReportWindowResponse Map(ReportWindowDescriptor window) => new(
+        window.Key,
+        window.Kind,
+        window.RollingDays,
+        window.WeekStartsOn,
+        window.StartDate,
+        window.EndDateExclusive,
+        window.DayCount,
+        window.Label);
+
+    private static ReportWindowMetricsResponse Map(ReportWindowMetrics window) => new(
+        window.WindowKey,
+        Map(window.Metrics));
     private static ReportUsageMetricsResponse Map(ReportUsageMetrics metrics) => new(
         metrics.TotalRequests.ToString(CultureInfo.InvariantCulture),
         metrics.TotalInputTokens.ToString(CultureInfo.InvariantCulture),

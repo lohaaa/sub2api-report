@@ -30,7 +30,7 @@ var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>()
 var dbContext = scope.ServiceProvider.GetRequiredService<ReportDbContext>();
 
 MigrationLog.Applying(logger);
-await dbContext.Database.MigrateAsync();
+await DatabaseMigrationOrchestrator.MigrateAsync(dbContext, CancellationToken.None);
 await dbContext.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;");
 await dbContext.Database.ExecuteSqlRawAsync("PRAGMA busy_timeout=5000;");
 MigrationLog.Completed(logger);

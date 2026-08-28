@@ -20,6 +20,8 @@ import {
   FieldError,
   FieldGroup,
   FieldLabel,
+  FieldLegend,
+  FieldSet,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
@@ -31,6 +33,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { FormError } from "@/features/auth/form-error";
 import {
   ApiError,
@@ -49,6 +52,9 @@ export const channelTypeLabels: Record<NotificationChannelType, string> = {
   DingTalk: "钉钉群机器人",
   Feishu: "飞书群机器人",
 };
+
+const channelTypes = ["Email", "DingTalk", "Feishu"] as const satisfies
+  readonly NotificationChannelType[];
 
 const smtpSecurityLabels: Record<SmtpSecurityMode, string> = {
   StartTls: "STARTTLS（推荐，如 587）",
@@ -157,12 +163,14 @@ export function ChannelEditorDialog({
   open,
   onOpenChange,
   channelType,
+  onChannelTypeChange,
   existing,
   onSaved,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   channelType: NotificationChannelType;
+  onChannelTypeChange: (type: NotificationChannelType) => void;
   existing: NotificationChannel | null;
   onSaved: () => void;
 }) {
@@ -173,9 +181,10 @@ export function ChannelEditorDialog({
   });
   useEffect(() => {
     if (open) {
-      form.reset(toFormValues(channelType, existing));
+      const initialType = existing?.type ?? "Email";
+      form.reset(toFormValues(initialType, existing));
     }
-  }, [open, channelType, existing, form]);
+  }, [open, existing, form]);
   const saveMutation = useMutation({
     mutationFn: async (values: Values) => {
       if (existing === null) {
@@ -192,6 +201,17 @@ export function ChannelEditorDialog({
       onSaved();
     },
   });
+
+  function changeChannelType(nextType: NotificationChannelType) {
+    const { name, enabled } = form.getValues();
+    onChannelTypeChange(nextType);
+    form.reset({
+      ...toFormValues(nextType, null),
+      name,
+      enabled,
+    });
+    saveMutation.reset();
+  }
 
   function parseEmailValues(values: Values) {
     const parsed = emailSchema.safeParse({
@@ -347,6 +367,35 @@ export function ChannelEditorDialog({
             <FormError message={saveMutation.error.message} />
           ) : null}
           <FieldGroup>
+            {existing === null ? (
+              <FieldSet>
+                <FieldLegend variant="label">渠道类型</FieldLegend>
+                <ToggleGroup
+                  aria-label="渠道类型"
+                  value={[channelType]}
+                  onValueChange={(values) => {
+                    const nextType = channelTypes.find(
+                      (type) => type === values[0],
+                    );
+                    if (nextType) {
+                      changeChannelType(nextType);
+                    }
+                  }}
+                  variant="outline"
+                  className="grid w-full grid-cols-1 sm:grid-cols-3"
+                >
+                  {channelTypes.map((type) => (
+                    <ToggleGroupItem
+                      key={type}
+                      value={type}
+                      className="w-full"
+                    >
+                      {channelTypeLabels[type]}
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
+              </FieldSet>
+            ) : null}
             <Field data-invalid={Boolean(form.formState.errors.name)}>
               <FieldLabel htmlFor="channel-name">渠道名称</FieldLabel>
               <Input

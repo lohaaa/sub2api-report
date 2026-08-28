@@ -15,8 +15,9 @@ internal sealed class ReportSnapshotConfiguration : IEntityTypeConfiguration<Rep
         builder.Property(report => report.Timezone).HasMaxLength(100).IsRequired();
         builder.Property(report => report.SevenDayActualCost).HasPrecision(38, 18);
         builder.Property(report => report.ThirtyDayActualCost).HasPrecision(38, 18);
+        builder.Property(report => report.WindowSummaryJson);
         builder.Property(report => report.CanonicalJson).IsRequired();
-        builder.HasIndex(report => new { report.GeneratedAtUnixMilliseconds, report.Id });
+        builder.HasIndex(report => new { report.GeneratedAt, report.Id });
         builder.HasIndex(report => new { report.CutoffDate, report.Status });
         builder.ToTable(table => table.HasCheckConstraint(
             "CK_ReportSnapshots_SchemaVersion",

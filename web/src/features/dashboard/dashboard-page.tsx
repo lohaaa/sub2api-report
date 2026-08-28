@@ -28,9 +28,13 @@ import {
   getApiKeyInventory,
   getChannels,
   getReportGenerationRuns,
+  getReportSchedule,
   getReports,
   getSub2ApiConnection,
+  reportWindowKeys,
+  type ReportListItem,
   type ReportStatus,
+  type ReportTrigger,
 } from '@/lib/api-client'
 import { formatCost, formatDate, formatTimestamp } from '@/features/reports/report-format'
 
@@ -39,23 +43,38 @@ export function DashboardPage() {
   const connectionQuery = useQuery({
     queryKey: ['sub2api-connection'],
     queryFn: ({ signal }) => getSub2ApiConnection(signal),
+    enabled: versionQuery.isSuccess,
+    retry: false,
   })
   const keysQuery = useQuery({
     queryKey: ['api-keys', 1, false],
     queryFn: ({ signal }) => getApiKeyInventory(1, false, signal),
-    enabled: connectionQuery.data?.configured === true,
+    enabled: versionQuery.isSuccess && connectionQuery.data?.configured === true,
+    retry: false,
   })
   const reportsQuery = useQuery({
     queryKey: ['reports', 1],
     queryFn: ({ signal }) => getReports(1, signal),
+    enabled: versionQuery.isSuccess,
+    retry: false,
   })
   const generationsQuery = useQuery({
     queryKey: ['report-generations', 1],
     queryFn: ({ signal }) => getReportGenerationRuns(1, signal),
+    enabled: versionQuery.isSuccess,
+    retry: false,
   })
   const channelsQuery = useQuery({
     queryKey: ['channels'],
     queryFn: ({ signal }) => getChannels(signal),
+    enabled: versionQuery.isSuccess,
+    retry: false,
+  })
+  const scheduleQuery = useQuery({
+    queryKey: ['report-schedule'],
+    queryFn: ({ signal }) => getReportSchedule(signal),
+    enabled: versionQuery.isSuccess,
+    retry: false,
   })
 
   const connection = connectionQuery.data
@@ -64,17 +83,22 @@ export function DashboardPage() {
   const keyCount = keysQuery.data?.total ?? connection?.lastSynchronizedKeyCount ?? 0
   const synchronizedUserCount = connection?.lastSynchronizedUserCount ?? 0
   const enabledChannelCount = channelsQuery.data?.filter((channel) => channel.enabled).length ?? 0
-  const hasOperationalError = connectionQuery.isError
-    || keysQuery.isError
-    || reportsQuery.isError
-    || generationsQuery.isError
-    || channelsQuery.isError
+  const failedOperationalStates = [
+    connectionQuery.isError ? 'Sub2API 连接' : null,
+    keysQuery.isError ? 'API Keys' : null,
+    reportsQuery.isError ? '报告记录' : null,
+    generationsQuery.isError ? '报告生成记录' : null,
+    channelsQuery.isError ? '发送渠道' : null,
+    scheduleQuery.isError ? '计划任务' : null,
+  ].filter((item): item is string => item !== null)
 
   const metrics = [
     {
       label: '计划任务',
-      value: '未启用',
-      detail: '当前版本尚未实现自动调度',
+      value: scheduleQuery.data?.enabled ? '已启用' : '未启用',
+      detail: scheduleQuery.data?.nextRunAt
+        ? `下次运行 ${formatTimestamp(scheduleQuery.data.nextRunAt)}`
+        : '当前没有待运行任务',
       icon: CalendarClockIcon,
     },
     {
@@ -86,9 +110,9 @@ export function DashboardPage() {
       icon: FileClockIcon,
     },
     {
-      label: '30 天实际费用',
-      value: latestReport ? `¥${formatCost(latestReport.thirtyDayActualCost)}` : '¥0.00',
-      detail: latestReport ? '来自最近不可变快照' : '暂无统计快照',
+      label: '最近报告费用（USD）',
+      value: latestReport ? formatCost(latestRollingThirtyDayCost(latestReport)) : '0.00',
+      detail: latestReport ? '来自最近快照的滚动 30 天窗口' : '暂无统计快照',
       icon: CircleDollarSignIcon,
     },
     {
@@ -111,19 +135,21 @@ export function DashboardPage() {
         </Button>
       </div>
 
-      {!versionQuery.isSuccess ? (
+      {versionQuery.isError ? (
         <Alert variant="destructive">
           <AlertCircleIcon />
           <AlertTitle>后端服务未连接</AlertTitle>
-          <AlertDescription>当前无法读取系统版本。前端开发时请同时启动 ASP.NET Core API。</AlertDescription>
+          <AlertDescription>当前无法连接 API，页面不会继续请求业务状态。</AlertDescription>
         </Alert>
       ) : null}
 
-      {hasOperationalError ? (
+      {versionQuery.isSuccess && failedOperationalStates.length > 0 ? (
         <Alert variant="destructive">
           <AlertCircleIcon />
-          <AlertTitle>部分运行状态读取失败</AlertTitle>
-          <AlertDescription>请刷新页面；持续失败时检查 API 日志和数据库迁移状态。</AlertDescription>
+          <AlertTitle>部分状态加载失败</AlertTitle>
+          <AlertDescription>
+            {failedOperationalStates.join('、')}读取失败，其他已读取数据仍可使用。
+          </AlertDescription>
         </Alert>
       ) : null}
 
@@ -181,7 +207,7 @@ export function DashboardPage() {
                   <TableHead>统计截止日</TableHead>
                   <TableHead>触发方式</TableHead>
                   <TableHead>状态</TableHead>
-                  <TableHead className="text-right">30 天费用</TableHead>
+                  <TableHead className="text-right">滚动 30 天费用（USD）</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -193,10 +219,10 @@ export function DashboardPage() {
                           {formatDate(report.cutoffDate)}
                         </Link>
                       </TableCell>
-                      <TableCell>手工</TableCell>
+                      <TableCell>{reportTriggerLabels[report.trigger]}</TableCell>
                       <TableCell><ReportStatusBadge status={report.status} /></TableCell>
                       <TableCell className="text-right tabular-nums">
-                        ¥{formatCost(report.thirtyDayActualCost)}
+                        {formatCost(latestRollingThirtyDayCost(report))}
                       </TableCell>
                     </TableRow>
                   ))
@@ -247,6 +273,20 @@ export function DashboardPage() {
       </div>
     </div>
   )
+}
+
+function latestRollingThirtyDayCost(report: ReportListItem) {
+  const summary = report.windows?.find(
+    (window) => window.key === reportWindowKeys.rollingThirtyDays,
+  )
+  return summary ? summary.totalActualCost : report.thirtyDayActualCost
+}
+
+const reportTriggerLabels: Record<ReportTrigger, string> = {
+  ManualDryRun: '手工生成',
+  Scheduled: '自动计划',
+  ManualScheduled: '立即运行',
+  Retry: '失败重试',
 }
 
 function ReportStatusBadge({ status }: { status: ReportStatus }) {

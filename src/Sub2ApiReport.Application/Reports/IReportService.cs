@@ -10,6 +10,10 @@ public interface IReportService
         GenerateReportCommand command,
         CancellationToken cancellationToken);
 
+    Task<ReportDocument> GenerateTaskReportAsync(
+        GenerateTaskReportCommand command,
+        CancellationToken cancellationToken);
+
     Task<ReportPage> GetPageAsync(
         int page,
         int pageSize,
@@ -25,7 +29,16 @@ public interface IReportService
         CancellationToken cancellationToken);
 }
 
-public sealed record GenerateReportCommand(DateOnly? CutoffDate);
+public sealed record GenerateReportCommand(
+    DateOnly? CutoffDate,
+    IReadOnlyList<ReportWindowSpec>? Windows);
+
+public sealed record GenerateTaskReportCommand(
+    Guid ReportRunId,
+    DateOnly CutoffDate,
+    string Timezone,
+    IReadOnlyList<ResolvedReportWindow> Windows,
+    ReportTrigger Trigger);
 
 public sealed record ReportCsv(byte[] Content, string FileName);
 
@@ -48,7 +61,8 @@ public sealed record ReportListItem(
     int KeyCount,
     int FailedRangeCount,
     decimal SevenDayActualCost,
-    decimal ThirtyDayActualCost);
+    decimal ThirtyDayActualCost,
+    string? WindowSummaryJson);
 
 public sealed record ReportGenerationRunPage(
     IReadOnlyList<ReportGenerationRunItem> Items,
@@ -69,6 +83,20 @@ public sealed record ReportGenerationRunItem(
     DateTimeOffset? CompletedAt,
     Guid? ReportSnapshotId);
 
+/// <summary>Describes one ordered report window of a canonical snapshot.</summary>
+public sealed record ReportWindowDescriptor(
+    string Key,
+    ReportWindowKind Kind,
+    int? RollingDays,
+    DayOfWeek? WeekStartsOn,
+    DateOnly StartDate,
+    DateOnly EndDateExclusive,
+    int DayCount,
+    string Label);
+
+/// <summary>Links aggregate metrics to one window key.</summary>
+public sealed record ReportWindowMetrics(string WindowKey, ReportUsageMetrics Metrics);
+
 public sealed record ReportDocument(
     int SchemaVersion,
     Guid ReportId,
@@ -77,15 +105,22 @@ public sealed record ReportDocument(
     DateTimeOffset GeneratedAt,
     string Timezone,
     long ConnectionRevision,
-    ReportWindow SevenDayWindow,
-    ReportWindow ThirtyDayWindow,
-    ReportUsageMetrics SevenDayTotal,
-    ReportUsageMetrics ThirtyDayTotal,
+    IReadOnlyList<ReportWindowDescriptor> Windows,
+    IReadOnlyList<ReportWindowMetrics> WindowTotals,
     IReadOnlyList<ReportUserUsage> Users,
     IReadOnlyList<ReportKeyUsage> Keys,
-    ReportDiagnostics Diagnostics);
+    ReportDiagnostics Diagnostics)
+{
+    /// <summary>Gets the total actual cost of the seven-day rolling window when present.</summary>
+    public decimal SevenDayActualCost =>
+        WindowTotals.FirstOrDefault(item => item.WindowKey == ReportWindows.RollingSevenDaysKey)
+            ?.Metrics.TotalActualCost ?? 0m;
 
-public sealed record ReportWindow(int Days, DateOnly StartDate, DateOnly EndDate);
+    /// <summary>Gets the total actual cost of the thirty-day rolling window when present.</summary>
+    public decimal ThirtyDayActualCost =>
+        WindowTotals.FirstOrDefault(item => item.WindowKey == ReportWindows.RollingThirtyDaysKey)
+            ?.Metrics.TotalActualCost ?? 0m;
+}
 
 public sealed record ReportUsageMetrics(
     long TotalRequests,
@@ -105,8 +140,7 @@ public sealed record ReportUserUsage(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Username,
     string Email,
     int KeyCount,
-    ReportUsageMetrics SevenDay,
-    ReportUsageMetrics ThirtyDay);
+    IReadOnlyList<ReportWindowMetrics> Windows);
 
 public sealed record ReportKeyUsage(
     Guid KeyId,
@@ -117,8 +151,7 @@ public sealed record ReportKeyUsage(
     string Status,
     DateTimeOffset? LastUsedAt,
     DateTimeOffset? RetiredAt,
-    ReportUsageMetrics SevenDay,
-    ReportUsageMetrics ThirtyDay);
+    IReadOnlyList<ReportWindowMetrics> Windows);
 
 public sealed record ReportDiagnostics(
     IReadOnlyList<ReportRangeFailure> FailedRanges);
@@ -128,10 +161,21 @@ public sealed record ReportRangeFailure(
     string UserEmail,
     long ExternalKeyId,
     string KeyName,
+    string WindowKey,
     DateOnly StartDate,
-    DateOnly EndDate,
+    DateOnly EndDateExclusive,
     Sub2ApiFailureKind? FailureKind,
     string? ErrorCode);
 
-public sealed class ReportGenerationPreconditionException(string message)
-    : InvalidOperationException(message);
+public sealed class ReportGenerationPreconditionException : InvalidOperationException
+{
+    public ReportGenerationPreconditionException(string message)
+        : base(message)
+    {
+    }
+
+    public ReportGenerationPreconditionException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
+}

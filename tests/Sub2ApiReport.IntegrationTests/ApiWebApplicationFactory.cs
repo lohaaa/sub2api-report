@@ -43,6 +43,8 @@ public sealed class ApiWebApplicationFactory : WebApplicationFactory<Program>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment(_environmentName);
+        builder.UseSetting("ConnectionStrings:Database", $"Data Source={_databasePath}");
+        builder.UseSetting("DataProtection:KeysPath", _dataProtectionKeysPath);
         builder.ConfigureAppConfiguration((_, configuration) =>
         {
             configuration.AddInMemoryCollection(new Dictionary<string, string?>
@@ -67,7 +69,9 @@ public sealed class ApiWebApplicationFactory : WebApplicationFactory<Program>
             .Options;
         using (var dbContext = new ReportDbContext(options))
         {
-            dbContext.Database.Migrate();
+            DatabaseMigrationOrchestrator.MigrateAsync(dbContext, CancellationToken.None)
+                .GetAwaiter()
+                .GetResult();
         }
 
         return base.CreateHost(builder);

@@ -11,10 +11,11 @@
 0.3.0  Sub2API connection + people/key mapping
 0.4.0  report collection + snapshot + CSV
 0.5.0  email/dingtalk/feishu delivery
-0.6.0  persistent scheduling + run history
-0.7.0  production Docker deployment + release pipeline
-0.8.0  online update + rollback
-0.9.0  security hardening + release candidate
+0.6.0  Sub2API user + API Key direct reporting
+0.7.0  persistent scheduling + normalized execution history
+0.8.0  production Docker deployment + release pipeline
+0.9.0  online update + rollback
+0.10.0 security hardening + release candidate
 1.0.0  first stable release
 ```
 
@@ -172,7 +173,8 @@ Key 同步按钮仅作诊断用，报告生成前会自动执行。
 ### 交付
 
 - 生成报告前自动刷新 Sub2API 用户与 Key，失败则终止并记录到 `ReportGenerationRuns`；
-- 7/30 个完整自然日窗口；
+- 动态完整自然日窗口：默认滚动 7/30 日、上一完整自然周和上一完整自然月，手工报告支持自定义区间；
+- schema v4 canonical snapshot、v1-v3 读兼容，以及计划任务窗口规格/边界冻结；
 - `Asia/Shanghai` 及可配置 IANA 时区；
 - 按 Key 使用所属 `user_id` 调用 Sub2API stats；
 - bounded concurrency、timeout、retry；
@@ -240,26 +242,34 @@ API；Quartz 触发、计划幂等键和重启恢复仍属 M6，M6 在同一状�
 
 ## 9. M6：计划任务和运行历史
 
+- 状态：已实现（0.7.0）
+
 ### 交付
 
 - 在 M5 已落地的运行和投递状态机之上增加调度，不重建状态机；
 - Quartz persistent JobStore；
-- 每月日期、时间和时区设置；
+- 单例月报计划，支持每月 1-28 日、时间和 IANA 时区设置；
 - 默认每月 1 日 09:00 `Asia/Shanghai`；
 - disallow concurrent execution；
-- misfire policy；
+- misfire 使用 fire-once-now，错过多次只补一次；
 - scheduled idempotency key；
-- 手工运行和失败渠道补发；
+- 规范化任务执行记录，覆盖排队、采集、渲染、投递和最终状态；
+- 任务级错误码、安全错误摘要、阶段时间和配置 revision；
+- 手工立即运行，以及从失败阶段创建新的显式重试执行；
+- 渠道补发继续复用 M5 逐渠道/逐分片重试，不重复成功渠道；
 - 下次运行时间；
 - ReportRun/Delivery 状态和审计；
-- 进程重启恢复。
+- 进程重启恢复；发送结果未知时标记 `outcome_unknown`，禁止自动重发；
+- 计划运行使用运行时全部已启用渠道；部分报告保存快照但不自动发送。
 
 ### 验收
 
 - 重复触发只产生一份计划报告；
 - 执行中重启后不会静默重复发送；
-- 修改时区后下次运行时间正确；
-- 页面能区分成功、部分失败、采集失败和发送失败。
+- 失败重试创建可追溯的新执行并关联原执行，不覆盖历史结果；
+- 已成功渠道和结果未知渠道不会被自动重发；
+- 修改时区后持久化 trigger 与下次运行时间正确；
+- 页面能区分排队、执行中、成功、部分失败、采集失败、发送失败和中断。
 
 ## 10. M7：Docker 和发布
 

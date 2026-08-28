@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
+using Quartz;
+using Quartz.AspNetCore;
 using Serilog;
 using Serilog.Core;
 using Serilog.Events;
@@ -67,6 +69,22 @@ Directory.CreateDirectory(dataProtectionKeysPath);
 builder.Services.AddDataProtection()
     .SetApplicationName("Sub2ApiReport")
     .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysPath));
+builder.Services.AddQuartz(options =>
+{
+    options.SchedulerName = "Sub2ApiReport";
+    options.SchedulerId = "AUTO";
+    options.UseDefaultThreadPool(maxConcurrency: 1);
+    options.UsePersistentStore(store =>
+    {
+        store.UseProperties = true;
+        store.PerformSchemaValidation = true;
+        store.UseSystemTextJsonSerializer();
+        store.UseMicrosoftSQLite(connectionString);
+    });
+});
+builder.Services.AddQuartzServer(
+    options => options.WaitForJobsToComplete = true,
+    healthCheckTags: ["ready"]);
 _ = builder.Services.AddInfrastructure(connectionString);
 builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme)
     .AddIdentityCookies();
@@ -198,7 +216,8 @@ _ = app.MapSecurityEndpoints()
     .MapSystemEndpoints()
     .MapSub2ApiEndpoints()
     .MapReportEndpoints()
-    .MapChannelEndpoints();
+    .MapChannelEndpoints()
+    .MapScheduleEndpoints();
 
 app.UseDefaultFiles();
 app.UseStaticFiles(new StaticFileOptions

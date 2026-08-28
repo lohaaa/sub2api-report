@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Sub2ApiReport.Application.Audit;
 using Sub2ApiReport.Application.Notifications;
 using Sub2ApiReport.Application.Reports;
+using Sub2ApiReport.Application.Scheduling;
 using Sub2ApiReport.Application.Security;
 using Sub2ApiReport.Application.Sub2Api;
 using Sub2ApiReport.Application.System;
@@ -11,6 +12,7 @@ using Sub2ApiReport.Infrastructure.Audit;
 using Sub2ApiReport.Infrastructure.Identity;
 using Sub2ApiReport.Infrastructure.Persistence;
 using Sub2ApiReport.Infrastructure.Reports;
+using Sub2ApiReport.Infrastructure.Scheduling;
 using Sub2ApiReport.Infrastructure.Security;
 using Sub2ApiReport.Infrastructure.Sub2Api;
 using Sub2ApiReport.Infrastructure.System;
@@ -51,6 +53,11 @@ public static class DependencyInjection
         services.AddScoped<ISub2ApiUserService, DatabaseSub2ApiUserService>();
         services.AddScoped<IKeyInventoryService, DatabaseKeyInventoryService>();
         services.AddScoped<IReportService, DatabaseReportService>();
+        services.AddScoped<IReportScheduleService, DatabaseReportScheduleService>();
+        services.AddScoped<IReportScheduleCoordinator, QuartzReportScheduleCoordinator>();
+        services.AddScoped<IReportTaskExecutor, DatabaseReportTaskExecutor>();
+        services.AddTransient<ScheduledReportJob>();
+        services.AddHostedService<ReportScheduleBootstrapService>();
         services.AddHttpClient<ISub2ApiClient, Sub2ApiClient>(client =>
             client.Timeout = Timeout.InfiniteTimeSpan)
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler

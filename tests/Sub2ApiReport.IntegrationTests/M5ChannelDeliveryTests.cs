@@ -38,7 +38,10 @@ public sealed class M5ChannelDeliveryTests
         await LoginAsync(client);
 
         var created = await CreateDingTalkChannelAsync(client);
+        var listed = Assert.IsType<List<ChannelResponse>>(
+            await client.GetFromJsonAsync<List<ChannelResponse>>("/api/v1/channels", JsonOptions));
 
+        Assert.Equal(created.Id, Assert.Single(listed).Id);
         Assert.Equal("合成钉钉渠道", created.Name);
         Assert.True(created.Webhook?.HasWebhook);
         Assert.Equal("****oken", created.Webhook?.WebhookMask);
@@ -127,6 +130,12 @@ public sealed class M5ChannelDeliveryTests
 
         Assert.Equal(1, dingTalkSender.SendCount);
         Assert.Equal(1, emailSender.SendCount);
+
+        var listedRuns = Assert.IsType<List<DeliveryRunResponse>>(
+            await client.GetFromJsonAsync<List<DeliveryRunResponse>>(
+                $"/api/v1/reports/{report.ReportId:D}/deliveries",
+                JsonOptions));
+        Assert.Equal(run.Id, Assert.Single(listedRuns).Id);
 
         emailSender.OutcomeFor = _ => ChannelSendOutcome.Ok;
         using var retry = await SendJsonAsync<object?>(

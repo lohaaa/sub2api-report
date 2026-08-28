@@ -19,7 +19,12 @@ internal sealed class ReportGenerationRunConfiguration : IEntityTypeConfiguratio
             .HasMaxLength(64);
         builder.Property(item => item.ErrorMessage)
             .HasMaxLength(512);
+        builder.HasOne<ReportRun>()
+            .WithMany()
+            .HasForeignKey(item => item.ReportRunId)
+            .OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(item => new { item.StartedAt, item.Id });
         builder.HasIndex(item => item.Status);
+        builder.HasIndex(item => item.ReportRunId).IsUnique();
     }
 }

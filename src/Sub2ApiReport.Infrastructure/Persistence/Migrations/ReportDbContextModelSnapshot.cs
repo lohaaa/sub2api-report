@@ -17,6 +17,453 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.10");
 
+            modelBuilder.Entity("AppAny.Quartz.EntityFrameworkCore.Migrations.QuartzBlobTrigger", b =>
+                {
+                    b.Property<string>("SchedulerName")
+                        .HasColumnType("text")
+                        .HasColumnName("SCHED_NAME");
+
+                    b.Property<string>("TriggerName")
+                        .HasColumnType("text")
+                        .HasColumnName("TRIGGER_NAME");
+
+                    b.Property<string>("TriggerGroup")
+                        .HasColumnType("text")
+                        .HasColumnName("TRIGGER_GROUP");
+
+                    b.Property<byte[]>("BlobData")
+                        .HasColumnType("bytea")
+                        .HasColumnName("BLOB_DATA");
+
+                    b.HasKey("SchedulerName", "TriggerName", "TriggerGroup");
+
+                    b.ToTable("QRTZ_BLOB_TRIGGERS", (string)null);
+                });
+
+            modelBuilder.Entity("AppAny.Quartz.EntityFrameworkCore.Migrations.QuartzCalendar", b =>
+                {
+                    b.Property<string>("SchedulerName")
+                        .HasColumnType("text")
+                        .HasColumnName("SCHED_NAME");
+
+                    b.Property<string>("CalendarName")
+                        .HasColumnType("text")
+                        .HasColumnName("CALENDAR_NAME");
+
+                    b.Property<byte[]>("Calendar")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("CALENDAR");
+
+                    b.HasKey("SchedulerName", "CalendarName");
+
+                    b.ToTable("QRTZ_CALENDARS", (string)null);
+                });
+
+            modelBuilder.Entity("AppAny.Quartz.EntityFrameworkCore.Migrations.QuartzCronTrigger", b =>
+                {
+                    b.Property<string>("SchedulerName")
+                        .HasColumnType("text")
+                        .HasColumnName("SCHED_NAME");
+
+                    b.Property<string>("TriggerName")
+                        .HasColumnType("text")
+                        .HasColumnName("TRIGGER_NAME");
+
+                    b.Property<string>("TriggerGroup")
+                        .HasColumnType("text")
+                        .HasColumnName("TRIGGER_GROUP");
+
+                    b.Property<string>("CronExpression")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("CRON_EXPRESSION");
+
+                    b.Property<string>("TimeZoneId")
+                        .HasColumnType("text")
+                        .HasColumnName("TIME_ZONE_ID");
+
+                    b.HasKey("SchedulerName", "TriggerName", "TriggerGroup");
+
+                    b.ToTable("QRTZ_CRON_TRIGGERS", (string)null);
+                });
+
+            modelBuilder.Entity("AppAny.Quartz.EntityFrameworkCore.Migrations.QuartzFiredTrigger", b =>
+                {
+                    b.Property<string>("SchedulerName")
+                        .HasColumnType("text")
+                        .HasColumnName("SCHED_NAME");
+
+                    b.Property<string>("EntryId")
+                        .HasColumnType("text")
+                        .HasColumnName("ENTRY_ID");
+
+                    b.Property<long>("FiredTime")
+                        .HasColumnType("bigint")
+                        .HasColumnName("FIRED_TIME");
+
+                    b.Property<string>("InstanceName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("INSTANCE_NAME");
+
+                    b.Property<bool>("IsNonConcurrent")
+                        .HasColumnType("bool")
+                        .HasColumnName("IS_NONCONCURRENT");
+
+                    b.Property<string>("JobGroup")
+                        .HasColumnType("text")
+                        .HasColumnName("JOB_GROUP");
+
+                    b.Property<string>("JobName")
+                        .HasColumnType("text")
+                        .HasColumnName("JOB_NAME");
+
+                    b.Property<int>("Priority")
+                        .HasColumnType("integer")
+                        .HasColumnName("PRIORITY");
+
+                    b.Property<bool?>("RequestsRecovery")
+                        .HasColumnType("bool")
+                        .HasColumnName("REQUESTS_RECOVERY");
+
+                    b.Property<long>("ScheduledTime")
+                        .HasColumnType("bigint")
+                        .HasColumnName("SCHED_TIME");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("STATE");
+
+                    b.Property<string>("TriggerGroup")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("TRIGGER_GROUP");
+
+                    b.Property<string>("TriggerName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("TRIGGER_NAME");
+
+                    b.HasKey("SchedulerName", "EntryId");
+
+                    b.HasIndex("InstanceName")
+                        .HasDatabaseName("IDX_QRTZ_FT_TRIG_INST_NAME");
+
+                    b.HasIndex("JobGroup")
+                        .HasDatabaseName("IDX_QRTZ_FT_JOB_GROUP");
+
+                    b.HasIndex("JobName")
+                        .HasDatabaseName("IDX_QRTZ_FT_JOB_NAME");
+
+                    b.HasIndex("RequestsRecovery")
+                        .HasDatabaseName("IDX_QRTZ_FT_JOB_REQ_RECOVERY");
+
+                    b.HasIndex("TriggerGroup")
+                        .HasDatabaseName("IDX_QRTZ_FT_TRIG_GROUP");
+
+                    b.HasIndex("TriggerName")
+                        .HasDatabaseName("IDX_QRTZ_FT_TRIG_NAME");
+
+                    b.HasIndex("SchedulerName", "TriggerName", "TriggerGroup")
+                        .HasDatabaseName("IDX_QRTZ_FT_TRIG_NM_GP");
+
+                    b.ToTable("QRTZ_FIRED_TRIGGERS", (string)null);
+                });
+
+            modelBuilder.Entity("AppAny.Quartz.EntityFrameworkCore.Migrations.QuartzJobDetail", b =>
+                {
+                    b.Property<string>("SchedulerName")
+                        .HasColumnType("text")
+                        .HasColumnName("SCHED_NAME");
+
+                    b.Property<string>("JobName")
+                        .HasColumnType("text")
+                        .HasColumnName("JOB_NAME");
+
+                    b.Property<string>("JobGroup")
+                        .HasColumnType("text")
+                        .HasColumnName("JOB_GROUP");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text")
+                        .HasColumnName("DESCRIPTION");
+
+                    b.Property<bool>("IsDurable")
+                        .HasColumnType("bool")
+                        .HasColumnName("IS_DURABLE");
+
+                    b.Property<bool>("IsNonConcurrent")
+                        .HasColumnType("bool")
+                        .HasColumnName("IS_NONCONCURRENT");
+
+                    b.Property<bool>("IsUpdateData")
+                        .HasColumnType("bool")
+                        .HasColumnName("IS_UPDATE_DATA");
+
+                    b.Property<string>("JobClassName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("JOB_CLASS_NAME");
+
+                    b.Property<byte[]>("JobData")
+                        .HasColumnType("bytea")
+                        .HasColumnName("JOB_DATA");
+
+                    b.Property<bool>("RequestsRecovery")
+                        .HasColumnType("bool")
+                        .HasColumnName("REQUESTS_RECOVERY");
+
+                    b.HasKey("SchedulerName", "JobName", "JobGroup");
+
+                    b.HasIndex("RequestsRecovery")
+                        .HasDatabaseName("IDX_QRTZ_J_REQ_RECOVERY");
+
+                    b.ToTable("QRTZ_JOB_DETAILS", (string)null);
+                });
+
+            modelBuilder.Entity("AppAny.Quartz.EntityFrameworkCore.Migrations.QuartzLock", b =>
+                {
+                    b.Property<string>("SchedulerName")
+                        .HasColumnType("text")
+                        .HasColumnName("SCHED_NAME");
+
+                    b.Property<string>("LockName")
+                        .HasColumnType("text")
+                        .HasColumnName("LOCK_NAME");
+
+                    b.HasKey("SchedulerName", "LockName");
+
+                    b.ToTable("QRTZ_LOCKS", (string)null);
+                });
+
+            modelBuilder.Entity("AppAny.Quartz.EntityFrameworkCore.Migrations.QuartzPausedTriggerGroup", b =>
+                {
+                    b.Property<string>("SchedulerName")
+                        .HasColumnType("text")
+                        .HasColumnName("SCHED_NAME");
+
+                    b.Property<string>("TriggerGroup")
+                        .HasColumnType("text")
+                        .HasColumnName("TRIGGER_GROUP");
+
+                    b.HasKey("SchedulerName", "TriggerGroup");
+
+                    b.ToTable("QRTZ_PAUSED_TRIGGER_GRPS", (string)null);
+                });
+
+            modelBuilder.Entity("AppAny.Quartz.EntityFrameworkCore.Migrations.QuartzSchedulerState", b =>
+                {
+                    b.Property<string>("SchedulerName")
+                        .HasColumnType("text")
+                        .HasColumnName("SCHED_NAME");
+
+                    b.Property<string>("InstanceName")
+                        .HasColumnType("text")
+                        .HasColumnName("INSTANCE_NAME");
+
+                    b.Property<long>("CheckInInterval")
+                        .HasColumnType("bigint")
+                        .HasColumnName("CHECKIN_INTERVAL");
+
+                    b.Property<long>("LastCheckInTime")
+                        .HasColumnType("bigint")
+                        .HasColumnName("LAST_CHECKIN_TIME");
+
+                    b.HasKey("SchedulerName", "InstanceName");
+
+                    b.ToTable("QRTZ_SCHEDULER_STATE", (string)null);
+                });
+
+            modelBuilder.Entity("AppAny.Quartz.EntityFrameworkCore.Migrations.QuartzSimplePropertyTrigger", b =>
+                {
+                    b.Property<string>("SchedulerName")
+                        .HasColumnType("text")
+                        .HasColumnName("SCHED_NAME");
+
+                    b.Property<string>("TriggerName")
+                        .HasColumnType("text")
+                        .HasColumnName("TRIGGER_NAME");
+
+                    b.Property<string>("TriggerGroup")
+                        .HasColumnType("text")
+                        .HasColumnName("TRIGGER_GROUP");
+
+                    b.Property<bool?>("BooleanProperty1")
+                        .HasColumnType("bool")
+                        .HasColumnName("BOOL_PROP_1");
+
+                    b.Property<bool?>("BooleanProperty2")
+                        .HasColumnType("bool")
+                        .HasColumnName("BOOL_PROP_2");
+
+                    b.Property<decimal?>("DecimalProperty1")
+                        .HasColumnType("numeric")
+                        .HasColumnName("DEC_PROP_1");
+
+                    b.Property<decimal?>("DecimalProperty2")
+                        .HasColumnType("numeric")
+                        .HasColumnName("DEC_PROP_2");
+
+                    b.Property<int?>("IntegerProperty1")
+                        .HasColumnType("integer")
+                        .HasColumnName("INT_PROP_1");
+
+                    b.Property<int?>("IntegerProperty2")
+                        .HasColumnType("integer")
+                        .HasColumnName("INT_PROP_2");
+
+                    b.Property<long?>("LongProperty1")
+                        .HasColumnType("bigint")
+                        .HasColumnName("LONG_PROP_1");
+
+                    b.Property<long?>("LongProperty2")
+                        .HasColumnType("bigint")
+                        .HasColumnName("LONG_PROP_2");
+
+                    b.Property<string>("StringProperty1")
+                        .HasColumnType("text")
+                        .HasColumnName("STR_PROP_1");
+
+                    b.Property<string>("StringProperty2")
+                        .HasColumnType("text")
+                        .HasColumnName("STR_PROP_2");
+
+                    b.Property<string>("StringProperty3")
+                        .HasColumnType("text")
+                        .HasColumnName("STR_PROP_3");
+
+                    b.Property<string>("TimeZoneId")
+                        .HasColumnType("text")
+                        .HasColumnName("TIME_ZONE_ID");
+
+                    b.HasKey("SchedulerName", "TriggerName", "TriggerGroup");
+
+                    b.ToTable("QRTZ_SIMPROP_TRIGGERS", (string)null);
+                });
+
+            modelBuilder.Entity("AppAny.Quartz.EntityFrameworkCore.Migrations.QuartzSimpleTrigger", b =>
+                {
+                    b.Property<string>("SchedulerName")
+                        .HasColumnType("text")
+                        .HasColumnName("SCHED_NAME");
+
+                    b.Property<string>("TriggerName")
+                        .HasColumnType("text")
+                        .HasColumnName("TRIGGER_NAME");
+
+                    b.Property<string>("TriggerGroup")
+                        .HasColumnType("text")
+                        .HasColumnName("TRIGGER_GROUP");
+
+                    b.Property<long>("RepeatCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("REPEAT_COUNT");
+
+                    b.Property<long>("RepeatInterval")
+                        .HasColumnType("bigint")
+                        .HasColumnName("REPEAT_INTERVAL");
+
+                    b.Property<long>("TimesTriggered")
+                        .HasColumnType("bigint")
+                        .HasColumnName("TIMES_TRIGGERED");
+
+                    b.HasKey("SchedulerName", "TriggerName", "TriggerGroup");
+
+                    b.ToTable("QRTZ_SIMPLE_TRIGGERS", (string)null);
+                });
+
+            modelBuilder.Entity("AppAny.Quartz.EntityFrameworkCore.Migrations.QuartzTrigger", b =>
+                {
+                    b.Property<string>("SchedulerName")
+                        .HasColumnType("text")
+                        .HasColumnName("SCHED_NAME");
+
+                    b.Property<string>("TriggerName")
+                        .HasColumnType("text")
+                        .HasColumnName("TRIGGER_NAME");
+
+                    b.Property<string>("TriggerGroup")
+                        .HasColumnType("text")
+                        .HasColumnName("TRIGGER_GROUP");
+
+                    b.Property<string>("CalendarName")
+                        .HasColumnType("text")
+                        .HasColumnName("CALENDAR_NAME");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text")
+                        .HasColumnName("DESCRIPTION");
+
+                    b.Property<long?>("EndTime")
+                        .HasColumnType("bigint")
+                        .HasColumnName("END_TIME");
+
+                    b.Property<byte[]>("JobData")
+                        .HasColumnType("bytea")
+                        .HasColumnName("JOB_DATA");
+
+                    b.Property<string>("JobGroup")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("JOB_GROUP");
+
+                    b.Property<string>("JobName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("JOB_NAME");
+
+                    b.Property<short?>("MisfireInstruction")
+                        .HasColumnType("smallint")
+                        .HasColumnName("MISFIRE_INSTR");
+
+                    b.Property<long?>("MisfireOriginalFireTime")
+                        .HasColumnType("bigint")
+                        .HasColumnName("MISFIRE_ORIG_FIRE_TIME");
+
+                    b.Property<long?>("NextFireTime")
+                        .HasColumnType("bigint")
+                        .HasColumnName("NEXT_FIRE_TIME");
+
+                    b.Property<long?>("PreviousFireTime")
+                        .HasColumnType("bigint")
+                        .HasColumnName("PREV_FIRE_TIME");
+
+                    b.Property<int?>("Priority")
+                        .HasColumnType("integer")
+                        .HasColumnName("PRIORITY");
+
+                    b.Property<long>("StartTime")
+                        .HasColumnType("bigint")
+                        .HasColumnName("START_TIME");
+
+                    b.Property<string>("TriggerState")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("TRIGGER_STATE");
+
+                    b.Property<string>("TriggerType")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("TRIGGER_TYPE");
+
+                    b.HasKey("SchedulerName", "TriggerName", "TriggerGroup");
+
+                    b.HasIndex("NextFireTime")
+                        .HasDatabaseName("IDX_QRTZ_T_NEXT_FIRE_TIME");
+
+                    b.HasIndex("TriggerState")
+                        .HasDatabaseName("IDX_QRTZ_T_STATE");
+
+                    b.HasIndex("NextFireTime", "TriggerState")
+                        .HasDatabaseName("IDX_QRTZ_T_NFT_ST");
+
+                    b.HasIndex("SchedulerName", "JobName", "JobGroup");
+
+                    b.ToTable("QRTZ_TRIGGERS", (string)null);
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserClaim<System.Guid>", b =>
                 {
                     b.Property<int>("Id")
@@ -102,8 +549,9 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                         .HasMaxLength(4000)
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("OccurredAt")
-                        .HasColumnType("TEXT");
+                    b.Property<long>("OccurredAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("OccurredAtUnixMilliseconds");
 
                     b.Property<string>("Result")
                         .IsRequired()
@@ -132,8 +580,9 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                         .HasMaxLength(4096)
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("TEXT");
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("CreatedAtUnixMilliseconds");
 
                     b.Property<bool>("Enabled")
                         .HasColumnType("INTEGER");
@@ -153,8 +602,9 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                     b.Property<bool?>("LastTestSucceeded")
                         .HasColumnType("INTEGER");
 
-                    b.Property<DateTimeOffset?>("LastTestedAt")
-                        .HasColumnType("TEXT");
+                    b.Property<long?>("LastTestedAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("LastTestedAtUnixMilliseconds");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -205,8 +655,9 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                         .HasMaxLength(16)
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("TEXT");
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("UpdatedAtUnixMilliseconds");
 
                     b.Property<string>("WebhookCiphertext")
                         .HasMaxLength(4096)
@@ -267,8 +718,9 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset?>("SentAt")
-                        .HasColumnType("TEXT");
+                    b.Property<long?>("SentAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("SentAtUnixMilliseconds");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -327,8 +779,9 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("RunId")
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset?>("SentAt")
-                        .HasColumnType("TEXT");
+                    b.Property<long?>("SentAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("SentAtUnixMilliseconds");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -358,8 +811,9 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset?>("CompletedAt")
-                        .HasColumnType("TEXT");
+                    b.Property<long?>("CompletedAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("CompletedAtUnixMilliseconds");
 
                     b.Property<long>("ConnectionRevision")
                         .HasColumnType("INTEGER");
@@ -372,6 +826,9 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                         .HasMaxLength(512)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("ReportRunId")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid?>("ReportSnapshotId")
                         .HasColumnType("TEXT");
 
@@ -379,11 +836,9 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("StartedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<long>("StartedAtUnixMilliseconds")
-                        .HasColumnType("INTEGER");
+                    b.Property<long>("StartedAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("StartedAtUnixMilliseconds");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -396,6 +851,9 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ReportRunId")
+                        .IsUnique();
 
                     b.HasIndex("Status");
 
@@ -413,22 +871,71 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset?>("CompletedAt")
+                    b.Property<int>("Attempt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(1);
+
+                    b.Property<long?>("CollectingAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("CollectingAtUnixMilliseconds");
+
+                    b.Property<long?>("CompletedAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("CompletedAtUnixMilliseconds");
+
+                    b.Property<long?>("DeliveringAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("DeliveringAtUnixMilliseconds");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(512)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("IdempotencyKey")
                         .HasMaxLength(128)
                         .HasColumnType("TEXT");
 
-                    b.Property<Guid>("ReportSnapshotId")
+                    b.Property<bool>("OutcomeUnknownConfirmed")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateOnly?>("PeriodEnd")
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("StartedAt")
+                    b.Property<long?>("RenderingAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("RenderingAtUnixMilliseconds");
+
+                    b.Property<Guid?>("ReportSnapshotId")
                         .HasColumnType("TEXT");
+
+                    b.Property<string>("ResolvedWindowsJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("RetryOfRunId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("ScheduleId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ScheduleRevision")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("StartedAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("StartedAtUnixMilliseconds");
 
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Timezone")
+                        .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Trigger")
@@ -436,20 +943,90 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("WindowSpecsJson")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("IdempotencyKey")
                         .IsUnique();
 
+                    b.HasIndex("RetryOfRunId");
+
                     b.HasIndex("ReportSnapshotId", "StartedAt");
+
+                    b.HasIndex("ScheduleId", "StartedAt");
 
                     b.ToTable("ReportRuns", null, t =>
                         {
-                            t.HasCheckConstraint("CK_ReportRuns_Completion", "(Status = 'Running' AND CompletedAt IS NULL) OR (Status <> 'Running' AND CompletedAt IS NOT NULL)");
+                            t.HasCheckConstraint("CK_ReportRuns_Attempt", "Attempt > 0");
 
-                            t.HasCheckConstraint("CK_ReportRuns_Status", "Status IN ('Running', 'Succeeded', 'PartialFailed', 'Failed')");
+                            t.HasCheckConstraint("CK_ReportRuns_Completion", "(Status IN ('Succeeded', 'PartialFailed', 'Failed') AND CompletedAtUnixMilliseconds IS NOT NULL) OR (Status NOT IN ('Succeeded', 'PartialFailed', 'Failed') AND CompletedAtUnixMilliseconds IS NULL)");
 
-                            t.HasCheckConstraint("CK_ReportRuns_Trigger", "Trigger = 'ManualDelivery'");
+                            t.HasCheckConstraint("CK_ReportRuns_Idempotency", "Trigger <> 'Scheduled' OR IdempotencyKey IS NOT NULL");
+
+                            t.HasCheckConstraint("CK_ReportRuns_ScheduleMetadata", "Trigger = 'ManualDelivery' OR (ScheduleId IS NOT NULL AND ScheduleRevision > 0 AND PeriodEnd IS NOT NULL AND Timezone IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_ReportRuns_Status", "Status IN ('Running', 'Queued', 'Collecting', 'Rendering', 'Delivering', 'Succeeded', 'PartialFailed', 'Failed')");
+
+                            t.HasCheckConstraint("CK_ReportRuns_Trigger", "Trigger IN ('ManualDelivery', 'Scheduled', 'ManualScheduled', 'Retry')");
+                        });
+                });
+
+            modelBuilder.Entity("Sub2ApiReport.Domain.Reports.ReportSchedule", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("DayOfMonth")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("LocalTime")
+                        .IsRequired()
+                        .HasMaxLength(5)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Timezone")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("UpdatedAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("UpdatedAtUnixMilliseconds");
+
+                    b.Property<string>("WindowSpecsJson")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ReportSchedules", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ReportSchedules_DayOfMonth", "DayOfMonth BETWEEN 1 AND 28");
+
+                            t.HasCheckConstraint("CK_ReportSchedules_LocalTime", "length(LocalTime) = 5");
+
+                            t.HasCheckConstraint("CK_ReportSchedules_Revision", "Revision > 0");
+
+                            t.HasCheckConstraint("CK_ReportSchedules_Singleton", "Id = 1");
+                        });
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            DayOfMonth = 1,
+                            Enabled = false,
+                            LocalTime = "09:00",
+                            Revision = 1L,
+                            Timezone = "Asia/Shanghai"
                         });
                 });
 
@@ -472,11 +1049,9 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                     b.Property<int>("FailedRangeCount")
                         .HasColumnType("INTEGER");
 
-                    b.Property<DateTimeOffset>("GeneratedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<long>("GeneratedAtUnixMilliseconds")
-                        .HasColumnType("INTEGER");
+                    b.Property<long>("GeneratedAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("GeneratedAtUnixMilliseconds");
 
                     b.Property<int>("KeyCount")
                         .HasColumnType("INTEGER");
@@ -510,11 +1085,14 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                     b.Property<int>("UserCount")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("WindowSummaryJson")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CutoffDate", "Status");
 
-                    b.HasIndex("GeneratedAtUnixMilliseconds", "Id");
+                    b.HasIndex("GeneratedAt", "Id");
 
                     b.ToTable("ReportSnapshots", null, t =>
                         {
@@ -541,23 +1119,28 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("BLOB");
 
-                    b.Property<DateTimeOffset?>("ConsumedAt")
-                        .HasColumnType("TEXT");
+                    b.Property<long?>("ConsumedAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("ConsumedAtUnixMilliseconds");
 
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("TEXT");
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("CreatedAtUnixMilliseconds");
 
-                    b.Property<DateTimeOffset>("ExpiresAt")
-                        .HasColumnType("TEXT");
+                    b.Property<long>("ExpiresAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("ExpiresAtUnixMilliseconds");
 
                     b.Property<int>("FailedAttempts")
                         .HasColumnType("INTEGER");
 
-                    b.Property<DateTimeOffset?>("LockedUntil")
-                        .HasColumnType("TEXT");
+                    b.Property<long?>("LockedUntil")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("LockedUntilUnixMilliseconds");
 
-                    b.Property<DateTimeOffset?>("RevokedAt")
-                        .HasColumnType("TEXT");
+                    b.Property<long?>("RevokedAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("RevokedAtUnixMilliseconds");
 
                     b.HasKey("Id");
 
@@ -576,23 +1159,28 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("BLOB");
 
-                    b.Property<DateTimeOffset?>("ConsumedAt")
-                        .HasColumnType("TEXT");
+                    b.Property<long?>("ConsumedAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("ConsumedAtUnixMilliseconds");
 
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("TEXT");
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("CreatedAtUnixMilliseconds");
 
-                    b.Property<DateTimeOffset>("ExpiresAt")
-                        .HasColumnType("TEXT");
+                    b.Property<long>("ExpiresAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("ExpiresAtUnixMilliseconds");
 
                     b.Property<int>("FailedAttempts")
                         .HasColumnType("INTEGER");
 
-                    b.Property<DateTimeOffset?>("LockedUntil")
-                        .HasColumnType("TEXT");
+                    b.Property<long?>("LockedUntil")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("LockedUntilUnixMilliseconds");
 
-                    b.Property<DateTimeOffset?>("RevokedAt")
-                        .HasColumnType("TEXT");
+                    b.Property<long?>("RevokedAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("RevokedAtUnixMilliseconds");
 
                     b.HasKey("Id");
 
@@ -613,19 +1201,22 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                     b.Property<long?>("GroupId")
                         .HasColumnType("INTEGER");
 
-                    b.Property<DateTimeOffset>("LastSeenAt")
-                        .HasColumnType("TEXT");
+                    b.Property<long>("LastSeenAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("LastSeenAtUnixMilliseconds");
 
-                    b.Property<DateTimeOffset?>("LastUsedAt")
-                        .HasColumnType("TEXT");
+                    b.Property<long?>("LastUsedAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("LastUsedAtUnixMilliseconds");
 
                     b.Property<string>("NameSnapshot")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset?>("RetiredAt")
-                        .HasColumnType("TEXT");
+                    b.Property<long?>("RetiredAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("RetiredAtUnixMilliseconds");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -673,8 +1264,9 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                     b.Property<long?>("CodexGroupId")
                         .HasColumnType("INTEGER");
 
-                    b.Property<DateTimeOffset?>("LastSynchronizedAt")
-                        .HasColumnType("TEXT");
+                    b.Property<long?>("LastSynchronizedAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("LastSynchronizedAtUnixMilliseconds");
 
                     b.Property<int?>("LastSynchronizedKeyCount")
                         .HasColumnType("INTEGER");
@@ -689,11 +1281,13 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                     b.Property<bool?>("LastTestSucceeded")
                         .HasColumnType("INTEGER");
 
-                    b.Property<DateTimeOffset?>("LastTestedAt")
-                        .HasColumnType("TEXT");
+                    b.Property<long?>("LastTestedAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("LastTestedAtUnixMilliseconds");
 
-                    b.Property<DateTimeOffset?>("LastUsersSynchronizedAt")
-                        .HasColumnType("TEXT");
+                    b.Property<long?>("LastUsersSynchronizedAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("LastUsersSynchronizedAtUnixMilliseconds");
 
                     b.Property<long?>("LegacyUserId")
                         .HasColumnType("INTEGER")
@@ -703,8 +1297,9 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                         .IsConcurrencyToken()
                         .HasColumnType("INTEGER");
 
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("TEXT");
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("UpdatedAtUnixMilliseconds");
 
                     b.Property<string>("UserScopeMode")
                         .IsRequired()
@@ -744,11 +1339,13 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsSelected")
                         .HasColumnType("INTEGER");
 
-                    b.Property<DateTimeOffset>("LastSeenAt")
-                        .HasColumnType("TEXT");
+                    b.Property<long>("LastSeenAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("LastSeenAtUnixMilliseconds");
 
-                    b.Property<DateTimeOffset?>("RetiredAt")
-                        .HasColumnType("TEXT");
+                    b.Property<long?>("RetiredAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("RetiredAtUnixMilliseconds");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -780,8 +1377,9 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                     b.Property<int>("BackupRetentionCount")
                         .HasColumnType("INTEGER");
 
-                    b.Property<DateTimeOffset?>("InitializedAt")
-                        .HasColumnType("TEXT");
+                    b.Property<long?>("InitializedAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("InitializedAtUnixMilliseconds");
 
                     b.Property<string>("LogLevel")
                         .IsRequired()
@@ -808,8 +1406,9 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset?>("UpdatedAt")
-                        .HasColumnType("TEXT");
+                    b.Property<long?>("UpdatedAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("UpdatedAtUnixMilliseconds");
 
                     b.HasKey("Id");
 
@@ -842,8 +1441,9 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                         .IsConcurrencyToken()
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("TEXT");
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("CreatedAtUnixMilliseconds");
 
                     b.Property<string>("Email")
                         .HasMaxLength(256)
@@ -855,8 +1455,9 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                     b.Property<bool>("LockoutEnabled")
                         .HasColumnType("INTEGER");
 
-                    b.Property<DateTimeOffset?>("LockoutEnd")
-                        .HasColumnType("TEXT");
+                    b.Property<long?>("LockoutEnd")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("LockoutEndUnixMilliseconds");
 
                     b.Property<string>("NormalizedEmail")
                         .HasMaxLength(256)
@@ -904,6 +1505,84 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                         {
                             t.HasCheckConstraint("CK_AdminUsers_SingletonKey", "SingletonKey = 1");
                         });
+                });
+
+            modelBuilder.Entity("Sub2ApiReport.Infrastructure.Persistence.UnixTimeMigrationState", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Completed")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("UnixTimeMigrationState", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_UnixTimeMigrationState_Completed", "Completed = 1");
+                        });
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Completed = true
+                        });
+                });
+
+            modelBuilder.Entity("AppAny.Quartz.EntityFrameworkCore.Migrations.QuartzBlobTrigger", b =>
+                {
+                    b.HasOne("AppAny.Quartz.EntityFrameworkCore.Migrations.QuartzTrigger", "Trigger")
+                        .WithMany("BlobTriggers")
+                        .HasForeignKey("SchedulerName", "TriggerName", "TriggerGroup")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Trigger");
+                });
+
+            modelBuilder.Entity("AppAny.Quartz.EntityFrameworkCore.Migrations.QuartzCronTrigger", b =>
+                {
+                    b.HasOne("AppAny.Quartz.EntityFrameworkCore.Migrations.QuartzTrigger", "Trigger")
+                        .WithMany("CronTriggers")
+                        .HasForeignKey("SchedulerName", "TriggerName", "TriggerGroup")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Trigger");
+                });
+
+            modelBuilder.Entity("AppAny.Quartz.EntityFrameworkCore.Migrations.QuartzSimplePropertyTrigger", b =>
+                {
+                    b.HasOne("AppAny.Quartz.EntityFrameworkCore.Migrations.QuartzTrigger", "Trigger")
+                        .WithMany("SimplePropertyTriggers")
+                        .HasForeignKey("SchedulerName", "TriggerName", "TriggerGroup")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Trigger");
+                });
+
+            modelBuilder.Entity("AppAny.Quartz.EntityFrameworkCore.Migrations.QuartzSimpleTrigger", b =>
+                {
+                    b.HasOne("AppAny.Quartz.EntityFrameworkCore.Migrations.QuartzTrigger", "Trigger")
+                        .WithMany("SimpleTriggers")
+                        .HasForeignKey("SchedulerName", "TriggerName", "TriggerGroup")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Trigger");
+                });
+
+            modelBuilder.Entity("AppAny.Quartz.EntityFrameworkCore.Migrations.QuartzTrigger", b =>
+                {
+                    b.HasOne("AppAny.Quartz.EntityFrameworkCore.Migrations.QuartzJobDetail", "JobDetail")
+                        .WithMany("Triggers")
+                        .HasForeignKey("SchedulerName", "JobName", "JobGroup")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("JobDetail");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserClaim<System.Guid>", b =>
@@ -961,13 +1640,30 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                     b.Navigation("Run");
                 });
 
+            modelBuilder.Entity("Sub2ApiReport.Domain.Reports.ReportGenerationRun", b =>
+                {
+                    b.HasOne("Sub2ApiReport.Domain.Reports.ReportRun", null)
+                        .WithMany()
+                        .HasForeignKey("ReportRunId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("Sub2ApiReport.Domain.Reports.ReportRun", b =>
                 {
                     b.HasOne("Sub2ApiReport.Domain.Reports.ReportSnapshot", null)
                         .WithMany()
                         .HasForeignKey("ReportSnapshotId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Sub2ApiReport.Domain.Reports.ReportRun", null)
+                        .WithMany()
+                        .HasForeignKey("RetryOfRunId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Sub2ApiReport.Domain.Reports.ReportSchedule", null)
+                        .WithMany()
+                        .HasForeignKey("ScheduleId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("Sub2ApiReport.Domain.Security.RecoveryChallenge", b =>
@@ -987,6 +1683,22 @@ namespace Sub2ApiReport.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Sub2ApiUser");
+                });
+
+            modelBuilder.Entity("AppAny.Quartz.EntityFrameworkCore.Migrations.QuartzJobDetail", b =>
+                {
+                    b.Navigation("Triggers");
+                });
+
+            modelBuilder.Entity("AppAny.Quartz.EntityFrameworkCore.Migrations.QuartzTrigger", b =>
+                {
+                    b.Navigation("BlobTriggers");
+
+                    b.Navigation("CronTriggers");
+
+                    b.Navigation("SimplePropertyTriggers");
+
+                    b.Navigation("SimpleTriggers");
                 });
 
             modelBuilder.Entity("Sub2ApiReport.Domain.Reports.DeliveryRecord", b =>

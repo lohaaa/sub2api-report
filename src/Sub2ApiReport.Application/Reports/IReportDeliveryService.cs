@@ -12,6 +12,10 @@ public interface IReportDeliveryService
         RetryDeliveryCommand command,
         CancellationToken cancellationToken);
 
+    Task<DeliveryRunDocument> DeliverTaskAsync(
+        DeliverReportTaskCommand command,
+        CancellationToken cancellationToken);
+
     Task<IReadOnlyList<DeliveryRunDocument>> GetRunsAsync(
         Guid reportId,
         CancellationToken cancellationToken);
@@ -23,6 +27,8 @@ public sealed record DeliverReportCommand(
     bool ConfirmPartial);
 
 public sealed record RetryDeliveryCommand(Guid ReportId, Guid RunId);
+
+public sealed record DeliverReportTaskCommand(Guid RunId, bool Recovering);
 
 public sealed record DeliveryRunDocument(
     Guid Id,

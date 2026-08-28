@@ -1,4 +1,4 @@
-import { CalendarClockIcon, ScrollTextIcon } from "lucide-react";
+import { ScrollTextIcon } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
@@ -28,6 +28,11 @@ const ChannelsPage = lazy(() =>
 const ReportsPage = lazy(() =>
   import("@/features/reports/reports-page").then((module) => ({
     default: module.ReportsPage,
+  })),
+);
+const SchedulePage = lazy(() =>
+  import("@/features/schedule/schedule-page").then((module) => ({
+    default: module.SchedulePage,
   })),
 );
 const ReportDetailPage = lazy(() =>
@@ -127,18 +132,7 @@ function AuthenticatedRoutes() {
         <Route path="reports" element={<ReportsPage />} />
         <Route path="reports/:id" element={<ReportDetailPage />} />
         <Route path="channels" element={<ChannelsPage />} />
-        <Route
-          path="schedule"
-          element={
-            <EmptySectionPage
-              title="计划任务"
-              description="月报运行时间和最近执行结果"
-              icon={CalendarClockIcon}
-              columns={["任务", "计划", "时区", "状态"]}
-              emptyText="暂无计划任务"
-            />
-          }
-        />
+        <Route path="schedule" element={<SchedulePage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route
           path="audit"

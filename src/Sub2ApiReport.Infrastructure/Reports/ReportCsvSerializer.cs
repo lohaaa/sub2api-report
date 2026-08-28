@@ -9,68 +9,75 @@ internal static class ReportCsvSerializer
     public static byte[] Serialize(ReportDocument report)
     {
         var builder = new StringBuilder();
-        AppendRow(builder, "报告 ID", report.ReportId.ToString("D"));
-        AppendRow(builder, "状态", report.Status.ToString());
-        AppendRow(builder, "生成时间", report.GeneratedAt.ToString("O", CultureInfo.InvariantCulture));
-        AppendRow(builder, "时区", report.Timezone);
-        AppendRow(builder, "7 日窗口", $"{FormatDate(report.SevenDayWindow.StartDate)} 至 {FormatDate(report.SevenDayWindow.EndDate)}");
-        AppendRow(builder, "30 日窗口", $"{FormatDate(report.ThirtyDayWindow.StartDate)} 至 {FormatDate(report.ThirtyDayWindow.EndDate)}");
-        AppendRow(builder, "失败区间", report.Diagnostics.FailedRanges.Count.ToString(CultureInfo.InvariantCulture));
-        builder.Append("\r\n");
         AppendRow(
             builder,
             "Sub2API 用户",
             "Key 名称",
             "Key ID",
             "状态",
-            "7 日请求数",
-            "7 日输入 Token",
-            "7 日输出 Token",
-            "7 日缓存创建 Token",
-            "7 日缓存读取 Token",
-            "7 日总 Token",
-            "7 日实际费用",
-            "30 日请求数",
-            "30 日输入 Token",
-            "30 日输出 Token",
-            "30 日缓存创建 Token",
-            "30 日缓存读取 Token",
-            "30 日总 Token",
-            "30 日实际费用",
-            "30 日日均实际费用");
+            "窗口 Key",
+            "窗口名称",
+            "窗口类型",
+            "开始日期",
+            "结束日期",
+            "天数",
+            "请求数（次）",
+            "输入 Token 数（个）",
+            "输出 Token 数（个）",
+            "缓存创建 Token 数（个）",
+            "缓存读取 Token 数（个）",
+            "总 Token 数（个）",
+            "实际费用（USD）",
+            "日均实际费用（USD/日）");
+
+        var windowOrder = report.Windows
+            .Select((descriptor, index) => (descriptor.Key, index))
+            .ToDictionary(pair => pair.Key, pair => pair.index);
 
         foreach (var key in report.Keys)
         {
-            AppendKeyRow(
-                builder,
-                key.SourceUserEmail ?? "未知用户",
-                key.Name,
-                key.ExternalId,
-                key.Status,
-                key.SevenDay,
-                key.ThirtyDay);
+            foreach (var window in OrderByWindows(windowOrder, key.Windows))
+            {
+                AppendUsageRow(
+                    builder,
+                    key.SourceUserEmail ?? "未知用户",
+                    key.Name,
+                    key.ExternalId,
+                    key.Status,
+                    report,
+                    window.WindowKey,
+                    window.Metrics);
+            }
         }
 
         foreach (var user in report.Users)
         {
-            AppendUsageRow(
-                builder,
-                user.Email,
-                "（用户小计）",
-                string.Empty,
-                string.Empty,
-                user.SevenDay,
-                user.ThirtyDay);
+            foreach (var window in OrderByWindows(windowOrder, user.Windows))
+            {
+                AppendUsageRow(
+                    builder,
+                    user.Email,
+                    "（用户小计）",
+                    string.Empty,
+                    string.Empty,
+                    report,
+                    window.WindowKey,
+                    window.Metrics);
+            }
         }
 
-        AppendUsageRow(
-            builder,
-            "TOTAL",
-            "全部总计",
-            string.Empty,
-            string.Empty,
-            report.SevenDayTotal,
-            report.ThirtyDayTotal);
+        foreach (var total in report.WindowTotals)
+        {
+            AppendUsageRow(
+                builder,
+                "TOTAL",
+                "全部总计",
+                string.Empty,
+                string.Empty,
+                report,
+                total.WindowKey,
+                total.Metrics);
+        }
 
         var content = Encoding.UTF8.GetBytes(builder.ToString());
         var preamble = Encoding.UTF8.GetPreamble();
@@ -80,21 +87,13 @@ internal static class ReportCsvSerializer
         return output;
     }
 
-    private static void AppendKeyRow(
-        StringBuilder builder,
-        string email,
-        string name,
-        string externalId,
-        string status,
-        ReportUsageMetrics sevenDay,
-        ReportUsageMetrics thirtyDay) => AppendUsageRow(
-            builder,
-            email,
-            name,
-            externalId,
-            status,
-            sevenDay,
-            thirtyDay);
+    private static ReportWindowMetrics[] OrderByWindows(
+        Dictionary<string, int> windowOrder,
+        IReadOnlyList<ReportWindowMetrics> windows) => windows
+            .OrderBy(window => windowOrder.TryGetValue(window.WindowKey, out var index)
+                ? index
+                : int.MaxValue)
+            .ToArray();
 
     private static void AppendUsageRow(
         StringBuilder builder,
@@ -102,28 +101,32 @@ internal static class ReportCsvSerializer
         string name,
         string externalId,
         string status,
-        ReportUsageMetrics sevenDay,
-        ReportUsageMetrics thirtyDay) => AppendRow(
+        ReportDocument report,
+        string windowKey,
+        ReportUsageMetrics metrics)
+    {
+        var descriptor = report.Windows.FirstOrDefault(window => window.Key == windowKey);
+        AppendRow(
             builder,
             email,
             name,
             externalId,
             status,
-            sevenDay.TotalRequests.ToString(CultureInfo.InvariantCulture),
-            sevenDay.TotalInputTokens.ToString(CultureInfo.InvariantCulture),
-            sevenDay.TotalOutputTokens.ToString(CultureInfo.InvariantCulture),
-            sevenDay.TotalCacheCreationTokens.ToString(CultureInfo.InvariantCulture),
-            sevenDay.TotalCacheReadTokens.ToString(CultureInfo.InvariantCulture),
-            sevenDay.TotalTokens.ToString(CultureInfo.InvariantCulture),
-            FormatDecimal(sevenDay.TotalActualCost),
-            thirtyDay.TotalRequests.ToString(CultureInfo.InvariantCulture),
-            thirtyDay.TotalInputTokens.ToString(CultureInfo.InvariantCulture),
-            thirtyDay.TotalOutputTokens.ToString(CultureInfo.InvariantCulture),
-            thirtyDay.TotalCacheCreationTokens.ToString(CultureInfo.InvariantCulture),
-            thirtyDay.TotalCacheReadTokens.ToString(CultureInfo.InvariantCulture),
-            thirtyDay.TotalTokens.ToString(CultureInfo.InvariantCulture),
-            FormatDecimal(thirtyDay.TotalActualCost),
-            FormatDecimal(thirtyDay.TotalActualCost / 30m));
+            windowKey,
+            descriptor?.Label ?? string.Empty,
+            descriptor?.Kind.ToString() ?? string.Empty,
+            descriptor is null ? string.Empty : FormatDate(descriptor.StartDate),
+            descriptor is null ? string.Empty : FormatDate(descriptor.EndDateExclusive.AddDays(-1)),
+            descriptor is null ? string.Empty : descriptor.DayCount.ToString(CultureInfo.InvariantCulture),
+            metrics.TotalRequests.ToString(CultureInfo.InvariantCulture),
+            metrics.TotalInputTokens.ToString(CultureInfo.InvariantCulture),
+            metrics.TotalOutputTokens.ToString(CultureInfo.InvariantCulture),
+            metrics.TotalCacheCreationTokens.ToString(CultureInfo.InvariantCulture),
+            metrics.TotalCacheReadTokens.ToString(CultureInfo.InvariantCulture),
+            metrics.TotalTokens.ToString(CultureInfo.InvariantCulture),
+            FormatDecimal(metrics.TotalActualCost),
+            FormatDecimal(metrics.TotalActualCost / Math.Max(descriptor?.DayCount ?? 0, 1)));
+    }
 
     private static void AppendRow(StringBuilder builder, params string[] values)
     {

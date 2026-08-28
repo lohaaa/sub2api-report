@@ -1,3 +1,7 @@
+using System.Globalization;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
 namespace Sub2ApiReport.Domain.Reports;
 
 public enum ReportStatus
@@ -9,11 +13,14 @@ public enum ReportStatus
 public enum ReportTrigger
 {
     ManualDryRun,
+    Scheduled,
+    ManualScheduled,
+    Retry,
 }
 
 public sealed class ReportSnapshot
 {
-    public const int CurrentSchemaVersion = 3;
+    public const int CurrentSchemaVersion = 4;
 
     private ReportSnapshot()
     {
@@ -35,8 +42,6 @@ public sealed class ReportSnapshot
 
     public DateTimeOffset GeneratedAt { get; private init; }
 
-    public long GeneratedAtUnixMilliseconds { get; private init; }
-
     public int UserCount { get; private init; }
 
     public int KeyCount { get; private init; }
@@ -46,6 +51,8 @@ public sealed class ReportSnapshot
     public decimal SevenDayActualCost { get; private init; }
 
     public decimal ThirtyDayActualCost { get; private init; }
+
+    public string? WindowSummaryJson { get; private init; }
 
     public string CanonicalJson { get; private init; } = string.Empty;
 
@@ -62,6 +69,7 @@ public sealed class ReportSnapshot
         int failedRangeCount,
         decimal sevenDayActualCost,
         decimal thirtyDayActualCost,
+        string? windowSummaryJson,
         string canonicalJson)
     {
         if (id == Guid.Empty)
@@ -96,13 +104,47 @@ public sealed class ReportSnapshot
             Timezone = timezone,
             ConnectionRevision = connectionRevision,
             GeneratedAt = generatedAt,
-            GeneratedAtUnixMilliseconds = generatedAt.ToUnixTimeMilliseconds(),
             UserCount = userCount,
             KeyCount = keyCount,
             FailedRangeCount = failedRangeCount,
             SevenDayActualCost = sevenDayActualCost,
             ThirtyDayActualCost = thirtyDayActualCost,
+            WindowSummaryJson = windowSummaryJson,
             CanonicalJson = canonicalJson,
         };
+    }
+}
+
+/// <summary>A compact per-window summary persisted beside the canonical snapshot.</summary>
+public sealed record ReportWindowSummary(
+    string Key,
+    string Label,
+    DateOnly StartDate,
+    DateOnly EndDateExclusive,
+    int DayCount,
+    decimal TotalActualCost);
+
+/// <summary>Serializes the compact window summary list stored on report snapshots.</summary>
+public static class ReportWindowSummaryJson
+{
+    private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter() },
+    };
+
+    /// <summary>Serializes the window summary list.</summary>
+    public static string Serialize(IReadOnlyList<ReportWindowSummary> summaries) =>
+        JsonSerializer.Serialize(summaries, Options);
+
+    /// <summary>Deserializes the window summary list; returns an empty list for null storage.</summary>
+    public static IReadOnlyList<ReportWindowSummary> Deserialize(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return [];
+        }
+
+        return JsonSerializer.Deserialize<ReportWindowSummary[]>(json, Options)
+            ?? throw new InvalidOperationException("The stored report window summary is invalid.");
     }
 }

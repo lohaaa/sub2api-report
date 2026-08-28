@@ -8,7 +8,7 @@
 Sub2API Report 是一个单管理员、单实例的内部运营工具，用于：
 
 - 按 Sub2API 用户展示账号下的 API Key；
-- 统计每个 API Key 最近 7 天和 30 天的 Codex 用量，并按用户小计；
+- 以可配置窗口集合统计每个 API Key 的 Codex 用量，并按用户小计；默认窗口为滚动 7 日、滚动 30 日、上一完整自然周和上一完整自然月；
 - 每次生成报告前自动刷新 Sub2API 用户与 Key，刷新失败则终止并记录错误；
 - 通过邮箱、钉钉、飞书任意组合发送；
 - 留存报告、发送结果和操作审计；
@@ -167,13 +167,13 @@ Controller/Endpoint 只负责协议转换、认证授权和输入校验。统计
 ### 5.3 报表执行流程
 
 ```text
-manual dry-run
-  -> load connection, system settings, Key inventory and assignment snapshots
-  -> calculate previous complete 7/30-day windows
-  -> split each Key at the 7-day and assignment boundaries
-  -> fetch per-key segment stats with bounded concurrency
-  -> aggregate segment -> Key -> person -> totals
-  -> mark failed, conflicting or materially unassigned segments
+manual dry-run or scheduled run
+  -> load connection and system settings snapshots
+  -> refresh Sub2API users and API Keys
+  -> resolve the configured rolling, calendar, and custom windows
+  -> fetch per-user/per-key stats with bounded concurrency
+  -> aggregate Key -> Sub2API user -> totals
+  -> mark failed ranges without hiding partial results
   -> freeze canonical report snapshot
   -> render UTF-8 BOM CSV from the stored snapshot
 ```
@@ -198,9 +198,13 @@ Queued -> Collecting -> Rendering -> Delivering -> Succeeded
           \-> Failed
 ```
 
-0.5.0 的手工投递只使用该状态机的尾部：运行从 `Running` 进入，全部渠道成功
-为 `Succeeded`，存在失败渠道为 `PartialFailed`，全部失败为 `Failed`。`Queued`、
-`Collecting`、`Rendering` 和幂等键唯一索引由 M6 的计划运行启用，不重建状态机。
+0.5.0 的手工投递只使用该状态机的尾部；历史 `Running` 值只用于迁移兼容。M6 的
+计划运行在任何外部请求前创建 `Queued` 记录，并按阶段持久化状态、配置 revision、
+安全错误摘要和时间。重试不修改终态历史记录，而是创建带 `RetryOfRunId` 的新运行。
+
+计划任务使用运行时全部已启用渠道。采集得到部分报告时保存不可变快照，但不自动发送；
+管理员可在报告详情页显式确认后手工投递。进程中断时，尚未开始的渠道可继续执行，处于
+`Sending` 的渠道标记为 `outcome_unknown`，只能由管理员确认后显式补发，禁止静默重发。
 
 `Delivery` 状态：
 
@@ -216,8 +220,13 @@ Pending -> Sending -> Succeeded
 - 默认时区：`Asia/Shanghai`。
 - 默认发送时间：每月 1 日 09:00。
 - 报告不包含运行当天。
-- 7 天和 30 天均使用完整自然日。
-- 内部使用 UTC `Instant` 保存时间，业务窗口使用时区和 `DateOnly` 计算。
+- 默认窗口包含滚动 7 日、滚动 30 日、上一完整自然周和上一完整自然月；自然周默认周一开始；
+- 单份报告允许 1 到 8 个窗口；滚动窗口为 1 到 90 日，自定义区间最多 92 日且只允许手工报告；
+- 窗口内部和 canonical snapshot 统一保存半开日期边界 `[StartDate, EndDateExclusive)`；调用上游闭合日期 API 时转换为 `end_date = EndDateExclusive - 1 日`；
+- 计划任务入队时冻结窗口规格、解析边界和时区，重试必须复用冻结值，禁止按当前配置重新解析；
+- SQLite 中的绝对时刻统一保存为 UTC Unix 毫秒 `INTEGER`，禁止把 `DateTimeOffset` 映射为可查询的 `TEXT` 列。
+- Domain/Application/API 使用 `DateTimeOffset` 表达确定时刻，持久化 converter 负责与 Unix 毫秒互转；API 统一输出 UTC offset。
+- 业务窗口使用 `DateOnly`，计划墙钟时间使用规范化 `HH:mm`，并与 IANA 时区字段分开保存。
 - 展示和 API 参数统一带明确时区，禁止依赖容器本地时区推断。
 
 ### 5.6 配置管理
@@ -249,10 +258,10 @@ Pending -> Sending -> Succeeded
 | `Sub2ApiUsers` | `ExternalId`, `EmailSnapshot`, `Status`, `IsSelected` | 同步的上游用户快照与报告范围 |
 | `ExternalApiKeys` | `ExternalId`, `Sub2ApiUserId`, `NameSnapshot`, `Status`, `GroupId`, `RetiredAt` | Sub2API Key 本地缓存，稳定标识为 `user_id + api_key_id`；报告生成前自动刷新 |
 | `ReportGenerationRuns` | `Trigger`, `Status`, `Stage`, `ErrorCode`, `ErrorMessage` | 每次报告生成尝试，包含自动刷新失败信息 |
-| `ReportSnapshots` | `Id`, `SchemaVersion`, `CutoffDate`, `Status`, `CanonicalJson`, cost summaries | M4 不可变报告快照；列表字段单独索引，明细只保留一份 canonical JSON |
-| `ReportSchedules` | `DayOfMonth`, `LocalTime`, `Timezone`, `Enabled` | M6 计划任务，MVP 只有一条月报计划 |
+| `ReportSnapshots` | `Id`, `SchemaVersion`, `CutoffDate`, `Status`, `CanonicalJson`, `WindowSummaryJson`, cost summaries | 不可变报告快照；schema v4 使用动态窗口集合，固定 7/30 费用只保留为列表兼容摘要 |
+| `ReportSchedules` | `DayOfMonth`, `LocalTime`, `Timezone`, `WindowSpecsJson`, `Enabled`, `Revision` | 单例月报计划；窗口规格动态存于 SQLite，更新后立即对账持久化 trigger |
 | `NotificationChannels` | `Type`, `Name`, `Enabled`, `ConfigCiphertext` | M5 邮件、钉钉、飞书实例 |
-| `ReportRuns` | `Id`, `SnapshotId`, `Trigger`, `Status`, `IdempotencyKey` | M5 手工投递运行（Trigger=ManualDelivery）；M6 增加计划触发并启用幂等键 |
+| `ReportRuns` | `Id`, `SnapshotId`, `Trigger`, `Status`, `IdempotencyKey`, `WindowSpecsJson`, `ResolvedWindowsJson`, `RetryOfRunId`, stage timestamps | 规范化任务执行；入队时冻结窗口规格与边界，重试沿用同一快照 |
 | `DeliveryRecords` | `RunId`, `ChannelId`, `PayloadHash`, `Status`, `Attempts` | M5 手工投递逐渠道状态；M6 计划投递复用同一状态机 |
 | `DeliveryParts` | `DeliveryId`, `PartIndex`, `PayloadHash`, `Status`, `Attempts` | M5 分片消息逐片状态，补发只重试失败分片 |
 | `UpdateRecords` | `FromVersion`, `ToVersion`, `Status`, timestamps | 升级历史 |
@@ -353,12 +362,10 @@ POST /api/v1/sub2api/connection/test
 GET  /api/v1/sub2api/keys
 POST /api/v1/sub2api/keys/sync
 
-GET/POST /api/v1/people
-GET/PUT/DELETE /api/v1/people/{id}
-GET/PUT/DELETE /api/v1/people/assignments/{id}
-POST /api/v1/people/{id}/assignments
-
 GET/PUT /api/v1/schedule
+POST   /api/v1/schedule/run
+GET    /api/v1/schedule/runs
+POST   /api/v1/schedule/runs/{runId}/retry
 
 GET/POST/PUT/DELETE /api/v1/channels
 POST /api/v1/channels/{id}/test
@@ -425,7 +432,7 @@ API Keys
 - 下次计划运行时间；
 - 最近一次报告状态；
 - 30 天总费用和总 Token；
-- 未映射 Key 数量；
+- 当前统计范围内的用户与 Key 数量；
 - 失败渠道和可重试操作；
 - 当前版本和可用更新。
 
@@ -492,7 +499,8 @@ MVP 不强制引入 Prometheus；保留 OpenTelemetry 接入点。
 
 ### 单元测试
 
-- 7/30 天日期窗口和跨月、闰年、时区边界；
+- 默认与任意滚动窗口、自定义区间、自然周跨年、自然月闰年和时区边界；
+- canonical snapshot schema v1-v3 到动态窗口内存模型的兼容映射；
 - 一人多 Key 聚合；
 - Key 轮换有效期；
 - 费用精度和 CSV 格式；
@@ -524,7 +532,7 @@ MVP 不强制引入 Prometheus；保留 OpenTelemetry 接入点。
 | --- | --- |
 | 部署 | amd64 Linux，Docker Compose 一条命令启动 |
 | 启动 | 常规机器 10 秒内 ready，不含首次镜像拉取 |
-| 人员规模 | 100 人、每人最多 10 个历史 Key |
+| 数据规模 | 100 个 Sub2API 用户、每用户最多 10 个历史 Key |
 | 报表执行 | 100 Key 在 5 分钟内完成，受 Sub2API 延迟影响 |
 | 可用性 | 单实例；升级失败自动恢复旧版本和数据库备份 |
 | 数据保留 | 报表至少 12 个月，审计默认 12 个月 |

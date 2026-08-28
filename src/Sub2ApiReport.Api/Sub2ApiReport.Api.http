@@ -89,28 +89,6 @@ X-CSRF-TOKEN: {{authenticatedAntiforgery.response.body.$.token}}
 # @name keys
 GET {{baseUrl}}/api/v1/sub2api/keys?page=1&pageSize=50&unmappedOnly=true
 
-### Create a person
-# @name createPerson
-POST {{baseUrl}}/api/v1/people
-Content-Type: application/json
-X-CSRF-TOKEN: {{authenticatedAntiforgery.response.body.$.token}}
-
-{
-  "code": "synthetic-person",
-  "displayName": "Synthetic Person"
-}
-
-### Assign the first synchronized Key to the person
-POST {{baseUrl}}/api/v1/people/{{createPerson.response.body.$.id}}/assignments
-Content-Type: application/json
-X-CSRF-TOKEN: {{authenticatedAntiforgery.response.body.$.token}}
-
-{
-  "externalApiKeyId": "{{keys.response.body.$.items[0].id}}",
-  "validFrom": "2026-08-01",
-  "validTo": null
-}
-
 ### Generate and persist a manual dry-run report
 # @name generateReport
 POST {{baseUrl}}/api/v1/reports/dry-run
@@ -118,7 +96,25 @@ Content-Type: application/json
 X-CSRF-TOKEN: {{authenticatedAntiforgery.response.body.$.token}}
 
 {
-  "cutoffDate": null
+  "cutoffDate": null,
+  "windows": [
+    {
+      "key": "rolling_7_days",
+      "kind": "RollingDays",
+      "rollingDays": 7,
+      "weekStartsOn": null,
+      "customStartDate": null,
+      "customEndDate": null
+    },
+    {
+      "key": "previous_calendar_month",
+      "kind": "PreviousCalendarMonth",
+      "rollingDays": null,
+      "weekStartsOn": null,
+      "customStartDate": null,
+      "customEndDate": null
+    }
+  ]
 }
 
 ### List immutable report snapshots
@@ -220,6 +216,58 @@ GET {{baseUrl}}/api/v1/reports/{{generateReport.response.body.$.reportId}}
 
 ### Download the generated UTF-8 BOM CSV
 GET {{baseUrl}}/api/v1/reports/{{generateReport.response.body.$.reportId}}/csv
+
+### Read the persistent monthly schedule
+# @name reportSchedule
+GET {{baseUrl}}/api/v1/schedule
+
+### Update and enable the monthly schedule
+PUT {{baseUrl}}/api/v1/schedule
+Content-Type: application/json
+X-CSRF-TOKEN: {{authenticatedAntiforgery.response.body.$.token}}
+
+{
+  "enabled": true,
+  "dayOfMonth": 1,
+  "localTime": "09:00",
+  "timezone": "Asia/Shanghai",
+  "windows": [
+    {
+      "key": "rolling_30_days",
+      "kind": "RollingDays",
+      "rollingDays": 30,
+      "weekStartsOn": null,
+      "customStartDate": null,
+      "customEndDate": null
+    },
+    {
+      "key": "previous_calendar_month",
+      "kind": "PreviousCalendarMonth",
+      "rollingDays": null,
+      "weekStartsOn": null,
+      "customStartDate": null,
+      "customEndDate": null
+    }
+  ],
+  "revision": {{reportSchedule.response.body.$.revision}}
+}
+
+### Queue an immediate report task
+# @name runReportTask
+POST {{baseUrl}}/api/v1/schedule/run
+X-CSRF-TOKEN: {{authenticatedAntiforgery.response.body.$.token}}
+
+### List normalized task execution records
+GET {{baseUrl}}/api/v1/schedule/runs?page=1&pageSize=20
+
+### Retry a terminal failed task (set confirmation only after reviewing unknown outcomes)
+POST {{baseUrl}}/api/v1/schedule/runs/{{runReportTask.response.body.$.id}}/retry
+Content-Type: application/json
+X-CSRF-TOKEN: {{authenticatedAntiforgery.response.body.$.token}}
+
+{
+  "confirmOutcomeUnknown": false
+}
 
 ### Logout
 POST {{baseUrl}}/api/v1/auth/logout

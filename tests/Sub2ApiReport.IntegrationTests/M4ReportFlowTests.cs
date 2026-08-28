@@ -7,6 +7,7 @@ using System.Text.Json.Serialization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Sub2ApiReport.Api.Models;
+using Sub2ApiReport.Application.Reports;
 using Sub2ApiReport.Application.Security;
 using Sub2ApiReport.Application.Sub2Api;
 using Sub2ApiReport.Domain.Reports;
@@ -66,23 +67,33 @@ public sealed class M4ReportFlowTests
             await generateResponse.Content.ReadFromJsonAsync<ReportDetailResponse>(JsonOptions));
         Assert.Equal($"/api/v1/reports/{report.ReportId:D}", generateResponse.Headers.Location?.OriginalString);
         Assert.Equal(ReportStatus.Complete, report.Status);
-        Assert.Equal(3, report.SchemaVersion);
-        Assert.Equal(new DateOnly(2026, 8, 19), report.SevenDayWindow.StartDate);
-        Assert.Equal(new DateOnly(2026, 7, 27), report.ThirtyDayWindow.StartDate);
-        Assert.Equal("7", report.SevenDayTotal.TotalRequests);
-        Assert.Equal("30", report.ThirtyDayTotal.TotalRequests);
-        Assert.Equal("3", report.ThirtyDayTotal.TotalActualCost);
-        Assert.Equal(2, upstream.Calls.Count);
+        Assert.Equal(ReportSnapshot.CurrentSchemaVersion, report.SchemaVersion);
+        var sevenWindow = FindWindow(report, ReportWindows.RollingSevenDaysKey);
+        var thirtyWindow = FindWindow(report, ReportWindows.RollingThirtyDaysKey);
+        var sevenTotal = FindMetrics(report.WindowTotals, ReportWindows.RollingSevenDaysKey);
+        var thirtyTotal = FindMetrics(report.WindowTotals, ReportWindows.RollingThirtyDaysKey);
+        Assert.Equal(new DateOnly(2026, 8, 19), sevenWindow.StartDate);
+        Assert.Equal(new DateOnly(2026, 7, 27), thirtyWindow.StartDate);
+        Assert.Equal("7", sevenTotal.TotalRequests);
+        Assert.Equal("30", thirtyTotal.TotalRequests);
+        Assert.Equal("3", thirtyTotal.TotalActualCost);
+        Assert.Equal(4, upstream.Calls.Count);
         Assert.All(upstream.Calls, call => Assert.Equal("Asia/Shanghai", call.Timezone));
 
         var user = Assert.Single(report.Users);
         Assert.Equal("user@example.com", user.Email);
         Assert.Equal(1, user.KeyCount);
-        Assert.Equal("30", user.ThirtyDay.TotalRequests);
+        Assert.Equal(
+            "30",
+            FindMetrics(user.Windows, ReportWindows.RollingThirtyDaysKey).TotalRequests);
         var key = Assert.Single(report.Keys);
         Assert.Equal("Rotated Key", key.Name);
-        Assert.Equal("7", key.SevenDay.TotalRequests);
-        Assert.Equal("30", key.ThirtyDay.TotalRequests);
+        Assert.Equal(
+            "7",
+            FindMetrics(key.Windows, ReportWindows.RollingSevenDaysKey).TotalRequests);
+        Assert.Equal(
+            "30",
+            FindMetrics(key.Windows, ReportWindows.RollingThirtyDaysKey).TotalRequests);
         Assert.Empty(report.Diagnostics.FailedRanges);
 
         using var listResponse = await client.GetAsync("/api/v1/reports?page=1&pageSize=25");
@@ -137,7 +148,7 @@ public sealed class M4ReportFlowTests
         Assert.Equal(ReportStatus.Partial, partial.Status);
         Assert.Single(partial.Diagnostics.FailedRanges);
         Assert.Equal(2, partial.Keys.Count);
-        Assert.Equal(2, upstream.Calls.Count(call => call.ExternalApiKeyId == 102));
+        Assert.Equal(4, upstream.Calls.Count(call => call.ExternalApiKeyId == 102));
 
         await using var verificationScope = factory.Services.CreateAsyncScope();
         var verificationContext = verificationScope.ServiceProvider.GetRequiredService<ReportDbContext>();
@@ -211,10 +222,16 @@ public sealed class M4ReportFlowTests
         var report = Assert.IsType<ReportDetailResponse>(
             await response.Content.ReadFromJsonAsync<ReportDetailResponse>(JsonOptions));
 
-        Assert.Equal(new DateOnly(2024, 2, 1), report.ThirtyDayWindow.StartDate);
-        Assert.Equal(new DateOnly(2024, 2, 24), report.SevenDayWindow.StartDate);
-        Assert.Equal("30", report.ThirtyDayTotal.TotalRequests);
-        Assert.Equal("7", report.SevenDayTotal.TotalRequests);
+        var thirtyWindow = FindWindow(report, ReportWindows.RollingThirtyDaysKey);
+        var sevenWindow = FindWindow(report, ReportWindows.RollingSevenDaysKey);
+        Assert.Equal(new DateOnly(2024, 2, 1), thirtyWindow.StartDate);
+        Assert.Equal(new DateOnly(2024, 2, 24), sevenWindow.StartDate);
+        Assert.Equal(
+            "30",
+            FindMetrics(report.WindowTotals, ReportWindows.RollingThirtyDaysKey).TotalRequests);
+        Assert.Equal(
+            "7",
+            FindMetrics(report.WindowTotals, ReportWindows.RollingSevenDaysKey).TotalRequests);
         Assert.Contains(upstream.Calls, call =>
             call.StartDate <= new DateOnly(2024, 2, 29)
             && call.EndDate >= new DateOnly(2024, 2, 29));
@@ -260,9 +277,16 @@ public sealed class M4ReportFlowTests
             new { cutoffDate = "2026-08-25" });
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        Assert.Equal(12, upstream.Calls.Count);
+        Assert.Equal(24, upstream.Calls.Count);
         Assert.Equal(2, upstream.MaxConcurrentCalls);
     }
+
+    private static ReportWindowResponse FindWindow(ReportDetailResponse report, string windowKey) =>
+        report.Windows.Single(window => window.Key == windowKey);
+
+    private static ReportUsageMetricsResponse FindMetrics(
+        IReadOnlyList<ReportWindowMetricsResponse> windows,
+        string windowKey) => windows.Single(window => window.WindowKey == windowKey).Metrics;
 
     private static ApiWebApplicationFactory CreateFactory(StubSub2ApiClient upstream) => new(
         databasePath: null,

@@ -44,7 +44,8 @@ jobs:
         run: |
           bash -n deploy/*.sh
           shellcheck -x deploy/*.sh
-          deploy/extract-release-notes.sh CHANGELOG.md Unreleased "$RUNNER_TEMP/release-notes.md"
+          version=$(sed -n 's:.*<VersionPrefix>\(.*\)</VersionPrefix>.*:\1:p' Directory.Build.props)
+          deploy/extract-release-notes.sh CHANGELOG.md "$version" "$RUNNER_TEMP/release-notes.md"
           INSTANCE_ID=ci DOCKER_GID=999 docker compose -f deploy/compose.yaml config --quiet
 
   container-builds:

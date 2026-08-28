@@ -30,7 +30,9 @@ public sealed record ChannelDeliveryContext(
     string ChannelName,
     NotificationChannelType ChannelType,
     EmailDeliveryOptions? Email,
-    WebhookDeliveryOptions? Webhook)
+    WebhookDeliveryOptions? Webhook,
+    string? ReportDownloadUrl = null,
+    string? ReportDownloadPolicy = null)
 {
     public static ChannelDeliveryContext ForEmail(
         Guid channelId,
@@ -66,7 +68,8 @@ public sealed record OutboundPart(
     string Subject,
     string Body,
     string? CsvContent,
-    string PayloadHash);
+    string PayloadHash,
+    string? CsvFileName = null);
 
 /// <summary>Result of one channel send attempt with sanitized error information.</summary>
 public sealed record ChannelSendOutcome(bool Succeeded, string? ErrorCode = null, string? ErrorMessage = null)

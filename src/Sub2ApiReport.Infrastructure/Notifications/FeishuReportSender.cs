@@ -14,12 +14,21 @@ internal sealed class FeishuReportSender(IHttpClientFactory httpClientFactory, T
     : WebhookReportSender(httpClientFactory, timeProvider)
 {
     private const int PostByteBudget = 12_000;
+    private const string DownloadLinkPrefix = "下载 CSV 完整明细（";
     private const string WebhookHost = "open.feishu.cn";
     private static readonly JsonSerializerOptions SerializerOptions = new();
 
     public override NotificationChannelType ChannelType => NotificationChannelType.Feishu;
 
     protected override int ContentByteBudget => PostByteBudget;
+
+    protected override IReadOnlyList<string> BuildContentLines(
+        ReportDocument report,
+        ChannelDeliveryContext context) =>
+        ReportMessageRenderer.BuildFeishuLines(
+            report,
+            context.ReportDownloadUrl,
+            context.ReportDownloadPolicy);
 
     protected override string BuildRequestUrl(
         WebhookDeliveryOptions options,
@@ -45,7 +54,7 @@ internal sealed class FeishuReportSender(IHttpClientFactory httpClientFactory, T
         var timestamp = now.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
         var rows = part.Body
             .Split('\n')
-            .Select(line => (IReadOnlyList<PostText>)[new PostText("text", line)])
+            .Select(CreatePostRow)
             .ToArray();
         var envelope = new PostMessage(
             timestamp,
@@ -74,6 +83,26 @@ internal sealed class FeishuReportSender(IHttpClientFactory httpClientFactory, T
         Uri.TryCreate(url, UriKind.Absolute, out var uri)
         && uri.Scheme == Uri.UriSchemeHttps
         && string.Equals(uri.Host, WebhookHost, StringComparison.OrdinalIgnoreCase);
+
+    internal static IReadOnlyList<PostText> CreatePostRow(string line)
+    {
+        if (line.StartsWith(DownloadLinkPrefix, StringComparison.Ordinal))
+        {
+            var separatorIndex = line.IndexOf(
+                "）：",
+                DownloadLinkPrefix.Length,
+                StringComparison.Ordinal);
+            if (separatorIndex > DownloadLinkPrefix.Length
+                && Uri.TryCreate(line[(separatorIndex + 2)..], UriKind.Absolute, out var uri)
+                && uri.Scheme == Uri.UriSchemeHttps)
+            {
+                return [new PostText("a", line[..(separatorIndex + 1)], uri.AbsoluteUri)];
+            }
+        }
+
+        return [new PostText("text", line, null)];
+    }
+
 
     private static string ComputeSignature(string timestamp, string signSecret)
     {
@@ -106,7 +135,9 @@ internal sealed class FeishuReportSender(IHttpClientFactory httpClientFactory, T
     [method: JsonConstructor]
     internal sealed record PostText(
         [property: JsonPropertyName("tag")] string Tag,
-        [property: JsonPropertyName("text")] string Text);
+        [property: JsonPropertyName("text")] string Text,
+        [property: JsonPropertyName("href"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        string? Href = null);
 
     [method: JsonConstructor]
     private sealed record FeishuResponse(

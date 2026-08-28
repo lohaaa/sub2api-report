@@ -42,6 +42,8 @@ public sealed class ReportDbContext(DbContextOptions<ReportDbContext> options)
 
     public DbSet<DeliveryRecord> DeliveryRecords => Set<DeliveryRecord>();
 
+
+    public DbSet<ReportDownloadGrant> ReportDownloadGrants => Set<ReportDownloadGrant>();
     public DbSet<DeliveryPart> DeliveryParts => Set<DeliveryPart>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)

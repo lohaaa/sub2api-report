@@ -210,6 +210,9 @@ public sealed class AuthenticationFlowTests
             reportConcurrency = 6,
             reportRetentionMonths = 24,
             backupRetentionCount = 20,
+            reportExternalBaseUrl = "https://reports.example.com",
+            reportDownloadLinkHours = 48,
+            reportDownloadMaxDownloads = 20,
             revision = current.Revision,
         };
         using var updateRequest = await CreateJsonRequestAsync(

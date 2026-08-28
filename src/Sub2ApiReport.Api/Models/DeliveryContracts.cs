@@ -35,7 +35,8 @@ public sealed record DeliveryResponse(
     string? ErrorCode,
     string? ErrorMessage,
     DateTimeOffset? SentAt,
-    IReadOnlyList<DeliveryPartResponse> Parts);
+    IReadOnlyList<DeliveryPartResponse> Parts,
+    ReportDownloadGrantResponse? DownloadGrant);
 
 /// <summary>Represents one message part of a channel delivery.</summary>
 public sealed record DeliveryPartResponse(
@@ -45,3 +46,12 @@ public sealed record DeliveryPartResponse(
     int Attempts,
     string? ErrorCode,
     DateTimeOffset? SentAt);
+
+/// <summary>Represents the revocable CSV download authorization included in an IM delivery.</summary>
+public sealed record ReportDownloadGrantResponse(
+    Guid Id,
+    DateTimeOffset? ExpiresAt,
+    DateTimeOffset? RevokedAt,
+    int DownloadCount,
+    int? MaxDownloads,
+    DateTimeOffset? LastDownloadedAt);

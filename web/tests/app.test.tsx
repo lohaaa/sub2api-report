@@ -540,6 +540,89 @@ describe("application authentication gate", () => {
     );
   });
 
+  it("previews only the channel selected from its row", async () => {
+    useAuthenticatedHandlers();
+    server.use(
+      http.get("/api/v1/reports/:id", () =>
+        HttpResponse.json(dynamicReportDetail),
+      ),
+      http.get("/api/v1/channels", () =>
+        HttpResponse.json([
+          {
+            id: "44444444-4444-4444-4444-444444444444",
+            type: "Feishu",
+            name: "合成飞书渠道",
+            enabled: true,
+            email: null,
+            webhook: {
+              hasWebhook: true,
+              webhookMask: "****hook",
+              signSecretMask: "****cret",
+            },
+            revision: 1,
+            createdAt: "2026-08-27T10:00:00Z",
+            updatedAt: "2026-08-27T10:00:00Z",
+            lastTestedAt: "2026-08-27T10:01:00Z",
+            lastTestSucceeded: true,
+            lastTestCode: "ok",
+          },
+        ]),
+      ),
+      http.get("/api/v1/system/settings", () =>
+        HttpResponse.json({
+          timezone: "Asia/Shanghai",
+          releaseChannel: "stable",
+          logLevel: "Information",
+          reportConcurrency: 4,
+          reportRetentionMonths: 12,
+          backupRetentionCount: 10,
+          reportExternalBaseUrl: null,
+          reportDownloadLinkHours: 24,
+          reportDownloadMaxDownloads: 20,
+          revision: 1,
+          updatedAt: null,
+        }),
+      ),
+    );
+
+    renderApp(`/reports/${dynamicReportDetail.reportId}`);
+
+    await userEvent.click(
+      await screen.findByRole("button", {
+        name: "预览合成飞书渠道的飞书消息",
+      }),
+    );
+    const dialog = screen.getByRole("dialog");
+    expect(
+      within(dialog).getByRole("heading", { name: "飞书报告消息预览" }),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByText("飞书群机器人 · post 富文本")).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(/【上一自然周】2026-08-17 至 2026-08-23/),
+    ).toBeInTheDocument();
+    expect(within(dialog).queryByText(/上一完整自然周/)).not.toBeInTheDocument();
+
+    expect(
+      within(dialog).getByText(/系统设置 →\s*动态配置 → 群报告下载授权/),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByRole("link", { name: "前往配置" })).toHaveAttribute(
+      "href",
+      "/settings#report-download-settings",
+    );
+    expect(
+      within(dialog).queryByRole("button", { name: "邮件" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(dialog).queryByRole("button", { name: "钉钉" }),
+    ).not.toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("link", { name: "前往配置" }));
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "系统设置" }),
+    ).toBeInTheDocument();
+    expect(await screen.findByLabelText("外部访问地址")).toBeInTheDocument();
+  });
+
+
   it("renders notification channels with masked secrets", async () => {
     useAuthenticatedHandlers();
     let createRequest: {
@@ -754,9 +837,9 @@ describe("application authentication gate", () => {
     expect(await screen.findByLabelText("每月日期")).toHaveValue(1);
     expect(screen.getByRole("switch", { name: "启用自动月报" })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: "滚动 7 天" })).toBeChecked();
-    expect(screen.getByRole("checkbox", { name: "上一完整自然月" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "上一自然月" })).toBeChecked();
     expect(
-      screen.getByText(/当前统计窗口：滚动 7 天、滚动 30 天、上一完整自然周、上一完整自然月/),
+      screen.getByText(/当前统计窗口：滚动 7 天、滚动 30 天、上一自然周、上一自然月/),
     ).toBeInTheDocument();
     expect(await screen.findByText("任务在重启后保留了未知发送结果。")).toBeInTheDocument();
 
@@ -786,6 +869,9 @@ describe("application authentication gate", () => {
           reportConcurrency: 4,
           reportRetentionMonths: 12,
           backupRetentionCount: 10,
+          reportExternalBaseUrl: null,
+          reportDownloadLinkHours: 24,
+          reportDownloadMaxDownloads: null,
           revision: 1,
           updatedAt: null,
         }),
@@ -867,9 +953,15 @@ describe("application authentication gate", () => {
     expect(
       await screen.findByRole("heading", { level: 1, name: "系统设置" }),
     ).toBeInTheDocument();
+    expect(screen.getByText("SQLite")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("tab", { name: "动态配置" }));
     expect(await screen.findByLabelText("默认时区")).toHaveValue(
       "Asia/Shanghai",
     );
+    expect(screen.getByText("群报告下载授权")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("tab", { name: "管理员安全" }));
     expect(
       screen.getByRole("heading", { level: 2, name: "管理员安全" }),
     ).toBeInTheDocument();
@@ -879,6 +971,7 @@ describe("application authentication gate", () => {
       }),
     ).toBeInTheDocument();
 
+    await userEvent.click(screen.getByRole("tab", { name: "Sub2API 连接" }));
     const groupIdInput = screen.getByLabelText("Codex Group ID（选填）");
     expect(groupIdInput).toHaveAttribute("placeholder", "例如 123");
     await userEvent.clear(groupIdInput);
@@ -894,6 +987,7 @@ describe("application authentication gate", () => {
     expect(
       screen.getByLabelText("当前密码", { selector: "#step-up-password" }),
     ).toHaveFocus();
+    await userEvent.click(screen.getByRole("tab", { name: "Sub2API 连接" }));
 
     await userEvent.click(screen.getByRole("button", { name: "获取指南" }));
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
@@ -944,11 +1038,14 @@ describe("application authentication gate", () => {
         }),
       ),
     );
+    await userEvent.click(screen.getByRole("tab", { name: "管理员安全" }));
     await userEvent.type(
       screen.getByLabelText("当前密码", { selector: "#step-up-password" }),
       "synthetic-password",
     );
     await userEvent.click(screen.getByRole("button", { name: "确认密码" }));
+    expect(await screen.findByText(/授权有效至/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("tab", { name: "Sub2API 连接" }));
     expect(
       await screen.findByText(/现在可以保存连接配置/),
     ).toBeInTheDocument();
@@ -1041,8 +1138,8 @@ describe("application authentication gate", () => {
     for (const name of [
       "滚动 7 天",
       "滚动 30 天",
-      "上一完整自然周",
-      "上一完整自然月",
+      "上一自然周",
+      "上一自然月",
     ]) {
       expect(screen.getByRole("checkbox", { name })).toBeChecked();
     }
@@ -1080,10 +1177,10 @@ describe("application authentication gate", () => {
     ).toHaveLength(2);
 
     await userEvent.click(
-      screen.getByRole("button", { name: "上周" }),
+      screen.getByRole("button", { name: "上一自然周" }),
     );
     expect(
-      screen.getByRole("button", { name: "上周" }),
+      screen.getByRole("button", { name: "上一自然周" }),
     ).toHaveAttribute("aria-pressed", "true");
 
     expect(within(overview).getByText("$3.50")).toBeInTheDocument();
@@ -1091,7 +1188,7 @@ describe("application authentication gate", () => {
     expect(within(overview).getByText("1,200")).toBeInTheDocument();
     expect(screen.getAllByLabelText("费用占比 100.0%")).toHaveLength(2);
     expect(
-      screen.getByText(/窗口 上周（previous_calendar_week）/),
+      screen.getByText(/窗口 上一自然周（previous_calendar_week）/),
     ).toBeInTheDocument();
     expect(screen.getByText(/2026-08-17 至 2026-08-23/)).toBeInTheDocument();
     expect(screen.getByText(/· E502/)).toBeInTheDocument();
@@ -1150,8 +1247,8 @@ describe("application authentication gate", () => {
     for (const name of [
       "滚动 7 天",
       "滚动 30 天",
-      "上一完整自然周",
-      "上一完整自然月",
+      "上一自然周",
+      "上一自然月",
     ]) {
       await userEvent.click(screen.getByRole("checkbox", { name }));
     }
@@ -1230,6 +1327,9 @@ describe("application authentication gate", () => {
           reportConcurrency: 4,
           reportRetentionMonths: 12,
           backupRetentionCount: 10,
+          reportExternalBaseUrl: "https://reports.example.com",
+          reportDownloadLinkHours: 24,
+          reportDownloadMaxDownloads: null,
           revision: 2,
           updatedAt: "2026-08-27T09:00:00Z",
         });
@@ -1244,6 +1344,9 @@ describe("application authentication gate", () => {
         reportConcurrency: 4,
         reportRetentionMonths: 12,
         backupRetentionCount: 10,
+        reportExternalBaseUrl: "https://reports.example.com",
+        reportDownloadLinkHours: 24,
+        reportDownloadMaxDownloads: null,
         revision: 1,
       }),
     ).resolves.toMatchObject({ revision: 2 });

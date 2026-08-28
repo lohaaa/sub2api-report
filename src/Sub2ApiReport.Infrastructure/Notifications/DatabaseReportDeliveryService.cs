@@ -11,6 +11,7 @@ namespace Sub2ApiReport.Infrastructure.Notifications;
 internal sealed class DatabaseReportDeliveryService(
     ReportDbContext dbContext,
     ChannelSecretProtector protector,
+    IReportDownloadService reportDownloadService,
     IEnumerable<IReportSender> senders,
     TimeProvider timeProvider) : IReportDeliveryService
 {
@@ -39,7 +40,12 @@ internal sealed class DatabaseReportDeliveryService(
         var work = new List<DeliveryWork>();
         foreach (var channel in channels)
         {
-            var context = ChannelRuntimeMapper.CreateContext(channel, protector);
+            var deliveryId = Guid.NewGuid();
+            var context = await CreateContextAsync(
+                channel,
+                report.ReportId,
+                deliveryId,
+                cancellationToken);
             var sender = ResolveSender(channel.Type);
             var parts = sender.Render(report, context);
             var aggregateHash = ComputeAggregateHash(parts);
@@ -48,7 +54,8 @@ internal sealed class DatabaseReportDeliveryService(
                 channel.Type,
                 channel.Name,
                 aggregateHash,
-                parts.Select(part => DeliveryPart.Create(part.Index, part.Count, part.PayloadHash)).ToArray());
+                parts.Select(part => DeliveryPart.Create(part.Index, part.Count, part.PayloadHash)).ToArray(),
+                deliveryId);
             run.Deliveries.Add(delivery);
             work.Add(new DeliveryWork(delivery, context, sender, parts));
         }
@@ -66,6 +73,8 @@ internal sealed class DatabaseReportDeliveryService(
         var run = await dbContext.ReportRuns
             .Include(item => item.Deliveries)
             .ThenInclude(delivery => delivery.Parts)
+            .Include(item => item.Deliveries)
+            .ThenInclude(delivery => delivery.DownloadGrant)
             .AsSplitQuery()
             .SingleOrDefaultAsync(
                 item => item.Id == command.RunId && item.ReportSnapshotId == command.ReportId,
@@ -101,7 +110,11 @@ internal sealed class DatabaseReportDeliveryService(
                 continue;
             }
 
-            var context = ChannelRuntimeMapper.CreateContext(channel, protector);
+            var context = await CreateContextAsync(
+                channel,
+                report.ReportId,
+                delivery.Id,
+                cancellationToken);
             var sender = ResolveSender(channel.Type);
             var parts = sender.Render(report, context);
             var aggregateHash = ComputeAggregateHash(parts);
@@ -139,6 +152,8 @@ internal sealed class DatabaseReportDeliveryService(
         var run = await dbContext.ReportRuns
             .Include(item => item.Deliveries)
             .ThenInclude(delivery => delivery.Parts)
+            .Include(item => item.Deliveries)
+            .ThenInclude(delivery => delivery.DownloadGrant)
             .AsSplitQuery()
             .SingleOrDefaultAsync(item => item.Id == command.RunId, cancellationToken)
             ?? throw new ReportRunNotFoundException(Guid.Empty, command.RunId);
@@ -177,7 +192,12 @@ internal sealed class DatabaseReportDeliveryService(
             var channels = await LoadChannelsAsync(channelIds, cancellationToken);
             foreach (var channel in channels)
             {
-                var context = ChannelRuntimeMapper.CreateContext(channel, protector);
+                var deliveryId = Guid.NewGuid();
+                var context = await CreateContextAsync(
+                    channel,
+                    report.ReportId,
+                    deliveryId,
+                    cancellationToken);
                 var sender = ResolveSender(channel.Type);
                 var parts = sender.Render(report, context);
                 var delivery = DeliveryRecord.Create(
@@ -185,7 +205,8 @@ internal sealed class DatabaseReportDeliveryService(
                     channel.Type,
                     channel.Name,
                     ComputeAggregateHash(parts),
-                    parts.Select(part => DeliveryPart.Create(part.Index, part.Count, part.PayloadHash)).ToArray());
+                    parts.Select(part => DeliveryPart.Create(part.Index, part.Count, part.PayloadHash)).ToArray(),
+                    deliveryId);
                 run.Deliveries.Add(delivery);
                 work.Add(new DeliveryWork(delivery, context, sender, parts));
             }
@@ -211,6 +232,8 @@ internal sealed class DatabaseReportDeliveryService(
             .AsNoTracking()
             .Include(item => item.Deliveries)
             .ThenInclude(delivery => delivery.Parts)
+            .Include(item => item.Deliveries)
+            .ThenInclude(delivery => delivery.DownloadGrant)
             .AsSplitQuery()
             .Where(item => item.ReportSnapshotId == reportId)
             .OrderByDescending(item => item.StartedAt)
@@ -264,6 +287,13 @@ internal sealed class DatabaseReportDeliveryService(
                 }
                 else
                 {
+                    if (item.Context.ReportDownloadUrl is not null)
+                    {
+                        await reportDownloadService.ActivateAsync(
+                            item.Delivery.Id,
+                            cancellationToken);
+                    }
+
                     item.Delivery.MarkSucceeded(timeProvider.GetUtcNow());
                 }
 
@@ -294,6 +324,42 @@ internal sealed class DatabaseReportDeliveryService(
 
         await dbContext.SaveChangesAsync(CancellationToken.None);
     }
+
+    private async Task<ChannelDeliveryContext> CreateContextAsync(
+        NotificationChannel channel,
+        Guid reportId,
+        Guid deliveryId,
+        CancellationToken cancellationToken)
+    {
+        var context = ChannelRuntimeMapper.CreateContext(channel, protector);
+        if (channel.Type == NotificationChannelType.Email)
+        {
+            return context;
+        }
+
+        var link = await reportDownloadService.PrepareLinkAsync(
+            reportId,
+            deliveryId,
+            cancellationToken);
+        return context with
+        {
+            ReportDownloadUrl = link?.Url,
+            ReportDownloadPolicy = link is null ? null : FormatDownloadPolicy(link),
+        };
+    }
+
+
+    private static string FormatDownloadPolicy(ReportDownloadLink link)
+    {
+        var lifetime = link.LifetimeHours % 24 == 0
+            ? $"{link.LifetimeHours / 24} 天"
+            : $"{link.LifetimeHours} 小时";
+        var downloads = link.MaxDownloads is null
+            ? "下载次数不限"
+            : $"最多下载 {link.MaxDownloads} 次";
+        return $"{lifetime}内有效，{downloads}";
+    }
+
 
     private IReportSender ResolveSender(NotificationChannelType type)
     {
@@ -361,7 +427,11 @@ internal sealed class DatabaseReportDeliveryService(
                 continue;
             }
 
-            var context = ChannelRuntimeMapper.CreateContext(channel, protector);
+            var context = await CreateContextAsync(
+                channel,
+                report.ReportId,
+                delivery.Id,
+                cancellationToken);
             var sender = ResolveSender(channel.Type);
             var parts = sender.Render(report, context);
             if (!string.Equals(
@@ -452,7 +522,16 @@ internal sealed class DatabaseReportDeliveryService(
                         part.Attempts,
                         part.ErrorCode,
                         part.SentAt))
-                    .ToArray()))
+                    .ToArray(),
+                delivery.DownloadGrant is null
+                    ? null
+                    : new ReportDownloadGrantDocument(
+                        delivery.DownloadGrant.Id,
+                        delivery.DownloadGrant.ExpiresAt,
+                        delivery.DownloadGrant.RevokedAt,
+                        delivery.DownloadGrant.DownloadCount,
+                        delivery.DownloadGrant.MaxDownloads,
+                        delivery.DownloadGrant.LastDownloadedAt)))
             .ToArray());
 
     private sealed record DeliveryWork(

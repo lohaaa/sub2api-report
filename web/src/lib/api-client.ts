@@ -25,6 +25,9 @@ export type SystemSettings = {
   reportConcurrency: number;
   reportRetentionMonths: number;
   backupRetentionCount: number;
+  reportExternalBaseUrl: string | null;
+  reportDownloadLinkHours: number;
+  reportDownloadMaxDownloads: number | null;
   revision: number;
   updatedAt: string | null;
 };
@@ -856,6 +859,15 @@ export type DeliveryRunStatus =
   | "PartialFailed"
   | "Failed";
 
+
+export type ReportDownloadGrant = {
+  id: string;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  downloadCount: number;
+  maxDownloads: number | null;
+  lastDownloadedAt: string | null;
+};
 export type Delivery = {
   id: string;
   channelId: string;
@@ -867,6 +879,7 @@ export type Delivery = {
   errorMessage: string | null;
   sentAt: string | null;
   parts: DeliveryPart[];
+  downloadGrant: ReportDownloadGrant | null;
 };
 
 export type DeliveryRun = {
@@ -935,6 +948,13 @@ export function deliverReport(
 export function retryReportDelivery(reportId: string, runId: string) {
   return apiRequest<DeliveryRun>(
     `/api/v1/reports/${encodeURIComponent(reportId)}/deliveries/${encodeURIComponent(runId)}/retry`,
+    { method: "POST" },
+  );
+}
+
+export function revokeReportDownloadGrant(reportId: string, grantId: string) {
+  return apiRequest<void>(
+    `/api/v1/reports/${encodeURIComponent(reportId)}/download-grants/${encodeURIComponent(grantId)}/revoke`,
     { method: "POST" },
   );
 }

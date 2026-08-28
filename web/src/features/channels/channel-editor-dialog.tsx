@@ -35,6 +35,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { FormError } from "@/features/auth/form-error";
+import { channelPresentations } from "@/features/channels/channel-presentation";
 import {
   ApiError,
   createChannel,
@@ -47,11 +48,6 @@ import {
   type UpdateChannelInput,
 } from "@/lib/api-client";
 
-export const channelTypeLabels: Record<NotificationChannelType, string> = {
-  Email: "邮件（SMTP）",
-  DingTalk: "钉钉群机器人",
-  Feishu: "飞书群机器人",
-};
 
 const channelTypes = ["Email", "DingTalk", "Feishu"] as const satisfies
   readonly NotificationChannelType[];
@@ -346,7 +342,7 @@ export function ChannelEditorDialog({
             {existing === null ? "新增发送渠道" : "编辑发送渠道"}
           </DialogTitle>
           <DialogDescription>
-            {channelTypeLabels[channelType]}
+            {channelPresentations[channelType].fullLabel}
             。秘密在保存时加密存储，读取接口只返回掩码。
           </DialogDescription>
         </DialogHeader>
@@ -390,7 +386,7 @@ export function ChannelEditorDialog({
                       value={type}
                       className="w-full"
                     >
-                      {channelTypeLabels[type]}
+                      {channelPresentations[type].fullLabel}
                     </ToggleGroupItem>
                   ))}
                 </ToggleGroup>
@@ -410,7 +406,7 @@ export function ChannelEditorDialog({
             {isEmail ? (
               <EmailFields form={form} email={email} />
             ) : (
-              <WebhookFields form={form} />
+              <WebhookFields form={form} channelType={channelType} />
             )}
             <Field>
               <div className="flex items-center gap-2">
@@ -619,7 +615,13 @@ function EmailFields({
   );
 }
 
-function WebhookFields({ form }: { form: FormHandle }) {
+function WebhookFields({
+  form,
+  channelType,
+}: {
+  form: FormHandle;
+  channelType: Exclude<NotificationChannelType, "Email">;
+}) {
   return (
     <>
       <Field data-invalid={Boolean(form.formState.errors.webhookUrl)}>
@@ -652,6 +654,13 @@ function WebhookFields({ form }: { form: FormHandle }) {
         </FieldDescription>
         <FieldError errors={[form.formState.errors.signSecret]} />
       </Field>
+      <Alert>
+        <AlertTitle>{channelPresentations[channelType].contentLabel}</AlertTitle>
+        <AlertDescription>
+          群机器人不直接发送 CSV 附件；配置外部访问地址后，正式报告会附带
+          可撤销的限时下载链接。
+        </AlertDescription>
+      </Alert>
     </>
   );
 }

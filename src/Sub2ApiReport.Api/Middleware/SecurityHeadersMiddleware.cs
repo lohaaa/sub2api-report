@@ -13,7 +13,11 @@ internal sealed class SecurityHeadersMiddleware(RequestDelegate next)
                 + "script-src 'self'; style-src 'self' 'unsafe-inline'";
             headers["X-Content-Type-Options"] = "nosniff";
             headers["X-Frame-Options"] = "DENY";
-            headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+            headers["Referrer-Policy"] = context.Request.Path.StartsWithSegments(
+                "/api/v1/report-downloads",
+                StringComparison.Ordinal)
+                ? "no-referrer"
+                : "strict-origin-when-cross-origin";
             headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()";
             return Task.CompletedTask;
         });

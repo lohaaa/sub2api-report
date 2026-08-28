@@ -80,6 +80,23 @@ public static class ReportWindows
         new(RollingThirtyDaysKey, ReportWindowKind.RollingDays, RollingDays: 30),
     ];
 
+    /// <summary>Returns the concise display label for a resolved report window.</summary>
+    public static string GetDisplayLabel(ReportWindowKind kind, string storedLabel) => kind switch
+    {
+        ReportWindowKind.PreviousCalendarWeek => "上一自然周",
+        ReportWindowKind.PreviousCalendarMonth => "上一自然月",
+        _ => NormalizeStoredLabel(storedLabel),
+    };
+
+    /// <summary>Normalizes legacy labels saved before concise calendar-window terminology.</summary>
+    public static string NormalizeStoredLabel(string storedLabel) => storedLabel switch
+    {
+        "上一完整自然周" => "上一自然周",
+        "上一完整自然月" => "上一自然月",
+        _ => storedLabel,
+    };
+
+
     /// <summary>Validates a window specification list without resolving dates.</summary>
     public static void Validate(IReadOnlyList<ReportWindowSpec> specs, bool allowCustomRange)
     {
@@ -185,7 +202,7 @@ public static class ReportWindows
             weekStartsOn,
             start,
             currentWeekStart,
-            "上一完整自然周");
+            "上一自然周");
     }
 
     private static ResolvedReportWindow ResolvePreviousMonth(ReportWindowSpec spec, DateOnly referenceDate)
@@ -199,7 +216,7 @@ public static class ReportWindows
             null,
             start,
             currentMonthStart,
-            "上一完整自然月");
+            "上一自然月");
     }
 
     private static ResolvedReportWindow ResolveCustomRange(ReportWindowSpec spec, DateOnly cutoffDate)

@@ -22,8 +22,28 @@ public static class UnixTimestampBackfill
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
         try
         {
+            var columnsByTable = new Dictionary<(string? Schema, string Table), HashSet<string>>();
             foreach (var mapping in mappings)
             {
+                var tableKey = (mapping.Schema, mapping.TableName);
+                if (!columnsByTable.TryGetValue(tableKey, out var columns))
+                {
+                    columns = await GetColumnsAsync(
+                        connection,
+                        transaction,
+                        mapping.Schema,
+                        mapping.TableName,
+                        cancellationToken);
+                    columnsByTable.Add(tableKey, columns);
+                }
+
+                if (!columns.Contains(mapping.LegacyColumn)
+                    || !columns.Contains(mapping.UnixColumn)
+                    || mapping.KeyColumns.Any(column => !columns.Contains(column)))
+                {
+                    continue;
+                }
+
                 await BackfillAsync(connection, transaction, mapping, cancellationToken);
             }
 
@@ -84,6 +104,43 @@ public static class UnixTimestampBackfill
             .ThenBy(mapping => mapping.LegacyColumn, StringComparer.Ordinal)
             .ToArray();
     }
+
+    private static async Task<HashSet<string>> GetColumnsAsync(
+        DbConnection connection,
+        DbTransaction transaction,
+        string? schema,
+        string tableName,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        var tableParameter = command.CreateParameter();
+        tableParameter.ParameterName = "@tableName";
+        tableParameter.Value = tableName;
+        command.Parameters.Add(tableParameter);
+        if (schema is null)
+        {
+            command.CommandText = "SELECT name FROM pragma_table_info(@tableName)";
+        }
+        else
+        {
+            var schemaParameter = command.CreateParameter();
+            schemaParameter.ParameterName = "@schema";
+            schemaParameter.Value = schema;
+            command.Parameters.Add(schemaParameter);
+            command.CommandText = "SELECT name FROM pragma_table_info(@tableName, @schema)";
+        }
+
+        var columns = new HashSet<string>(StringComparer.Ordinal);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            columns.Add(reader.GetString(0));
+        }
+
+        return columns;
+    }
+
 
     private static async Task BackfillAsync(
         DbConnection connection,

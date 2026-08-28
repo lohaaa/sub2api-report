@@ -38,6 +38,9 @@ internal sealed class DatabaseSystemSettingsService(
             command.ReportConcurrency,
             command.ReportRetentionMonths,
             command.BackupRetentionCount,
+            command.ReportExternalBaseUrl,
+            command.ReportDownloadLinkHours,
+            command.ReportDownloadMaxDownloads,
             timeProvider.GetUtcNow());
 
         try
@@ -62,7 +65,10 @@ internal sealed class DatabaseSystemSettingsService(
         setting.ReportRetentionMonths,
         setting.BackupRetentionCount,
         setting.Revision,
-        setting.UpdatedAt);
+        setting.UpdatedAt,
+        setting.ReportExternalBaseUrl,
+        setting.ReportDownloadLinkHours,
+        setting.ReportDownloadMaxDownloads);
 
     private static void ValidateTimezone(string timezone)
     {

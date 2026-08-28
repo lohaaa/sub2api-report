@@ -38,6 +38,13 @@ public sealed class ReportWindowTests
                 new DateOnly(2026, 7, 1),
                 new DateOnly(2026, 8, 1),
                 31));
+        Assert.Equal("上一自然周", windows[2].Label);
+        Assert.Equal("上一自然月", windows[3].Label);
+        Assert.Equal(
+            "上一自然周",
+            ReportWindows.GetDisplayLabel(
+                ReportWindowKind.PreviousCalendarWeek,
+                "上一完整自然周"));
     }
 
     [Fact]

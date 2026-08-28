@@ -174,6 +174,7 @@ builder.Services.AddRateLimiter(options =>
     AddRateLimitPolicy(options, "recovery", 5, TimeSpan.FromMinutes(5));
     AddRateLimitPolicy(options, "configuration", 20, TimeSpan.FromMinutes(1));
     AddRateLimitPolicy(options, "external", 6, TimeSpan.FromMinutes(1));
+    AddRateLimitPolicy(options, "report-download", 60, TimeSpan.FromMinutes(1));
 });
 builder.Services.AddScoped<ISystemInfoService, SystemInfoService>();
 builder.Services.AddHostedService<DatabaseSettingsSynchronizer>();
@@ -214,6 +215,7 @@ _ = app.MapSecurityEndpoints()
     .MapSetupEndpoints()
     .MapAuthEndpoints()
     .MapSystemEndpoints()
+    .MapReportDownloadEndpoints()
     .MapSub2ApiEndpoints()
     .MapReportEndpoints()
     .MapChannelEndpoints()

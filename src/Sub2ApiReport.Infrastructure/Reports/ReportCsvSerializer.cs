@@ -113,7 +113,9 @@ internal static class ReportCsvSerializer
             externalId,
             status,
             windowKey,
-            descriptor?.Label ?? string.Empty,
+            descriptor is null
+                ? string.Empty
+                : ReportWindows.GetDisplayLabel(descriptor.Kind, descriptor.Label),
             descriptor?.Kind.ToString() ?? string.Empty,
             descriptor is null ? string.Empty : FormatDate(descriptor.StartDate),
             descriptor is null ? string.Empty : FormatDate(descriptor.EndDateExclusive.AddDays(-1)),

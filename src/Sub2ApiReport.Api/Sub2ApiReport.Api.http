@@ -6,6 +6,8 @@
 @sub2ApiAdminKey = REPLACE-WITH-SUB2API-ADMIN-KEY
 @sub2ApiUserId = 42
 @sub2ApiGroupId = 7
+@reportDownloadToken = REPLACE-WITH-TOKEN-FROM-IM-LINK
+@reportDownloadGrantId = REPLACE-WITH-GRANT-ID
 
 ### Liveness
 GET {{baseUrl}}/health/live
@@ -52,7 +54,26 @@ X-CSRF-TOKEN: {{authenticatedAntiforgery.response.body.$.token}}
 GET {{baseUrl}}/api/v1/auth/me
 
 ### Dynamic system settings
+# @name systemSettings
 GET {{baseUrl}}/api/v1/system/settings
+
+### Configure revocable report download links
+PUT {{baseUrl}}/api/v1/system/settings
+Content-Type: application/json
+X-CSRF-TOKEN: {{authenticatedAntiforgery.response.body.$.token}}
+
+{
+  "timezone": "{{systemSettings.response.body.$.timezone}}",
+  "releaseChannel": "{{systemSettings.response.body.$.releaseChannel}}",
+  "logLevel": "{{systemSettings.response.body.$.logLevel}}",
+  "reportConcurrency": {{systemSettings.response.body.$.reportConcurrency}},
+  "reportRetentionMonths": {{systemSettings.response.body.$.reportRetentionMonths}},
+  "backupRetentionCount": {{systemSettings.response.body.$.backupRetentionCount}},
+  "reportExternalBaseUrl": "https://reports.example.com",
+  "reportDownloadLinkHours": 24,
+  "reportDownloadMaxDownloads": 20,
+  "revision": {{systemSettings.response.body.$.revision}}
+}
 
 ### Create a short step-up authorization
 POST {{baseUrl}}/api/v1/auth/step-up
@@ -206,6 +227,13 @@ X-CSRF-TOKEN: {{authenticatedAntiforgery.response.body.$.token}}
 
 ### List delivery runs and per-channel states
 GET {{baseUrl}}/api/v1/reports/{{generateReport.response.body.$.reportId}}/deliveries
+
+### Download CSV through an anonymous limited grant
+GET {{baseUrl}}/api/v1/report-downloads/csv?token={{reportDownloadToken}}
+
+### Revoke one report download grant
+POST {{baseUrl}}/api/v1/reports/{{generateReport.response.body.$.reportId}}/download-grants/{{reportDownloadGrantId}}/revoke
+X-CSRF-TOKEN: {{authenticatedAntiforgery.response.body.$.token}}
 
 ### Retry only the failed channels of a run
 POST {{baseUrl}}/api/v1/reports/{{generateReport.response.body.$.reportId}}/deliveries/{{deliverReport.response.body.$.id}}/retry

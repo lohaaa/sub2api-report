@@ -21,6 +21,14 @@ internal sealed class DingTalkReportSender(IHttpClientFactory httpClientFactory,
 
     protected override int ContentByteBudget => MarkdownByteBudget;
 
+    protected override IReadOnlyList<string> BuildContentLines(
+        ReportDocument report,
+        ChannelDeliveryContext context) =>
+        ReportMessageRenderer.BuildDingTalkLines(
+            report,
+            context.ReportDownloadUrl,
+            context.ReportDownloadPolicy);
+
     protected override string BuildRequestUrl(
         WebhookDeliveryOptions options,
         DateTimeOffset now)

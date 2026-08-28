@@ -88,6 +88,15 @@ internal static class ReportEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict);
 
+        group.MapPost("/{id:guid}/download-grants/{grantId:guid}/revoke", RevokeDownloadGrantAsync)
+            .RequireAntiforgery()
+            .RequireRateLimiting("configuration")
+            .WithName("RevokeReportDownloadGrant")
+            .WithSummary("撤销报告下载授权")
+            .WithDescription("立即撤销一条已发送到群机器人的限时 CSV 下载授权。")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound);
+
         return endpoints;
     }
 
@@ -370,6 +379,33 @@ internal static class ReportEndpoints
         }
     }
 
+    private static async Task<IResult> RevokeDownloadGrantAsync(
+        Guid id,
+        Guid grantId,
+        ClaimsPrincipal principal,
+        IReportDownloadService downloadService,
+        IAuditWriter auditWriter,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        var revoked = await downloadService.RevokeAsync(id, grantId, cancellationToken);
+        if (!revoked)
+        {
+            return TypedResults.NotFound();
+        }
+
+        await auditWriter.WriteAsync(
+            principal.Identity?.Name,
+            "reports.download-grant.revoke",
+            grantId.ToString("D"),
+            "succeeded",
+            httpContext.TraceIdentifier,
+            $"{{\"reportId\":\"{id:D}\"}}",
+            cancellationToken);
+        return TypedResults.NoContent();
+    }
+
+
     private static DeliveryRunResponse MapRun(DeliveryRunDocument run) => new(
         run.Id,
         run.ReportId,
@@ -395,7 +431,16 @@ internal static class ReportEndpoints
                         part.Attempts,
                         part.ErrorCode,
                         part.SentAt))
-                    .ToArray()))
+                    .ToArray(),
+                delivery.DownloadGrant is null
+                    ? null
+                    : new ReportDownloadGrantResponse(
+                        delivery.DownloadGrant.Id,
+                        delivery.DownloadGrant.ExpiresAt,
+                        delivery.DownloadGrant.RevokedAt,
+                        delivery.DownloadGrant.DownloadCount,
+                        delivery.DownloadGrant.MaxDownloads,
+                        delivery.DownloadGrant.LastDownloadedAt)))
             .ToArray());
 
     private static ProblemHttpResult NotFoundReport() => TypedResults.Problem(
@@ -430,7 +475,7 @@ internal static class ReportEndpoints
         ReportWindowSummaryJson.Deserialize(report.WindowSummaryJson)
             .Select(summary => new ReportWindowListSummaryResponse(
                 summary.Key,
-                summary.Label,
+                ReportWindows.NormalizeStoredLabel(summary.Label),
                 summary.StartDate,
                 summary.EndDateExclusive,
                 summary.DayCount,
@@ -492,7 +537,7 @@ internal static class ReportEndpoints
         window.StartDate,
         window.EndDateExclusive,
         window.DayCount,
-        window.Label);
+        ReportWindows.GetDisplayLabel(window.Kind, window.Label));
 
     private static ReportWindowMetricsResponse Map(ReportWindowMetrics window) => new(
         window.WindowKey,

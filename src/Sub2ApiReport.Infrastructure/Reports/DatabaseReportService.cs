@@ -305,19 +305,7 @@ internal sealed class DatabaseReportService(
             ? null
             : new ReportCsv(
                 ReportCsvSerializer.Serialize(report),
-                string.Create(
-                    CultureInfo.InvariantCulture,
-                    $"sub2api-report-{GetCsvDate(report):yyyy-MM-dd}.csv"));
-    }
-
-    private static DateOnly GetCsvDate(ReportDocument report)
-    {
-        if (report.Windows.Count == 0)
-        {
-            return DateOnly.MinValue;
-        }
-
-        return report.Windows.Max(window => window.EndDateExclusive).AddDays(-1);
+                ReportCsvFileName.Create(report));
     }
 
     private static IReadOnlyList<ResolvedReportWindow> ValidateFrozenWindows(

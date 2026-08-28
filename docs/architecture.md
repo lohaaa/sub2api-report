@@ -8,7 +8,7 @@
 Sub2API Report 是一个单管理员、单实例的内部运营工具，用于：
 
 - 按 Sub2API 用户展示账号下的 API Key；
-- 以可配置窗口集合统计每个 API Key 的 Codex 用量，并按用户小计；默认窗口为滚动 7 日、滚动 30 日、上一完整自然周和上一完整自然月；
+- 以可配置窗口集合统计每个 API Key 的 Codex 用量，并按用户小计；默认窗口为滚动 7 日、滚动 30 日、上一自然周和上一自然月；
 - 每次生成报告前自动刷新 Sub2API 用户与 Key，刷新失败则终止并记录错误；
 - 通过邮箱、钉钉、飞书任意组合发送；
 - 留存报告、发送结果和操作审计；
@@ -220,7 +220,7 @@ Pending -> Sending -> Succeeded
 - 默认时区：`Asia/Shanghai`。
 - 默认发送时间：每月 1 日 09:00。
 - 报告不包含运行当天。
-- 默认窗口包含滚动 7 日、滚动 30 日、上一完整自然周和上一完整自然月；自然周默认周一开始；
+- 默认窗口包含滚动 7 日、滚动 30 日、上一自然周和上一自然月；自然周默认周一开始；
 - 单份报告允许 1 到 8 个窗口；滚动窗口为 1 到 90 日，自定义区间最多 92 日且只允许手工报告；
 - 窗口内部和 canonical snapshot 统一保存半开日期边界 `[StartDate, EndDateExclusive)`；调用上游闭合日期 API 时转换为 `end_date = EndDateExclusive - 1 日`；
 - 计划任务入队时冻结窗口规格、解析边界和时区，重试必须复用冻结值，禁止按当前配置重新解析；
@@ -252,7 +252,7 @@ Pending -> Sending -> Succeeded
 | 表 | 关键字段 | 说明 |
 | --- | --- | --- |
 | `AdminUsers` + Identity tables | `Id`, `UserName`, `PasswordHash` | 唯一管理员；数据库约束只允许一个活动管理员 |
-| `SystemSettings` | `InitializedAt`, `Timezone`, `ReleaseChannel`, `LogLevel`, retention fields, `Revision` | 可动态更新的单例系统设置 |
+| `SystemSettings` | `InitializedAt`, `Timezone`, `ReleaseChannel`, `LogLevel`, retention fields, report download base URL/policy, `Revision` | 可动态更新的单例系统设置 |
 | `SetupChallenges` | `CodeHash`, `ExpiresAt`, `ConsumedAt` | 只保存初始化码哈希 |
 | `Sub2ApiConnections` | `BaseUrl`, `AdminKeyCiphertext`, `LegacyUserId`, `UserScopeMode`, `CodexGroupId` | 当前只允许一个活动连接 |
 | `Sub2ApiUsers` | `ExternalId`, `EmailSnapshot`, `Status`, `IsSelected` | 同步的上游用户快照与报告范围 |
@@ -264,6 +264,7 @@ Pending -> Sending -> Succeeded
 | `ReportRuns` | `Id`, `SnapshotId`, `Trigger`, `Status`, `IdempotencyKey`, `WindowSpecsJson`, `ResolvedWindowsJson`, `RetryOfRunId`, stage timestamps | 规范化任务执行；入队时冻结窗口规格与边界，重试沿用同一快照 |
 | `DeliveryRecords` | `RunId`, `ChannelId`, `PayloadHash`, `Status`, `Attempts` | M5 手工投递逐渠道状态；M6 计划投递复用同一状态机 |
 | `DeliveryParts` | `DeliveryId`, `PartIndex`, `PayloadHash`, `Status`, `Attempts` | M5 分片消息逐片状态，补发只重试失败分片 |
+| `ReportDownloadGrants` | `DeliveryId`, `ReportSnapshotId`, token hash/ciphertext, expiry/revocation/download fields | 钉钉/飞书限时 CSV 下载授权；策略按投递冻结 |
 | `UpdateRecords` | `FromVersion`, `ToVersion`, `Status`, timestamps | 升级历史 |
 | `AuditEvents` | `Actor`, `Action`, `Target`, `Result`, `MetadataJson` | 不保存密钥和密码 |
 
@@ -284,8 +285,11 @@ Pending -> Sending -> Succeeded
 - SMTP 密码；
 - 钉钉 webhook/secret；
 - 飞书 webhook/secret。
+- 报告下载令牌密文（同时保存 SHA-256 哈希用于查找）。
 
 使用 ASP.NET Core Data Protection，key ring 持久化到 `/data/keys`。日志、审计和 API 响应永不返回完整秘密，只显示类型和末尾掩码。
+
+钉钉/飞书下载 URL 中的令牌属于短期 bearer credential。应用请求日志不得记录 query string；下载响应禁止缓存和发送 Referer，按 IP 限流，并支持期限、次数上限和管理员撤销。
 
 应明确：若攻击者同时取得整个 `/data` 卷，默认一键部署模式下仍可能获得数据库和解密 key ring。高安全部署可通过 `APP_MASTER_KEY_FILE` 使用宿主机 Secret 或外部密钥管理系统保护 key ring。
 
@@ -381,6 +385,8 @@ POST /api/v1/channels/{id}/test
 GET  /api/v1/reports/{id}/deliveries
 POST /api/v1/reports/{id}/deliveries
 POST /api/v1/reports/{id}/deliveries/{runId}/retry
+POST /api/v1/reports/{id}/download-grants/{grantId}/revoke
+GET  /api/v1/report-downloads/csv?token=...
 
 GET  /api/v1/system/version
 GET  /api/v1/system/settings

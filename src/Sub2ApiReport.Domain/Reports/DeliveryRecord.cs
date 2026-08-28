@@ -46,17 +46,25 @@ public sealed class DeliveryRecord
 
     public List<DeliveryPart> Parts { get; private init; } = [];
 
+
+    public ReportDownloadGrant? DownloadGrant { get; private init; }
     public static DeliveryRecord Create(
         Guid channelId,
         NotificationChannelType channelType,
         string channelName,
         string payloadHash,
-        IReadOnlyList<DeliveryPart> parts)
+        IReadOnlyList<DeliveryPart> parts,
+        Guid? id = null)
     {
         if (channelId == Guid.Empty)
         {
             throw new ArgumentException("The channel identifier is required.", nameof(channelId));
         }
+        if (id == Guid.Empty)
+        {
+            throw new ArgumentException("The delivery identifier cannot be empty.", nameof(id));
+        }
+
 
         ArgumentException.ThrowIfNullOrWhiteSpace(channelName, nameof(channelName));
         ArgumentException.ThrowIfNullOrWhiteSpace(payloadHash, nameof(payloadHash));
@@ -67,7 +75,7 @@ public sealed class DeliveryRecord
 
         var record = new DeliveryRecord
         {
-            Id = Guid.NewGuid(),
+            Id = id ?? Guid.NewGuid(),
             ChannelId = channelId,
             ChannelType = channelType,
             ChannelName = channelName,

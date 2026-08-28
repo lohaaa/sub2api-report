@@ -264,6 +264,9 @@ public sealed class M4ReportFlowTests
                 reportConcurrency = 2,
                 settings.ReportRetentionMonths,
                 settings.BackupRetentionCount,
+                settings.ReportExternalBaseUrl,
+                settings.ReportDownloadLinkHours,
+                settings.ReportDownloadMaxDownloads,
                 settings.Revision,
             }))
         {

@@ -24,6 +24,11 @@ internal abstract class WebhookReportSender(IHttpClientFactory httpClientFactory
     /// <summary>UTF-8 byte budget for the rendered text content of one part.</summary>
     protected abstract int ContentByteBudget { get; }
 
+    /// <summary>Builds the channel-specific rows that are kept intact during message sharding.</summary>
+    protected abstract IReadOnlyList<string> BuildContentLines(
+        ReportDocument report,
+        ChannelDeliveryContext context);
+
     public IReadOnlyList<OutboundPart> Render(ReportDocument report, ChannelDeliveryContext context)
     {
         ArgumentNullException.ThrowIfNull(report);
@@ -33,7 +38,7 @@ internal abstract class WebhookReportSender(IHttpClientFactory httpClientFactory
         }
 
         var subject = ReportMessageRenderer.BuildSubject(report);
-        var lines = ReportMessageRenderer.BuildLines(report);
+        var lines = BuildContentLines(report, context);
         var shards = ShardLines(lines, ContentByteBudget);
         return shards
             .Select((shard, index) =>

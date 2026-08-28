@@ -78,7 +78,10 @@ internal static class SystemEndpoints
                     request.ReportConcurrency,
                     request.ReportRetentionMonths,
                     request.BackupRetentionCount,
-                    request.Revision),
+                    request.Revision,
+                    request.ReportExternalBaseUrl,
+                    request.ReportDownloadLinkHours,
+                    request.ReportDownloadMaxDownloads),
                 cancellationToken);
             await auditWriter.WriteAsync(
                 principal.Identity?.Name,
@@ -113,6 +116,9 @@ internal static class SystemEndpoints
         settings.ReportConcurrency,
         settings.ReportRetentionMonths,
         settings.BackupRetentionCount,
+        settings.ReportExternalBaseUrl,
+        settings.ReportDownloadLinkHours,
+        settings.ReportDownloadMaxDownloads,
         settings.Revision,
         settings.UpdatedAt);
 }

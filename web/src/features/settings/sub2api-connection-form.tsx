@@ -55,7 +55,11 @@ const schema = z.object({
 });
 type Values = z.infer<typeof schema>;
 
-export function Sub2ApiConnectionForm() {
+export function Sub2ApiConnectionForm({
+  onRequestStepUp,
+}: {
+  onRequestStepUp?: () => void;
+} = {}) {
   const queryClient = useQueryClient();
   const [guideOpen, setGuideOpen] = useState(false);
   const connectionQuery = useQuery({
@@ -143,6 +147,10 @@ export function Sub2ApiConnectionForm() {
 
   const connection = connectionQuery.data;
   function focusStepUpPassword() {
+    if (onRequestStepUp) {
+      onRequestStepUp();
+      return;
+    }
     const field = document.getElementById("step-up-password");
     if (!field) {
       return;

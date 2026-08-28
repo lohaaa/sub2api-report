@@ -48,7 +48,8 @@ public sealed record DeliveryDocument(
     string? ErrorCode,
     string? ErrorMessage,
     DateTimeOffset? SentAt,
-    IReadOnlyList<DeliveryPartDocument> Parts);
+    IReadOnlyList<DeliveryPartDocument> Parts,
+    ReportDownloadGrantDocument? DownloadGrant = null);
 
 public sealed record DeliveryPartDocument(
     int Index,

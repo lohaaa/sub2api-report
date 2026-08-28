@@ -53,6 +53,8 @@ public static class DependencyInjection
         services.AddScoped<ISub2ApiUserService, DatabaseSub2ApiUserService>();
         services.AddScoped<IKeyInventoryService, DatabaseKeyInventoryService>();
         services.AddScoped<IReportService, DatabaseReportService>();
+        services.AddSingleton<ReportDownloadTokenProtector>();
+        services.AddScoped<IReportDownloadService, DatabaseReportDownloadService>();
         services.AddScoped<IReportScheduleService, DatabaseReportScheduleService>();
         services.AddScoped<IReportScheduleCoordinator, QuartzReportScheduleCoordinator>();
         services.AddScoped<IReportTaskExecutor, DatabaseReportTaskExecutor>();

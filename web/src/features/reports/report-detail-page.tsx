@@ -45,6 +45,9 @@ import {
 } from "./report-format";
 import { cn } from "@/lib/utils";
 import { ReportStatusBadge } from "./reports-page";
+import {
+  getReportWindowDisplayLabel as getWindowDisplayLabel,
+} from "./report-window-label";
 
 export function ReportDetailPage() {
   const { id = "" } = useParams();
@@ -217,6 +220,7 @@ export function ReportDetailPage() {
       <ReportDeliveryPanel
         reportId={report.reportId}
         reportStatus={report.status}
+        report={report}
       />
 
       <section className="flex flex-col gap-3" aria-labelledby="user-ranking-title">
@@ -660,11 +664,6 @@ function formatKeyStatus(status: string) {
   return status.toLowerCase() === "active" ? "有效" : status;
 }
 
-function getWindowDisplayLabel(window: ReportWindowDescriptor) {
-  if (window.kind === "PreviousCalendarWeek") return "上周";
-  if (window.kind === "PreviousCalendarMonth") return "上月";
-  return window.label;
-}
 
 function ReportDetailLoading() {
   return (

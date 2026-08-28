@@ -17,7 +17,10 @@ public sealed record SystemSettingsSnapshot(
     int ReportRetentionMonths,
     int BackupRetentionCount,
     long Revision,
-    DateTimeOffset? UpdatedAt);
+    DateTimeOffset? UpdatedAt,
+    string? ReportExternalBaseUrl = null,
+    int ReportDownloadLinkHours = 24,
+    int? ReportDownloadMaxDownloads = null);
 
 public sealed record UpdateSystemSettingsCommand(
     string Timezone,
@@ -26,7 +29,10 @@ public sealed record UpdateSystemSettingsCommand(
     int ReportConcurrency,
     int ReportRetentionMonths,
     int BackupRetentionCount,
-    long ExpectedRevision);
+    long ExpectedRevision,
+    string? ReportExternalBaseUrl = null,
+    int ReportDownloadLinkHours = 24,
+    int? ReportDownloadMaxDownloads = null);
 
 public sealed class SystemSettingsConflictException(long expectedRevision, long actualRevision)
     : Exception($"System settings revision {expectedRevision} is stale; current revision is {actualRevision}.");

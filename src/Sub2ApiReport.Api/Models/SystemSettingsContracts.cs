@@ -10,6 +10,9 @@ public sealed record SystemSettingsResponse(
     int ReportConcurrency,
     int ReportRetentionMonths,
     int BackupRetentionCount,
+    string? ReportExternalBaseUrl,
+    int ReportDownloadLinkHours,
+    int? ReportDownloadMaxDownloads,
     long Revision,
     DateTimeOffset? UpdatedAt);
 
@@ -33,6 +36,15 @@ public sealed record UpdateSystemSettingsRequest
 
     [Range(1, 100)]
     public required int BackupRetentionCount { get; init; }
+
+    [StringLength(2048)]
+    public string? ReportExternalBaseUrl { get; init; }
+
+    [Range(1, 720)]
+    public required int ReportDownloadLinkHours { get; init; }
+
+    [Range(1, 10_000)]
+    public int? ReportDownloadMaxDownloads { get; init; }
 
     [Range(1, long.MaxValue)]
     public required long Revision { get; init; }

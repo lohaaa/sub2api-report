@@ -1,7 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Sub2ApiReport.Api.Models;
@@ -9,6 +11,7 @@ using Sub2ApiReport.Application.Notifications;
 using Sub2ApiReport.Application.Reports;
 using Sub2ApiReport.Application.Security;
 using Sub2ApiReport.Application.Sub2Api;
+using Sub2ApiReport.Application.System;
 using Sub2ApiReport.Domain.Notifications;
 using Sub2ApiReport.Domain.Reports;
 using Sub2ApiReport.Infrastructure.Persistence;
@@ -235,6 +238,92 @@ public sealed class M5ChannelDeliveryTests
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
+    [Fact]
+    public async Task DingTalkDeliveryCreatesLimitedRevocableCsvDownload()
+    {
+        var dingTalkSender = new StubReportSender(NotificationChannelType.DingTalk);
+        await using var factory = CreateFactory(dingTalkSender);
+        await InitializeAsync(factory);
+        await ConfigureReportDownloadSettingsAsync(factory, maxDownloads: 2);
+        using var client = CreateClient(factory);
+        await LoginAsync(client);
+
+        var channel = await CreateDingTalkChannelAsync(client);
+        var report = await GenerateCompleteReportAsync(client);
+        using var deliver = await SendJsonAsync(
+            client,
+            HttpMethod.Post,
+            $"/api/v1/reports/{report.ReportId:D}/deliveries",
+            new { channelIds = new[] { channel.Id }, confirmPartial = false });
+        Assert.Equal(HttpStatusCode.Created, deliver.StatusCode);
+        var run = Assert.IsType<DeliveryRunResponse>(
+            await deliver.Content.ReadFromJsonAsync<DeliveryRunResponse>(JsonOptions));
+        var delivery = Assert.Single(run.Deliveries);
+        var grant = Assert.IsType<ReportDownloadGrantResponse>(delivery.DownloadGrant);
+        Assert.Equal(2, grant.MaxDownloads);
+        Assert.NotNull(grant.ExpiresAt);
+
+        var downloadUrl = Assert.IsType<string>(dingTalkSender.LastReportDownloadUrl);
+        var token = QueryHelpers.ParseQuery(new Uri(downloadUrl).Query)["token"].ToString();
+        Assert.NotEmpty(token);
+        for (var index = 0; index < 2; index++)
+        {
+            using var download = await client.GetAsync(
+                $"/api/v1/report-downloads/csv?token={Uri.EscapeDataString(token)}");
+            Assert.Equal(HttpStatusCode.OK, download.StatusCode);
+            Assert.Contains("no-store", download.Headers.CacheControl?.ToString(), StringComparison.Ordinal);
+            Assert.Equal("no-referrer", Assert.Single(download.Headers.GetValues("Referrer-Policy")));
+            var content = await download.Content.ReadAsByteArrayAsync();
+            Assert.True(content.AsSpan().StartsWith(Encoding.UTF8.GetPreamble()));
+        }
+
+        using (var exhausted = await client.GetAsync(
+            $"/api/v1/report-downloads/csv?token={Uri.EscapeDataString(token)}"))
+        {
+            Assert.Equal(HttpStatusCode.Gone, exhausted.StatusCode);
+        }
+
+        using var revoke = await SendJsonAsync<object?>(
+            client,
+            HttpMethod.Post,
+            $"/api/v1/reports/{report.ReportId:D}/download-grants/{grant.Id:D}/revoke",
+            null);
+        Assert.Equal(HttpStatusCode.NoContent, revoke.StatusCode);
+
+        var runs = Assert.IsType<List<DeliveryRunResponse>>(
+            await client.GetFromJsonAsync<List<DeliveryRunResponse>>(
+                $"/api/v1/reports/{report.ReportId:D}/deliveries",
+                JsonOptions));
+        var refreshedGrant = Assert.IsType<ReportDownloadGrantResponse>(
+            Assert.Single(Assert.Single(runs).Deliveries).DownloadGrant);
+        Assert.Equal(2, refreshedGrant.DownloadCount);
+        Assert.NotNull(refreshedGrant.RevokedAt);
+    }
+
+
+
+    private static async Task ConfigureReportDownloadSettingsAsync(
+        ApiWebApplicationFactory factory,
+        int? maxDownloads)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var settingsService = scope.ServiceProvider.GetRequiredService<ISystemSettingsService>();
+        var current = await settingsService.GetAsync(CancellationToken.None);
+        _ = await settingsService.UpdateAsync(
+            new UpdateSystemSettingsCommand(
+                current.Timezone,
+                current.ReleaseChannel,
+                current.LogLevel,
+                current.ReportConcurrency,
+                current.ReportRetentionMonths,
+                current.BackupRetentionCount,
+                current.Revision,
+                "https://reports.example.com",
+                24,
+                maxDownloads),
+            CancellationToken.None);
+    }
+
 
     private static async Task<ChannelResponse> CreateDingTalkChannelAsync(HttpClient client)
     {
@@ -470,10 +559,13 @@ public sealed class M5ChannelDeliveryTests
 
         public int SendCount => Volatile.Read(ref _sendCount);
 
+        public string? LastReportDownloadUrl { get; private set; }
+
         public IReadOnlyList<OutboundPart> Render(
             ReportDocument report,
             ChannelDeliveryContext context)
         {
+            LastReportDownloadUrl = context.ReportDownloadUrl;
             var body = $"统计窗口（合成）\n渠道 {context.ChannelName}";
             return
             [

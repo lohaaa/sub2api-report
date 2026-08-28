@@ -32,6 +32,10 @@ public sealed class DatabaseMigrationTests
         Assert.Equal(4, setting.ReportConcurrency);
         Assert.Equal(12, setting.ReportRetentionMonths);
         Assert.Equal(10, setting.BackupRetentionCount);
+        Assert.Null(setting.ReportExternalBaseUrl);
+        Assert.Equal(24, setting.ReportDownloadLinkHours);
+        Assert.Null(setting.ReportDownloadMaxDownloads);
+        Assert.Empty(await dbContext.ReportDownloadGrants.ToListAsync(CancellationToken.None));
         Assert.Equal(1, setting.Revision);
 
         var schedule = await dbContext.ReportSchedules.SingleAsync(CancellationToken.None);
@@ -282,7 +286,10 @@ public sealed class DatabaseMigrationTests
                         6,
                         24,
                         20,
-                        current.Revision),
+                        current.Revision,
+                        "https://reports.example.com",
+                        48,
+                        100),
                     CancellationToken.None);
 
                 Assert.Equal(current.Revision + 1, updated.Revision);
@@ -299,6 +306,9 @@ public sealed class DatabaseMigrationTests
                 Assert.Equal(6, updated.ReportConcurrency);
                 Assert.Equal(24, updated.ReportRetentionMonths);
                 Assert.Equal(20, updated.BackupRetentionCount);
+                Assert.Equal("https://reports.example.com", updated.ReportExternalBaseUrl);
+                Assert.Equal(48, updated.ReportDownloadLinkHours);
+                Assert.Equal(100, updated.ReportDownloadMaxDownloads);
                 Assert.Equal(originalRevision + 1, updated.Revision);
             }
         }

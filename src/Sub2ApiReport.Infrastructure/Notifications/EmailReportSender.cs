@@ -15,7 +15,6 @@ namespace Sub2ApiReport.Infrastructure.Notifications;
 internal sealed class EmailReportSender(TimeProvider timeProvider) : IReportSender
 {
     private const int SmtpTimeoutMilliseconds = 15_000;
-    private const string CsvAttachmentName = "sub2api-report.csv";
 
     public NotificationChannelType ChannelType => NotificationChannelType.Email;
 
@@ -38,7 +37,8 @@ internal sealed class EmailReportSender(TimeProvider timeProvider) : IReportSend
                 subject,
                 body,
                 csv,
-                DeliveryPayloadHash.Compute(subject, body, csv)),
+                DeliveryPayloadHash.Compute(subject, body, csv),
+                ReportCsvFileName.Create(report)),
         ];
     }
 
@@ -155,7 +155,7 @@ internal sealed class EmailReportSender(TimeProvider timeProvider) : IReportSend
         if (part.CsvContent is { } csvContent)
         {
             bodyBuilder.Attachments.Add(
-                CsvAttachmentName,
+                part.CsvFileName ?? "sub2api-report.csv",
                 BuildCsvAttachmentBytes(csvContent),
                 new ContentType("text", "csv") { Charset = "utf-8" });
         }

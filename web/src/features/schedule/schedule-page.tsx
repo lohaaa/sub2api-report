@@ -77,8 +77,8 @@ type ScheduleValues = z.infer<typeof scheduleSchema>;
 const builtinWindowOptions = [
   { key: reportWindowKeys.rollingSevenDays, label: "滚动 7 天" },
   { key: reportWindowKeys.rollingThirtyDays, label: "滚动 30 天" },
-  { key: reportWindowKeys.previousCalendarWeek, label: "上一完整自然周" },
-  { key: reportWindowKeys.previousCalendarMonth, label: "上一完整自然月" },
+  { key: reportWindowKeys.previousCalendarWeek, label: "上一自然周" },
+  { key: reportWindowKeys.previousCalendarMonth, label: "上一自然月" },
 ] as const;
 
 function windowSummary(specs: readonly ReportWindowSpec[]) {

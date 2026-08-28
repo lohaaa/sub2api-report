@@ -1,6 +1,8 @@
 using System.Text;
+using Sub2ApiReport.Application.Notifications;
 using Sub2ApiReport.Application.Reports;
 using Sub2ApiReport.Application.Sub2Api;
+using Sub2ApiReport.Domain.Notifications;
 using Sub2ApiReport.Domain.Reports;
 using Sub2ApiReport.Infrastructure.Notifications;
 using Sub2ApiReport.Infrastructure.Reports;
@@ -43,18 +45,73 @@ public sealed class ReportGoldenFileTests
     {
         var report = CreateReport();
 
-        var lines = ReportMessageRenderer.BuildLines(report);
+        var dingTalkLines = ReportMessageRenderer.BuildDingTalkLines(report);
+        var feishuLines = ReportMessageRenderer.BuildFeishuLines(report);
+        var dingTalkLinkLines = ReportMessageRenderer.BuildDingTalkLines(
+            report,
+            "https://reports.example.com/api/v1/report-downloads/csv?token=synthetic",
+            "1 天内有效，最多下载 20 次");
+        var feishuLinkLines = ReportMessageRenderer.BuildFeishuLines(
+            report,
+            "https://reports.example.com/api/v1/report-downloads/csv?token=synthetic",
+            "1 天内有效，下载次数不限");
         var html = ReportMessageRenderer.BuildHtmlBody(report);
 
-        Assert.Contains(lines, line => line.Contains("Token 数（个） 9,007,199,254,740,993", StringComparison.Ordinal));
-        Assert.Contains(lines, line => line.Contains("实际费用（USD） 3.25", StringComparison.Ordinal));
-        Assert.Contains("<th>Key 数（个）</th>", html, StringComparison.Ordinal);
-        Assert.Contains("<th>rolling_30_days 请求数（次）</th>", html, StringComparison.Ordinal);
-        Assert.Contains("<th>rolling_30_days 实际费用（USD）</th>", html, StringComparison.Ordinal);
+        Assert.Contains("### Codex 用量摘要", dingTalkLines);
+        Assert.Contains(dingTalkLines, line => line.Contains("Token 数（个）：**9,007,199,254,740,993**", StringComparison.Ordinal));
+        Assert.Contains(dingTalkLines, line => line.Contains("实际费用（USD）：**3.25**", StringComparison.Ordinal));
+        Assert.Contains(feishuLines, line => line.Contains("【最近 30 天】", StringComparison.Ordinal));
+        Assert.Contains(feishuLines, line => line.Contains("Token 数（个） 9,007,199,254,740,993", StringComparison.Ordinal));
+        Assert.Contains(feishuLines, line => line.Contains("实际费用（USD） 3.25", StringComparison.Ordinal));
+        Assert.Contains(
+            dingTalkLinkLines,
+            line => line.Contains("[下载 CSV 完整明细（1 天内有效，最多下载 20 次）]", StringComparison.Ordinal));
+        Assert.Contains(
+            feishuLinkLines,
+            line => line.StartsWith("下载 CSV 完整明细（1 天内有效，下载次数不限）：https://", StringComparison.Ordinal));
+        var feishuLinkNode = Assert.Single(FeishuReportSender.CreatePostRow(
+            feishuLinkLines.Single(line => line.StartsWith("下载 CSV 完整明细", StringComparison.Ordinal))));
+        Assert.Equal("a", feishuLinkNode.Tag);
+        Assert.Equal("https://reports.example.com/api/v1/report-downloads/csv?token=synthetic", feishuLinkNode.Href);
+        Assert.Contains("role=\"article\"", html, StringComparison.Ordinal);
+        Assert.Contains(">最近 30 天</h2>", html, StringComparison.Ordinal);
+        Assert.Contains(">Key 数（个）</th>", html, StringComparison.Ordinal);
+        Assert.Contains(">Token 数（个）</th>", html, StringComparison.Ordinal);
+        Assert.Contains(">实际费用（USD）</th>", html, StringComparison.Ordinal);
+        Assert.Contains(">附件</strong>：CSV 文件", html, StringComparison.Ordinal);
+        Assert.Equal("sub2api-report-2026-08-25.csv", ReportCsvFileName.Create(report));
         Assert.DoesNotContain("¥", html, StringComparison.Ordinal);
-        Assert.DoesNotContain("$", string.Join('\n', lines), StringComparison.Ordinal);
+        Assert.DoesNotContain("$", string.Join('\n', dingTalkLines), StringComparison.Ordinal);
+        Assert.DoesNotContain("$", string.Join('\n', feishuLines), StringComparison.Ordinal);
         Assert.DoesNotContain("$", html, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void EmailRenderIncludesDatedCsvAttachmentMetadata()
+    {
+        var report = CreateReport();
+        var sender = new EmailReportSender(TimeProvider.System);
+        var context = ChannelDeliveryContext.ForEmail(
+            Guid.Parse("44444444-4444-4444-4444-444444444444"),
+            "合成邮件渠道",
+            new EmailDeliveryOptions(
+                "smtp.example.com",
+                587,
+                SmtpSecurityMode.StartTls,
+                null,
+                null,
+                "reports@example.com",
+                "Sub2API Report",
+                ["recipient@example.com"],
+                []));
+
+        var part = Assert.Single(sender.Render(report, context));
+
+        Assert.Equal("sub2api-report-2026-08-25.csv", part.CsvFileName);
+        Assert.NotNull(part.CsvContent);
+        Assert.StartsWith("\uFEFF", part.CsvContent, StringComparison.Ordinal);
+    }
+
 
     private static ReportDocument CreateReport()
     {

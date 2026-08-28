@@ -19,6 +19,11 @@ internal sealed class SystemSettingConfiguration : IEntityTypeConfiguration<Syst
         builder.Property(setting => setting.ReportConcurrency).IsRequired();
         builder.Property(setting => setting.ReportRetentionMonths).IsRequired();
         builder.Property(setting => setting.BackupRetentionCount).IsRequired();
+        builder.Property(setting => setting.ReportExternalBaseUrl).HasMaxLength(2048);
+        builder.Property(setting => setting.ReportDownloadLinkHours)
+            .HasDefaultValue(SystemSetting.DefaultReportDownloadLinkHours)
+            .IsRequired();
+        builder.Property(setting => setting.ReportDownloadMaxDownloads);
         builder.Property(setting => setting.Revision).IsConcurrencyToken().IsRequired();
         builder.Property(setting => setting.UpdatedAt);
 

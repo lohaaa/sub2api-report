@@ -30,10 +30,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { FormError } from "@/features/auth/form-error";
-import {
-  ChannelEditorDialog,
-  channelTypeLabels,
-} from "@/features/channels/channel-editor-dialog";
+import { ChannelEditorDialog } from "@/features/channels/channel-editor-dialog";
+import { channelPresentations } from "@/features/channels/channel-presentation";
 import {
   ApiError,
   deleteChannel,
@@ -152,7 +150,15 @@ export function ChannelsPage() {
                       ) : null}
                     </div>
                   </TableCell>
-                  <TableCell>{channelTypeLabels[channel.type]}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-col gap-1">
+                      <span>{channelPresentations[channel.type].fullLabel}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {channelPresentations[channel.type].contentLabel} ·{" "}
+                        {channelPresentations[channel.type].attachmentLabel}
+                      </span>
+                    </div>
+                  </TableCell>
                   <TableCell>
                     <Badge variant={channel.enabled ? "secondary" : "outline"}>
                       {channel.enabled ? "已启用" : "已停用"}
@@ -254,7 +260,7 @@ export function ChannelsPage() {
           {deleting ? (
             <p className="text-sm">
               确认删除 <strong>{deleting.name}</strong>（
-              {channelTypeLabels[deleting.type]}）？
+              {channelPresentations[deleting.type].fullLabel}）？
             </p>
           ) : null}
           <DialogFooter>

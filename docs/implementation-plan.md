@@ -20,28 +20,28 @@
 ## 2. 精简版本路线
 
 ```text
-0.7.0  报告业务闭环和持久化计划任务
-0.8.0  生产 Docker 部署和签名 GitHub Release
-0.9.0  App-only 应用内在线升级和自动回滚
-1.0.0  安全验收、恢复演练和稳定版文档
+0.7.0  内部里程碑：报告业务闭环和持久化计划任务
+0.8.0  内部里程碑：生产 Docker 部署和签名 bundle
+0.9.0  内部里程碑：App-only 在线升级和自动回滚
+1.0.0  首次公开 Release：安全验收、恢复演练和稳定版文档
 ```
 
-不再单独设置 `0.10.0`。M9 完成后直接进入 `1.0.0` 候选和正式发布。
+`0.x` 只表示开发能力阶段，不创建 Git Tag 或 GitHub Release。M9 完成后直接准备并发布首个公开版本 `v1.0.0`，不再单独设置 `0.10.0`。
 
 ## 3. 当前真实进度
 
 | 里程碑 | 对应版本 | 当前状态 | 真实结论 |
 | --- | --- | --- | --- |
-| M0 公开仓库基础 | 0.1.0 / 0.8.0 发布前置 | 已完成 | GitHub 仓库已公开；README、Apache-2.0、`SECURITY.md` 和 CI 已推送；Private Vulnerability Reporting、Secret Protection 和 Push protection 已启用，当前 0 个 Secret alert |
+| M0 公开仓库基础 | `v1.0.0` 发布前置 | 已完成 | GitHub 仓库已公开；README、Apache-2.0、`SECURITY.md` 和 CI 已推送；Private Vulnerability Reporting、Secret Protection 和 Push protection 已启用，当前 0 个 Secret alert |
 | M1 应用骨架 | 0.1.0 | 已完成 | .NET 模块、React SPA、SQLite、配置、健康检查和质量门已落地 |
 | M2 初始化和认证 | 0.2.0 | 已完成 | 单管理员初始化、Cookie、CSRF、step-up 和主机恢复码已落地 |
 | M3 Sub2API 同步 | 0.3.0 / 0.6.0 | 已完成 | 用户与 API Key 直接统计模型已落地，人员归属模型已移除 |
 | M4 报告引擎 | 0.4.0 / 0.6.0 | 已完成 | 动态完整自然日窗口、schema v4 快照、CSV 和报告页面已落地 |
 | M5 投递渠道 | 0.5.0 | 已完成 | 邮件、钉钉、飞书、限时下载和失败补发已落地 |
 | M6 计划任务 | 0.7.0 | 已完成 | Quartz 持久化计划、窗口冻结、规范化执行记录、重试和恢复已落地 |
-| M7 Docker 和 Release | 0.8.0 | 代码已合入 `main`，验收未完成 | Dockerfile、Compose、bundle、签名、GitHub Actions、许可证和 changelog 已推送；Docker/干净 VM 和失败恢复验收尚未完成 |
-| M8 在线升级 | 0.9.0 | 仅骨架 | Updater 只有 health/status，明确返回 `InstallationEnabled=false` 和 `State=scaffold` |
-| M9 稳定版加固 | 1.0.0 | 部分基础已完成 | CSP 等安全 Header、脱敏和完整质量门已有；高权限升级审计、恢复演练和稳定版文档未完成 |
+| M7 Docker 和签名 bundle | 0.8.0 内部里程碑 | 代码已合入 `main`，验收未完成 | Dockerfile、Compose、bundle、签名、GitHub Actions、许可证和 changelog 已推送；Docker/干净 VM 和失败恢复验收尚未完成 |
+| M8 在线升级 | 0.9.0 内部里程碑 | 仅骨架 | Updater 只有 health/status，明确返回 `InstallationEnabled=false` 和 `State=scaffold` |
+| M9 稳定版加固 | 首次公开 `v1.0.0` | 部分基础已完成 | CSP 等安全 Header、脱敏和完整质量门已有；高权限升级审查、恢复演练和稳定版文档未完成 |
 
 当前自动质量门最近一次通过：
 
@@ -53,7 +53,7 @@
 
 - 仓库没有版本 Tag；
 - 当前环境没有 Docker，因此未实际构建最终镜像或执行干净 VM 安装；
-- `Directory.Build.props` 和 changelog 仍为 `0.7.0`，与 M7 的 `0.8.0` 版本定位需要统一。
+- 当前 `VersionPrefix=0.7.0` 仅表示内部开发阶段；全部变更保留在 changelog 的 `Unreleased`，直到准备 `v1.0.0`。
 
 ## 4. 已完成业务基线（M1-M6）
 
@@ -70,7 +70,7 @@
 - Quartz 持久化月报计划、窗口冻结、幂等、任务级重试和重启恢复；
 - 报告、计划、渠道、Key 和系统设置页面。
 
-## 5. M7：完成 0.8.0 生产发布
+## 5. M7：完成生产部署和签名候选 bundle
 
 ### 5.1 `main` 已实现
 
@@ -89,29 +89,28 @@
 
 ### 5.2 必须完成
 
-1. 将 M7 版本统一为 `0.8.0`：更新 `VersionPrefix`、Node package 版本和 changelog 章节。
-2. 配置 `RELEASE_SIGNING_KEY_PEM`，保留离线备份并记录恢复方式。
-3. 在 GitHub Actions 中成功生成一次 draft `v0.8.0` Release。
-4. 在干净 linux/amd64 VM 从完整 bundle 执行 `install.sh`。
-5. 验证首次初始化、登录、容器重建和数据卷持久化。
-6. 从前一 bundle 执行 `update.sh`，验证配置、token、实例 ID 和数据保留。
-7. 注入 migration 失败和 readiness 失败，验证旧镜像和升级前数据库恢复。
-8. 验证 Release Assets 的 checksum、签名、SBOM、attestation、许可证和 changelog。
-9. 提供并演练一套可执行的主机备份/恢复命令；不要求自动周备份。
+1. 配置 `RELEASE_SIGNING_KEY_PEM`，保留离线备份并记录恢复方式。
+2. 在隔离的 linux/amd64 环境运行发布构建脚本，生成签名候选 bundle；不创建 `0.x` Tag 或 GitHub Release。
+3. 在干净 linux/amd64 VM 从候选 bundle 执行 `install.sh`。
+4. 验证首次初始化、登录、容器重建和数据卷持久化。
+5. 使用两个内部候选 bundle 执行 `update.sh`，验证配置、token、实例 ID 和数据保留。
+6. 注入 migration 失败和 readiness 失败，验证旧镜像和升级前数据库恢复。
+7. 验证候选 bundle 的 checksum、签名、镜像元数据、许可证和 changelog；SBOM 与 attestation 在最终 Release workflow 验收。
+8. 提供并演练一套可执行的主机备份/恢复命令；不要求自动周备份。
 
 ### 5.3 M7 完成门
 
 只有以下结果全部成立，M7 才能标记完成：
 
-- `v0.8.0` draft Release workflow 成功；
+- 签名候选 bundle 构建和校验成功，且没有创建任何 `0.x` Tag 或 Release；
 - 干净 amd64 VM 安装成功；
 - 容器重建不丢数据；
 - 手工部署契约更新成功；
 - 至少一次失败更新完整恢复旧 App 和 SQLite；
 - 镜像不包含源码、`.env`、数据库、报告、日志或测试结果；
-- 仓库和 Release 不包含真实身份、凭证或生产数据。
+- 仓库和候选 bundle 不包含真实身份、凭证或生产数据。
 
-## 6. M8：实现 0.9.0 App-only 在线升级
+## 6. M8：完成 0.9.0 内部在线升级里程碑
 
 ### 6.1 最小范围
 
@@ -160,7 +159,7 @@ M9 只保留稳定发布必需项：
 - 主机备份、恢复、升级失败和数据库损坏流程至少演练一次；
 - 安装、初始化、配置、备份、升级、回滚和故障恢复文档可按步骤执行；
 - 明确支持的 Docker Engine、Compose v2 和 linux/amd64 基线；
-- 从 `v0.8.0` 到最终候选版本的升级路径通过。
+- 内部候选 bundle 到最终 `v1.0.0` 的安装和升级路径通过。
 
 ### 质量
 
@@ -219,8 +218,10 @@ M9 只保留稳定发布必需项：
 
 ## 11. 下一执行顺序
 
-1. 将当前 M7 改动整理为 `0.8.0` 并更新 changelog。
-2. 配置 Release 签名 Secret，生成 `v0.8.0` draft Release。
-3. 完成干净 VM 安装、持久化、手工更新和失败恢复验收。
-4. 标记 M7 完成，再开始 M8 Updater 实现。
-5. M8 安全门通过后进入 M9 恢复演练和 `1.0.0` 发布。
+1. 保持当前改动在 changelog 的 `Unreleased`，不创建 `0.x` Tag 或 Release。
+2. 配置 Release 签名 Secret，在隔离环境生成并验收内部候选 bundle。
+3. 完成干净 VM 安装、持久化、手工更新和失败恢复验收，标记 M7 完成。
+4. 实现并验收 M8 Updater。
+5. 完成 M9 安全审查、恢复演练和稳定版文档。
+6. 将 `Unreleased` 整理为 `1.0.0`，统一项目版本，创建首个 Tag `v1.0.0`。
+7. 审核 `v1.0.0` draft Release 的 Assets、签名、SBOM、attestation 和 smoke test 后正式发布。

@@ -28,6 +28,11 @@ jobs:
         shell: bash
         run: |
           version=${GITHUB_REF_NAME#v}
+          if ! git rev-parse --quiet --verify refs/tags/v1.0.0 >/dev/null \
+            && [[ $version != 1.0.0 ]]; then
+            echo "The first public release must be v1.0.0." >&2
+            exit 1
+          fi
           project_version=$(sed -n 's:.*<VersionPrefix>\(.*\)</VersionPrefix>.*:\1:p' Directory.Build.props)
           test "$version" = "$project_version"
           deploy/extract-release-notes.sh CHANGELOG.md "$version" "$RUNNER_TEMP/release-notes.md"

@@ -4,9 +4,9 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
-## [Unreleased]
+首次公开版本将是 `v1.0.0`。在此之前，所有开发阶段变更都保留在 `Unreleased`，不创建 `0.x` GitHub Release。
 
-## [0.7.0] - 2026-08-28
+## [Unreleased]
 
 ### Added
 
@@ -35,5 +35,4 @@
 - 应用内在线安装继续保持关闭；Updater 不挂载 Docker Socket。
 - 增加公开安全政策，并将未修复漏洞引导至 GitHub Private Vulnerability Reporting。
 
-[Unreleased]: https://github.com/lohaaa/sub2api-report/compare/v0.7.0...HEAD
-[0.7.0]: https://github.com/lohaaa/sub2api-report/releases/tag/v0.7.0
+[Unreleased]: https://github.com/lohaaa/sub2api-report/commits/main

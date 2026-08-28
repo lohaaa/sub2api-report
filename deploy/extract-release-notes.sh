@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [[ $# -ne 3 ]]; then
-  echo "Usage: $0 <changelog-file> <version-without-v> <output-file>" >&2
+  echo "Usage: $0 <changelog-file> <version-without-v|Unreleased> <output-file>" >&2
   exit 2
 fi
 
@@ -14,7 +14,8 @@ if [[ ! -f $changelog_file ]]; then
   echo "Changelog not found: $changelog_file" >&2
   exit 2
 fi
-if [[ ! $version =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]]; then
+if [[ $version != Unreleased \
+  && ! $version =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]]; then
   echo "Invalid version: $version" >&2
   exit 2
 fi

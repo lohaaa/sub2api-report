@@ -50,6 +50,7 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+      - run: dotnet restore Sub2ApiReport.slnx
       - run: pnpm quality
       - run: |
           bash -n deploy/*.sh

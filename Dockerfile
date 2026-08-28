@@ -41,7 +41,7 @@ LABEL org.opencontainers.image.title="Sub2API Report App" \
       io.sub2api-report.contract="1"
 # hadolint ignore=DL3008
 RUN apt-get update \
-    && apt-get install --yes --no-install-recommends curl \
+    && apt-get install --yes --no-install-recommends curl tar \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /app/api /app/migrator /app/cli /data \
     && chown -R app:app /app /data

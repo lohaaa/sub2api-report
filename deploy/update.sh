@@ -18,7 +18,7 @@ fi
 
 # shellcheck source=deploy/release-lib.sh
 source "$bundle_dir/release-lib.sh"
-for command_name in docker find gzip jq openssl sha256sum sort stat xargs; do
+for command_name in docker gzip jq openssl sha256sum sort stat; do
   require_command "$command_name"
 done
 require_release_host
@@ -62,14 +62,14 @@ done
 docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml" stop app
 if ! docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml" \
   run --rm --no-deps --user 0:0 --volume "$data_backup:/host-backup" \
-  --entrypoint sh app -c 'cp -a /data/db /host-backup/db'; then
+  --entrypoint sh app -c 'tar -C /data -cf /host-backup/db.tar db'; then
   docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml" up --detach --no-build app
   echo "Database backup failed; the installed release was not changed." >&2
   exit 1
 fi
-if [[ ! -s $data_backup/db/sub2api-report.db ]] || ! (
+if [[ ! -s $data_backup/db.tar ]] || ! (
   cd "$data_backup"
-  find db -type f -print0 | sort -z | xargs -0 sha256sum > checksums.txt
+  sha256sum db.tar > checksums.txt
 ); then
   docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml" up --detach --no-build app
   echo "Database backup validation failed; the installed release was not changed." >&2
@@ -94,7 +94,7 @@ rollback_release() {
   if ! docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml" \
     run --rm --no-deps --user 0:0 --volume "$data_backup:/host-backup:ro" \
     --entrypoint sh app -c \
-    'rm -rf /data/db && cp -a /host-backup/db /data/db'; then
+    'rm -rf /data/db && tar -C /data -xf /host-backup/db.tar'; then
     echo "Database restore failed and requires operator intervention." >&2
     exit "$exit_code"
   fi

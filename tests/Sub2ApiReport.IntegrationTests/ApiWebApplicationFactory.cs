@@ -18,6 +18,7 @@ public sealed class ApiWebApplicationFactory : WebApplicationFactory<Program>
     private readonly string _environmentName;
     private readonly Action<IServiceCollection>? _configureTestServices;
 
+    private readonly IReadOnlyDictionary<string, string?> _settings;
     public ApiWebApplicationFactory()
         : this(null, true, Environments.Development)
     {
@@ -27,7 +28,8 @@ public sealed class ApiWebApplicationFactory : WebApplicationFactory<Program>
         string? databasePath,
         bool deleteDatabaseOnDispose,
         string environmentName = "Development",
-        Action<IServiceCollection>? configureTestServices = null)
+        Action<IServiceCollection>? configureTestServices = null,
+        IReadOnlyDictionary<string, string?>? settings = null)
     {
         _databasePath = databasePath ?? Path.Combine(
             Path.GetTempPath(),
@@ -38,6 +40,7 @@ public sealed class ApiWebApplicationFactory : WebApplicationFactory<Program>
         _deleteDatabaseOnDispose = deleteDatabaseOnDispose;
         _environmentName = environmentName;
         _configureTestServices = configureTestServices;
+        _settings = settings ?? new Dictionary<string, string?>();
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -45,13 +48,23 @@ public sealed class ApiWebApplicationFactory : WebApplicationFactory<Program>
         builder.UseEnvironment(_environmentName);
         builder.UseSetting("ConnectionStrings:Database", $"Data Source={_databasePath}");
         builder.UseSetting("DataProtection:KeysPath", _dataProtectionKeysPath);
+        foreach (var setting in _settings)
+        {
+            builder.UseSetting(setting.Key, setting.Value);
+        }
         builder.ConfigureAppConfiguration((_, configuration) =>
         {
-            configuration.AddInMemoryCollection(new Dictionary<string, string?>
+            var values = new Dictionary<string, string?>
             {
                 ["ConnectionStrings:Database"] = $"Data Source={_databasePath}",
                 ["DataProtection:KeysPath"] = _dataProtectionKeysPath,
-            });
+            };
+            foreach (var setting in _settings)
+            {
+                values[setting.Key] = setting.Value;
+            }
+
+            configuration.AddInMemoryCollection(values);
         });
         builder.ConfigureServices(services =>
         {

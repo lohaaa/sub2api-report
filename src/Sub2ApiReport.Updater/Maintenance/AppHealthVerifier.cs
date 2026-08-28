@@ -16,6 +16,7 @@ public interface IHealthVerifier
     Task<HealthVerificationResult> VerifyAsync(
         string expectedVersion,
         bool expectedMaintenanceMode,
+        string? expectedOperationId,
         int requiredConsecutiveSuccesses,
         TimeSpan timeout,
         CancellationToken cancellationToken);
@@ -32,6 +33,7 @@ public sealed class AppHealthVerifier(
     public async Task<HealthVerificationResult> VerifyAsync(
         string expectedVersion,
         bool expectedMaintenanceMode,
+        string? expectedOperationId,
         int requiredConsecutiveSuccesses,
         TimeSpan timeout,
         CancellationToken cancellationToken)
@@ -48,6 +50,7 @@ public sealed class AppHealthVerifier(
             var (attemptSucceeded, failure) = await TryVerifyOnceAsync(
                 expectedVersion,
                 expectedMaintenanceMode,
+                expectedOperationId,
                 cancellationToken);
             consecutive = attemptSucceeded ? consecutive + 1 : 0;
             if (consecutive >= requiredConsecutiveSuccesses)
@@ -71,6 +74,7 @@ public sealed class AppHealthVerifier(
     private async Task<(bool Succeeded, string? FailureReason)> TryVerifyOnceAsync(
         string expectedVersion,
         bool expectedMaintenanceMode,
+        string? expectedOperationId,
         CancellationToken cancellationToken)
     {
         try
@@ -81,10 +85,13 @@ public sealed class AppHealthVerifier(
                 return (false, "/health/live 请求失败。");
             }
 
-            using var readyResponse = await httpClient.GetAsync("/health/ready", cancellationToken);
-            if (!readyResponse.IsSuccessStatusCode)
+            if (!expectedMaintenanceMode)
             {
-                return (false, "/health/ready 请求失败。");
+                using var readyResponse = await httpClient.GetAsync("/health/ready", cancellationToken);
+                if (!readyResponse.IsSuccessStatusCode)
+                {
+                    return (false, "/health/ready 请求失败。");
+                }
             }
 
             var handshake = await maintenanceClient.GetHandshakeAsync(cancellationToken);
@@ -101,6 +108,14 @@ public sealed class AppHealthVerifier(
             if (handshake.MaintenanceMode != expectedMaintenanceMode)
             {
                 return (false, "App 维护模式状态与预期不一致。");
+            }
+
+            if (!string.Equals(
+                    handshake.MaintenanceOperationId,
+                    expectedOperationId,
+                    StringComparison.Ordinal))
+            {
+                return (false, "App 维护操作标识与预期不一致。");
             }
 
             return (true, null);

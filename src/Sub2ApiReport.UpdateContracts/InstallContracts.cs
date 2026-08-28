@@ -34,12 +34,19 @@ public static class InstallOperationStates
     public static bool IsTerminal(string state) => state is Succeeded or RolledBack or Failed or FailedNeedsOperator;
 }
 
-/// <summary>App 对 Updater 的维护握手响应契约（App 侧端点后续实现）。</summary>
+/// <summary>Updater 请求 App 进入或完成维护模式。</summary>
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record AppMaintenanceRequest(string OperationId);
+
+/// <summary>App 对 Updater 的维护握手响应契约。</summary>
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record AppUpdateHandshakeResponse(
     string Version,
     int DeploymentContractVersion,
-    bool MaintenanceMode);
+    bool MaintenanceMode,
+    string MaintenanceState,
+    string? MaintenanceOperationId,
+    string? MigrationIdentity);
 
 /// <summary>单个安装阶段的持久化历史记录。</summary>
 public sealed record InstallStageRecord(

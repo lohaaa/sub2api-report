@@ -46,7 +46,9 @@ public sealed class InstallRecovery(
             {
                 try
                 {
-                    await maintenanceClient.CompleteMaintenanceAsync(cancellationToken);
+                    await maintenanceClient.CompleteMaintenanceAsync(
+                        operation.OperationId,
+                        cancellationToken);
                     operation = operation with { MaintenanceEntered = false };
                 }
                 catch (Exception exception)

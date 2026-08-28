@@ -279,7 +279,7 @@ public sealed class InstallTransactionService(
             stages,
             InstallOperationStates.RequestingMaintenance,
             cancellationToken);
-        await maintenanceClient.EnterMaintenanceAsync(cancellationToken);
+        await maintenanceClient.EnterMaintenanceAsync(record.OperationId, cancellationToken);
         var handshake = await maintenanceClient.GetHandshakeAsync(cancellationToken);
         if (!handshake.MaintenanceMode)
         {
@@ -369,6 +369,7 @@ public sealed class InstallTransactionService(
         var verification = await healthVerifier.VerifyAsync(
             record.TargetVersion,
             expectedMaintenanceMode: true,
+            record.OperationId,
             options.VerifyConsecutiveSuccesses,
             TimeSpan.FromSeconds(options.VerifyTimeoutSeconds),
             cancellationToken);
@@ -392,7 +393,7 @@ public sealed class InstallTransactionService(
             stages,
             InstallOperationStates.CompletingMaintenance,
             cancellationToken);
-        await maintenanceClient.CompleteMaintenanceAsync(cancellationToken);
+        await maintenanceClient.CompleteMaintenanceAsync(record.OperationId, cancellationToken);
         var handshake = await maintenanceClient.GetHandshakeAsync(cancellationToken);
         if (handshake.MaintenanceMode)
         {
@@ -460,7 +461,7 @@ public sealed class InstallTransactionService(
         {
             try
             {
-                await maintenanceClient.CompleteMaintenanceAsync(CancellationToken.None);
+                await maintenanceClient.CompleteMaintenanceAsync(record.OperationId, CancellationToken.None);
                 record = record with { MaintenanceEntered = false };
             }
             catch (Exception exitException)

@@ -180,6 +180,9 @@ internal sealed class FakeMaintenanceClient : IAppMaintenanceClient
 
     public bool MaintenanceMode { get; set; }
 
+    public string? OperationId { get; set; }
+
+    public string MaintenanceState => MaintenanceMode ? "maintenance" : "normal";
     public int DeploymentContractVersion { get; set; } = UpdateContractConstants.DeploymentContractVersion;
 
     public Exception? OnEnterMaintenance { get; set; }
@@ -194,9 +197,12 @@ internal sealed class FakeMaintenanceClient : IAppMaintenanceClient
         Task.FromResult(new AppUpdateHandshakeResponse(
             CompleteCount > 0 && VersionAfterComplete is not null ? VersionAfterComplete : Version,
             DeploymentContractVersion,
-            MaintenanceMode));
+            MaintenanceMode,
+            MaintenanceState,
+            OperationId,
+            "test-migration"));
 
-    public Task EnterMaintenanceAsync(CancellationToken cancellationToken)
+    public Task EnterMaintenanceAsync(string operationId, CancellationToken cancellationToken)
     {
         if (OnEnterMaintenance is not null)
         {
@@ -205,10 +211,11 @@ internal sealed class FakeMaintenanceClient : IAppMaintenanceClient
 
         Interlocked.Increment(ref EnterCount);
         MaintenanceMode = true;
+        OperationId = operationId;
         return Task.CompletedTask;
     }
 
-    public Task CompleteMaintenanceAsync(CancellationToken cancellationToken)
+    public Task CompleteMaintenanceAsync(string operationId, CancellationToken cancellationToken)
     {
         if (OnCompleteMaintenance is not null)
         {
@@ -217,6 +224,7 @@ internal sealed class FakeMaintenanceClient : IAppMaintenanceClient
 
         Interlocked.Increment(ref CompleteCount);
         MaintenanceMode = false;
+        OperationId = null;
         return Task.CompletedTask;
     }
 }
@@ -240,6 +248,7 @@ internal sealed class FakeHealthVerifier : IHealthVerifier
     public Task<HealthVerificationResult> VerifyAsync(
         string expectedVersion,
         bool expectedMaintenanceMode,
+        string? expectedOperationId,
         int requiredConsecutiveSuccesses,
         TimeSpan timeout,
         CancellationToken cancellationToken)
@@ -342,6 +351,8 @@ internal static class TestSnapshots
         {
             [UpdateContractConstants.AppRoleLabelKey] = UpdateContractConstants.AppRoleLabelValue,
             [UpdateContractConstants.InstanceLabelKey] = "test-instance",
+            [UpdateContractConstants.ContractLabelKey] =
+                UpdateContractConstants.DeploymentContractVersion.ToString(System.Globalization.CultureInfo.InvariantCulture),
         },
         Env: ["ASPNETCORE_URLS=http://+:8080"],
         User: null,

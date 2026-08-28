@@ -148,6 +148,7 @@ public sealed class InstallRollbackService(
         var verification = await healthVerifier.VerifyAsync(
             record.CurrentVersion,
             expectedMaintenanceMode: false,
+            expectedOperationId: null,
             options.VerifyConsecutiveSuccesses,
             TimeSpan.FromSeconds(options.VerifyTimeoutSeconds),
             cancellationToken);

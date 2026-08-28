@@ -86,6 +86,13 @@ public static class AppContractMapper
         var labels = snapshot.Labels.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
         labels[UpdateContractConstants.UpgradeOperationLabelKey] = operationId;
 
+        var environment = snapshot.Env
+            .Where(value => !value.StartsWith(
+                $"{UpdateContractConstants.MaintenanceOperationEnvironmentKey}=",
+                StringComparison.Ordinal))
+            .ToList();
+        environment.Add($"{UpdateContractConstants.MaintenanceOperationEnvironmentKey}={operationId}");
+
         var hostConfig = new HostConfig
         {
             Binds = [.. snapshot.Binds],
@@ -128,7 +135,7 @@ public static class AppContractMapper
             Name = snapshot.ContainerName,
             Image = imageId,
             Labels = labels,
-            Env = [.. snapshot.Env],
+            Env = environment,
             User = snapshot.User,
             WorkingDir = snapshot.WorkingDir,
             Entrypoint = snapshot.Entrypoint.Count > 0 ? [.. snapshot.Entrypoint] : null,
@@ -172,6 +179,27 @@ public static class AppContractMapper
         if (string.IsNullOrWhiteSpace(snapshot.ImageId))
         {
             errors.Add("App 容器缺少镜像 ID。");
+        }
+
+        if (!snapshot.Labels.TryGetValue(UpdateContractConstants.AppRoleLabelKey, out var role)
+            || !string.Equals(role, UpdateContractConstants.AppRoleLabelValue, StringComparison.Ordinal))
+        {
+            errors.Add("App 容器角色标签无效。");
+        }
+
+        if (!snapshot.Labels.TryGetValue(UpdateContractConstants.InstanceLabelKey, out var instanceId)
+            || string.IsNullOrWhiteSpace(instanceId))
+        {
+            errors.Add("App 容器实例标签无效。");
+        }
+
+        if (!snapshot.Labels.TryGetValue(UpdateContractConstants.ContractLabelKey, out var contract)
+            || !string.Equals(
+                contract,
+                UpdateContractConstants.DeploymentContractVersion.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                StringComparison.Ordinal))
+        {
+            errors.Add("App 容器部署契约标签无效。");
         }
 
         if (snapshot.Mounts.All(mount => mount.Target != UpdateContractConstants.AppDataMountTarget))

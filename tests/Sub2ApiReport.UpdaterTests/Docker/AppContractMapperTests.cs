@@ -72,7 +72,11 @@ public sealed class AppContractMapperTests
         Assert.Equal(snapshot.ContainerName, parameters.Name);
         Assert.Equal("sha256:" + TestReleases.Hex('9'), parameters.Image);
         Assert.Equal(operationId, parameters.Labels![UpdateContractConstants.UpgradeOperationLabelKey]);
-        Assert.Equal(snapshot.Env, parameters.Env);
+        Assert.Equal(snapshot.Env.Count + 1, parameters.Env.Count);
+        Assert.All(snapshot.Env, value => Assert.Contains(value, parameters.Env));
+        Assert.Contains(
+            $"{UpdateContractConstants.MaintenanceOperationEnvironmentKey}={operationId}",
+            parameters.Env);
         Assert.Equal(snapshot.WorkingDir, parameters.WorkingDir);
         Assert.Equal(snapshot.Entrypoint, parameters.Entrypoint);
         Assert.Equal("8080/tcp", parameters.ExposedPorts!.Keys.Single());
@@ -107,6 +111,8 @@ public sealed class AppContractMapperTests
             {
                 [UpdateContractConstants.AppRoleLabelKey] = UpdateContractConstants.AppRoleLabelValue,
                 [UpdateContractConstants.InstanceLabelKey] = "test-instance",
+                [UpdateContractConstants.ContractLabelKey] =
+                    UpdateContractConstants.DeploymentContractVersion.ToString(System.Globalization.CultureInfo.InvariantCulture),
             },
             ExposedPorts = new Dictionary<string, EmptyStruct>
             {

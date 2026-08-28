@@ -31,7 +31,7 @@ Sub2API Report 是一个单管理员、单实例的内部运营工具，用于�
 | 在线升级 | 页面触发 updater sidecar | 主应用不接触 Docker Socket，可健康检查和回滚 |
 | 配置管理 | SQLite typed settings + 运行期刷新 | 可变配置通过页面修改并动态生效，部署配置只负责启动闭环 |
 | 镜像架构 | linux/amd64 | 用户确认当前只需要 amd64 |
-| 发布 | GitHub Release + GHCR | 代码、发行说明、镜像和校验信息统一管理 |
+| 发布 | GitHub Release Assets | 公开仓库统一管理源码、发行说明、离线镜像包、校验和与证明，不发布公共镜像 |
 
 ## 3. 总体架构
 
@@ -69,7 +69,7 @@ Browser
 +--------------------------+---------------------------+
                            |
                            v
-                    Docker Engine / GHCR
+                 Docker Engine / Release Assets
 ```
 
 只有主应用暴露 Web 端口。Updater 不映射主机端口，也不提供通用 Docker 代理能力。
@@ -569,8 +569,8 @@ MVP 不包含：
 4. 实现报表聚合（用户 → Key）、快照、CSV 和手工 dry-run。
 5. 实现邮箱、钉钉、飞书及组合发送。
 6. 接入 Quartz 月报计划、幂等和补发。
-7. 完成 Docker Compose、备份和 GitHub Release CI。
-8. 实现 updater、签名验证、健康检查和自动回滚。
+7. 完成 Docker Compose、离线镜像制品、备份和 GitHub Release CI。
+8. 实现 updater、签名验证、App 健康检查和自动回滚；Updater 或 Compose 变更使用手工 bundle 升级。
 9. 完成安全加固、发布文档和首个稳定版本。
 
-在线升级安排在业务闭环之后，但发布契约、数据目录和镜像标签必须从第一阶段就按升级方案设计，避免后期重构部署方式。
+在线升级安排在业务闭环之后，但发布契约、数据目录和本地镜像标签必须从第一阶段就按升级方案设计，避免后期重构部署方式。生产服务器不从公共 Registry 拉取镜像；Release bundle 通过 `docker load` 导入经过校验的镜像归档。

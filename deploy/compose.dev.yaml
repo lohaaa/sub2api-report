@@ -1,0 +1,20 @@
+services:
+  app:
+    image: sub2api-report-app:dev
+    pull_policy: build
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        VERSION: 0.7.0-dev
+        REVISION: local
+
+  updater:
+    image: sub2api-report-updater:dev
+    pull_policy: build
+    build:
+      context: ..
+      dockerfile: Dockerfile.updater
+      args:
+        VERSION: 0.7.0-dev
+        REVISION: local

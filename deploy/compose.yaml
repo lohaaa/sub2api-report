@@ -2,10 +2,8 @@ name: sub2api-report
 
 services:
   app:
-    image: sub2api-report-app:dev
-    build:
-      context: ..
-      dockerfile: Dockerfile
+    image: sub2api-report-app:current
+    pull_policy: never
     platform: linux/amd64
     restart: unless-stopped
     ports:
@@ -46,12 +44,11 @@ services:
     labels:
       io.sub2api-report.role: app
       io.sub2api-report.contract: "1"
+      io.sub2api-report.instance: "${INSTANCE_ID:?INSTANCE_ID is required}"
 
   updater:
-    image: sub2api-report-updater:dev
-    build:
-      context: ..
-      dockerfile: Dockerfile.updater
+    image: sub2api-report-updater:bootstrap
+    pull_policy: never
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -64,6 +61,7 @@ services:
       - ./secrets/updater-token:/run/secrets/updater-token:ro
     networks:
       - control
+      - updater-egress
     read_only: true
     tmpfs:
       - /tmp:size=32m,mode=1777
@@ -88,11 +86,13 @@ services:
     labels:
       io.sub2api-report.role: updater
       io.sub2api-report.contract: "1"
+      io.sub2api-report.instance: "${INSTANCE_ID:?INSTANCE_ID is required}"
 
 networks:
   frontend:
   control:
     internal: true
+  updater-egress:
 
 volumes:
   app-data:

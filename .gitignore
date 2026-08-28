@@ -14,6 +14,8 @@ appsettings.*.local.json
 /data/
 /reports/
 /backups/
+**/data-backups/
+**/deploy-backups/
 /logs/
 *.db
 *.db-shm
@@ -50,3 +52,6 @@ Thumbs.db
 *.tmp
 *.temp
 *.bak
+
+# Release artifacts
+/release/

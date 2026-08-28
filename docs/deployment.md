@@ -5,35 +5,52 @@
 
 ## 1. 一键部署目标
 
-首次部署只要求主机安装 Docker Engine 和 Docker Compose v2。发行包提供：
+首次部署要求主机安装 Docker Engine、Docker Compose v2、OpenSSL、jq、gzip 和 sha256sum。发行包提供：
 
 ```text
 deploy-bundle/
 ├─ compose.yaml
 ├─ .env.example
 ├─ install.sh
+├─ update.sh
+├─ release-lib.sh
+├─ appctl
+├─ upgrade-contract.json
+├─ CHANGELOG.md
+├─ LICENSE
+├─ RELEASE-NOTES.md
+├─ release-manifest.json
+├─ release-manifest.sig
 ├─ update-public-key.pem
-└─ checksums.txt
+└─ images/
+   ├─ sub2api-report-app-linux-amd64.tar.gz
+   ├─ sub2api-report-updater-linux-amd64.tar.gz
+   └─ checksums.txt
 ```
 
 推荐安装方式：
 
 ```bash
-curl -fsSLO https://github.com/example/sub2api-report/releases/download/vX.Y.Z/deploy-bundle.tar.gz
+curl -fsSLO https://github.com/example/sub2api-report/releases/download/vX.Y.Z/sub2api-report-vX.Y.Z-linux-amd64.tar.gz
 curl -fsSLO https://github.com/example/sub2api-report/releases/download/vX.Y.Z/checksums.txt
-sha256sum -c checksums.txt
+grep 'sub2api-report-vX.Y.Z-linux-amd64.tar.gz$' checksums.txt | sha256sum -c -
 mkdir -p sub2api-report
-tar -xzf deploy-bundle.tar.gz -C sub2api-report
+tar -xzf sub2api-report-vX.Y.Z-linux-amd64.tar.gz -C sub2api-report
 cd sub2api-report
-./install.sh
+sudo ./install.sh
 ```
 
-文档不把未经校验的 `curl | sh` 作为推荐命令。`install.sh` 只负责本地前置检查、生成内部 token 文件、创建目录并执行 `docker compose up -d`。
+已安装 GitHub CLI 时，应额外执行 `gh attestation verify sub2api-report-vX.Y.Z-linux-amd64.tar.gz --repo example/sub2api-report` 验证 GitHub artifact attestation。
+
+文档不把未经校验的 `curl | sh` 作为推荐命令。`install.sh` 只负责本地前置检查、校验包内镜像、执行 `docker load`、生成内部 token 和实例 ID，并执行 `docker compose up -d --no-build`。生产主机不从公共 Registry 拉取镜像。
+
+安装主机需要 Docker Engine、Docker Compose v2、OpenSSL、jq、gzip 和 sha256sum。脚本默认安装到 `/opt/sub2api-report`；可通过 `SUB2API_REPORT_INSTALL_DIR` 显式覆盖。后续部署契约升级在新 bundle 目录执行 `sudo ./update.sh`，脚本保留现有 `.env`、内部 token、实例 ID 和数据卷，并在停止 App 后将数据库一致性副本写到安装目录的 `data-backups/`，与 Docker data volume 分离。重复安装同一版本或降级默认被拒绝。
 
 安装完成后通过以下命令读取一次性管理员初始化码：
 
 ```bash
-docker compose logs app
+cd /opt/sub2api-report
+sudo docker compose logs app
 ```
 
 ## 2. Compose 拓扑
@@ -41,7 +58,8 @@ docker compose logs app
 ```text
 services:
   app:
-    image: ghcr.io/<owner>/sub2api-report-app@sha256:<digest>
+    image: sub2api-report-app:current
+    pull_policy: never
     ports:
       - "${BIND_ADDRESS:-0.0.0.0}:${APP_PORT:-8080}:8080"
     volumes:
@@ -52,7 +70,8 @@ services:
       - control
 
   updater:
-    image: ghcr.io/<owner>/sub2api-report-updater@sha256:<digest>
+    image: sub2api-report-updater:bootstrap
+    pull_policy: never
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - app-data:/managed-data
@@ -89,8 +108,8 @@ volumes:
 ### Updater
 
 - 检查和验证签名 release；
-- 创建临时 update worker；
-- 替换项目 App/Updater 容器；
+- 下载并校验 App 镜像压缩归档；
+- 使用 Docker API 加载并替换当前项目 App 容器；
 - 管理升级状态和自动回滚；
 - 不对宿主机开放端口；
 - 不处理报告和业务配置。
@@ -164,12 +183,14 @@ App：
 
 Updater：
 
-- 仅挂载 Docker Socket、受管数据卷、状态卷和 token secret；
+- 在线安装能力启用后，仅挂载 Docker Socket、受管数据卷、状态卷和 token secret；
+- M8 安全边界完成前不挂载 Docker Socket，状态接口明确返回安装未启用；
 - 不使用 host network；
 - 不映射端口；
 - 不挂载宿主机根目录；
-- 代码层只允许管理带当前 instance ID 标签的容器；
-- 只允许 GHCR 固定仓库 digest；
+- 代码层只允许管理带当前 instance ID 标签的 App 容器；
+- 只接受固定 GitHub 仓库 Release 路径、有效签名和匹配 SHA-256 的镜像归档；
+- `docker load` 后校验镜像 ID、版本标签和 `linux/amd64`；
 - 所有 Docker 变更写结构化审计日志。
 
 Docker Socket 本身仍是 root 等价权限，不能通过 `cap_drop` 消除。安全边界主要依赖 updater 的最小接口、不可达性和操作 allowlist。
@@ -315,35 +336,44 @@ logging:
     max-file: "5"
 ```
 
-## 13. GitHub 仓库和镜像
+## 13. GitHub 仓库和 Release 制品
 
 公开仓库包含：
 
 - 源代码和合成 fixture；
 - 架构、部署、开发和安全文档；
 - `.env.example`；
-- 不含 digest 的本地开发 Compose；
-- Release 构建工作流。
+- 生产 Compose 与本地开发 Compose override；
+- PR/Main 质量工作流和 Release 构建工作流。
 
-GitHub Release bundle 包含锁定 digest 的生产 Compose。
-
-GHCR 包：
+每个 GitHub Release 使用 Release Assets 发布：
 
 ```text
-ghcr.io/<owner>/sub2api-report-app
-ghcr.io/<owner>/sub2api-report-updater
+sub2api-report-v1.2.0-linux-amd64.tar.gz
+sub2api-report-app-v1.2.0-linux-amd64.tar.gz
+sub2api-report-updater-v1.2.0-linux-amd64.tar.gz
+release-manifest.json
+release-manifest.sig
+checksums.txt
+CHANGELOG.md
+LICENSE
+release-notes-v1.2.0.md
+sub2api-report-app-v1.2.0.spdx.json
+sub2api-report-updater-v1.2.0.spdx.json
 ```
 
-标签：
+完整 bundle 包含生产 Compose、脚本、Apache-2.0 许可证、完整变更日志、当前版本说明和两个离线镜像归档。GitHub Release 页面正文与 `release-notes-vX.Y.Z.md` 都由根目录 `CHANGELOG.md` 的对应版本章节生成；版本章节缺失或为空时发布失败。普通在线升级只下载 App 镜像归档；Updater 或部署契约变化要求下载新的完整 bundle 并执行 `update.sh`。
+
+生产 Compose 固定引用本地标签：
 
 ```text
-1.2.0     immutable release tag
-1.2       convenience tag, not used by updater
-stable    convenience tag, not used by updater
-sha-...   source revision tag
+sub2api-report-app:current
+sub2api-report-updater:bootstrap
 ```
 
-线上运行和在线升级一律使用 digest。
+两个服务都设置 `pull_policy: never`。这些本地标签只用于选择已校验并通过 `docker load` 导入的镜像；发布信任由 manifest 签名、归档 SHA-256、预期镜像 ID 和架构共同建立。GitHub Actions artifact 只用于 Job 间传递，最终安装文件必须进入无保留期依赖的 GitHub Release Assets。
+
+Release workflow 需要仓库 Actions secret `RELEASE_SIGNING_KEY_PEM`，内容为专用 RSA 私钥 PEM。私钥不能提交到仓库，也不能提供给 PR Job；工作流只在 Tag 发布 Job 的临时目录中使用它，并从同一密钥导出 bundle 内公钥。密钥轮换必须单独发布公告，现有安装默认拒绝未确认的公钥变化。Tag 版本必须与 `Directory.Build.props` 的 `VersionPrefix` 和 `CHANGELOG.md` 对应版本章节一致；该章节被提取为 Release 页面正文并以独立资产发布，其 SHA-256 和大小写入签名 manifest。工作流完成质量门和扫描后创建 draft Release，由维护者审核后发布。
 
 ## 14. 仓库隐私保护
 

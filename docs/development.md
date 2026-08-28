@@ -147,14 +147,27 @@ pnpm quality:web
 
 它依次运行 TypeScript typecheck、oxlint、Vitest 和生产构建。前端生产构建输出到 `src/Sub2ApiReport.Api/wwwroot/`。该目录是生成物，不提交到 Git；ASP.NET Core 发布和 App Dockerfile 会包含这份产物。
 
+## 变更日志和发布
+
+面向用户的重要变更先记录在根目录 `CHANGELOG.md` 的 `Unreleased` 章节。准备版本时：
+
+1. 将待发布条目整理到 `## [X.Y.Z] - YYYY-MM-DD` 章节；
+2. 同步更新 `Directory.Build.props` 的 `VersionPrefix`；
+3. 运行 `deploy/extract-release-notes.sh CHANGELOG.md X.Y.Z /tmp/release-notes.md` 检查章节；
+4. 创建并推送 `vX.Y.Z` Tag。
+
+Release workflow 不自动拼接 Git 提交信息。对应版本章节缺失、没有受支持的分类或没有条目时，发布会在构建镜像前失败。
+
 ## Docker Compose
 
-当前 Compose 包含 App 和无安装权限的 Updater 骨架：
+源码仓库使用开发 override 本地构建 App 和无安装权限的 Updater 骨架：
 
 ```bash
 cd deploy
 cp .env.example .env
-./install.sh
+./dev-up.sh
 ```
+
+正式 `install.sh` 只接受 GitHub Release bundle 中已经校验的离线镜像归档，不从源码构建，也不访问公共 Registry。
 
 Updater 在在线升级安全边界完成前不会挂载 Docker Socket，状态接口明确返回安装未启用。当前开发机没有 Docker 时，仍可完成全部非容器构建和测试。

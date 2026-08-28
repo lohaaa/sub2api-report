@@ -1,0 +1,156 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - v[0-9]+.[0-9]+.[0-9]+
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate release version
+        id: version
+        shell: bash
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          project_version=$(sed -n 's:.*<VersionPrefix>\(.*\)</VersionPrefix>.*:\1:p' Directory.Build.props)
+          test "$version" = "$project_version"
+          deploy/extract-release-notes.sh CHANGELOG.md "$version" "$RUNNER_TEMP/release-notes.md"
+          printf 'value=%s\n' "$version" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: Directory.Packages.props
+
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+        with:
+          version: 11.17.0
+          run_install: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm quality
+      - run: |
+          bash -n deploy/*.sh
+          shellcheck -x deploy/*.sh
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Build signed offline assets
+        shell: bash
+        env:
+          RELEASE_SIGNING_KEY_PEM: ${{ secrets.RELEASE_SIGNING_KEY_PEM }}
+        run: |
+          test -n "$RELEASE_SIGNING_KEY_PEM"
+          key_file=$(mktemp "$RUNNER_TEMP/release-key.XXXXXX.pem")
+          trap 'rm -f "$key_file"' EXIT
+          chmod 0600 "$key_file"
+          printf '%s\n' "$RELEASE_SIGNING_KEY_PEM" > "$key_file"
+          RELEASE_SIGNING_KEY_FILE=$key_file \
+            deploy/build-release-assets.sh '${{ steps.version.outputs.value }}' release
+
+      - name: Verify generated bundle
+        shell: bash
+        run: |
+          verify_dir=$(mktemp -d "$RUNNER_TEMP/release-verify.XXXXXX")
+          trap 'rm -rf "$verify_dir"' EXIT
+          tar -xzf "release/sub2api-report-v${{ steps.version.outputs.value }}-linux-amd64.tar.gz" -C "$verify_dir"
+          source "$verify_dir/release-lib.sh"
+          verify_release_bundle "$verify_dir"
+
+      - name: Smoke test release installation
+        shell: bash
+        run: |
+          smoke_root=$(mktemp -d "$RUNNER_TEMP/release-smoke.XXXXXX")
+          bundle_dir="$smoke_root/bundle"
+          install_dir="$smoke_root/install"
+          mkdir -p "$bundle_dir"
+          tar -xzf "release/sub2api-report-v${{ steps.version.outputs.value }}-linux-amd64.tar.gz" -C "$bundle_dir"
+          sed -i 's/^APP_PORT=.*/APP_PORT=18080/; s/^BIND_ADDRESS=.*/BIND_ADDRESS=127.0.0.1/' "$bundle_dir/.env.example"
+          cleanup() {
+            sudo docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml" down --volumes >/dev/null 2>&1 || true
+            sudo rm -rf "$smoke_root"
+          }
+          trap cleanup EXIT
+          sudo env SUB2API_REPORT_INSTALL_DIR="$install_dir" "$bundle_dir/install.sh"
+          curl --fail --silent http://127.0.0.1:18080/health/ready >/dev/null
+
+      - name: Scan App image
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          image-ref: sub2api-report-app:${{ steps.version.outputs.value }}
+          format: table
+          exit-code: 1
+          ignore-unfixed: false
+          severity: CRITICAL
+
+      - name: Scan Updater image
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          image-ref: sub2api-report-updater:${{ steps.version.outputs.value }}
+          format: table
+          exit-code: 1
+          ignore-unfixed: false
+          severity: CRITICAL
+
+      - name: Generate App SBOM
+        uses: anchore/sbom-action@28d71544de8eaf1b958d335707167c5f783590ad # v0.22.2
+        with:
+          image: sub2api-report-app:${{ steps.version.outputs.value }}
+          format: spdx-json
+          output-file: release/sub2api-report-app-v${{ steps.version.outputs.value }}.spdx.json
+
+      - name: Generate Updater SBOM
+        uses: anchore/sbom-action@28d71544de8eaf1b958d335707167c5f783590ad # v0.22.2
+        with:
+          image: sub2api-report-updater:${{ steps.version.outputs.value }}
+          format: spdx-json
+          output-file: release/sub2api-report-updater-v${{ steps.version.outputs.value }}.spdx.json
+
+      - name: Add SBOM checksums
+        working-directory: release
+        run: sha256sum *.spdx.json >> checksums.txt
+
+      - name: Attest release artifacts
+        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2
+        with:
+          subject-path: |
+            release/*.tar.gz
+            release/release-manifest.json
+            release/release-manifest.sig
+            release/checksums.txt
+            release/LICENSE
+            release/update-public-key.pem
+            release/*.spdx.json
+            release/*.md
+
+      - name: Create draft GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" release/* \
+            --draft \
+            --verify-tag \
+            --title "Sub2API Report $GITHUB_REF_NAME" \
+            --notes-file "release/release-notes-v${{ steps.version.outputs.value }}.md"

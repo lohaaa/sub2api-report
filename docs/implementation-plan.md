@@ -1,391 +1,229 @@
 # 实施计划
 
-- 状态：设计基线
-- 原则：先完成可验证的报告闭环，再交付高权限在线升级能力。
+- 状态：执行基线
+- 最近核对：2026-08-28
+- 目标：交付公开、单管理员、Docker Compose 单实例的稳定报告系统，并支持签名 GitHub Release 安装和 App-only 安全在线升级。
 
-## 1. 版本路线
+## 1. 计划原则
 
-```text
-0.1.0  repository foundation + application shell
-0.2.0  secure bootstrap + administrator session
-0.3.0  Sub2API connection + people/key mapping
-0.4.0  report collection + snapshot + CSV
-0.5.0  email/dingtalk/feishu delivery
-0.6.0  Sub2API user + API Key direct reporting
-0.7.0  persistent scheduling + normalized execution history
-0.8.0  production Docker deployment + release pipeline
-0.9.0  online update + rollback
-0.10.0 security hardening + release candidate
-1.0.0  first stable release
-```
+本计划只保留实现产品目标和安全发布所必需的工作：
 
-版本号表示能力成熟度，不要求每个中间版本都面向普通用户发布镜像。
+- 报告采集、快照、投递和计划任务必须形成可恢复的业务闭环；
+- 普通用户必须能从 GitHub Release bundle 安装，不依赖公共容器 Registry；
+- 发布物必须经过签名、哈希、架构和版本校验；
+- 在线升级必须具备一致性备份、健康验证和自动回滚；
+- 高权限 Updater 未通过安全验收前不得挂载 Docker Socket，也不得开放安装能力；
+- 真实实现、自动测试和环境验收优先于计划文本中的完成声明。
 
-## 2. 阶段依赖
+贡献者社区建设、更多运行平台和便利性自动化不阻塞 1.0，统一列入“可延后项”。
+
+## 2. 精简版本路线
 
 ```text
-M0 Repository
-  -> M1 Application shell
-  -> M2 Setup and identity
-  -> M3 Sub2API and key ownership
-  -> M4 Report engine
-  -> M5 Delivery channels
-  -> M6 Scheduling
-  -> M7 Docker and releases
-  -> M8 Online updater
-  -> M9 Release hardening
+0.7.0  报告业务闭环和持久化计划任务
+0.8.0  生产 Docker 部署和签名 GitHub Release
+0.9.0  App-only 应用内在线升级和自动回滚
+1.0.0  安全验收、恢复演练和稳定版文档
 ```
 
-M5 的三个渠道可以并行实现，但必须共用同一 Sender contract 和 delivery state machine。
-
-## 3. M0：公开仓库基础
-
-### 交付
-
-- GitHub public repository；
-- `README.md`、`LICENSE`、`SECURITY.md`、`CONTRIBUTING.md`、Code of Conduct；
-- `.editorconfig`、`.gitattributes`、`.gitignore`；
-- .NET solution 和 Node workspace 基础文件；
-- Dependabot/Renovate 依赖更新策略；
-- CodeQL、secret scanning、Gitleaks；
-- Issue/PR templates，明确禁止上传生产数据；
-- branch protection 和 required checks。
-
-### 必须先决定
-
-- 项目正式名称和 GitHub/GHCR namespace；
-- 开源许可证；
-- 安全漏洞私下报告渠道；
-- Release 签名密钥保管方式。
-
-### 验收
-
-- 提交包含假 API Key、测试私钥或真实邮箱模式时 CI 能阻止；
-- Docker build context 不包含 `.git`、`.env`、数据库、报告和日志；
-- 所有测试 fixture 都是合成数据；
-- PR 无法绕过 required checks 合并到默认分支。
-
-## 4. M1：应用骨架
-
-### 后端
-
-- 创建 Domain/Application/Infrastructure/Api/Migrator 项目；
-- 依赖方向测试；
-- SQLite DbContext 和第一版 migration；
-- 数据库优先的 typed settings service、revision 并发控制和运行期日志级别刷新；
-- Problem Details、correlation ID、Serilog；
-- `/health/live`、`/health/ready`；
-- OpenAPI；
-- React SPA fallback 和静态资源缓存规则。
-
-### 前端
-
-- React + TypeScript + Vite；
-- shadcn/ui、Tailwind、Lucide；
-- React Router 和 TanStack Query；
-- 工作台壳、侧栏、页面标题、错误边界；
-- light/dark/system theme；
-- 中文默认文案；
-
-### 构建
-
-- 前端 build 输出复制到 ASP.NET Core `wwwroot`；
-- 本地开发由 Vite proxy `/api` 到 ASP.NET Core；
-- Release 构建只产生一个 App Web artifact。
-
-### 验收
-
-- `dotnet test`、frontend lint/test/build 全部通过；
-- App 同源提供 API 和 SPA；
-- 刷新任意前端路由不会 404；
-- API 路由不会被 SPA fallback 吞掉；
-- 修改数据库设置后，读取方和日志级别无需重启即可使用新 revision；
-- 桌面和移动视口无水平溢出。
-
-## 5. M2：首次初始化和认证
-
-- 状态：已实现（0.2.0）
-
-### 交付
-
-- Setup challenge 生成、哈希、过期和失败限流；
-- Docker 日志一次性初始化码；
-- 初始化状态 API；
-- 管理员创建事务和唯一管理员约束；
-- ASP.NET Core Identity Cookie 登录；
-- antiforgery header；
-- 登录、登出、修改密码；
-- step-up 授权；
-- 主机侧密码恢复码 CLI；
-- 初始化页、登录页和安全设置页；
-- 受认证的系统设置查询/更新 API 和页面，不暴露业务配置环境变量；
-- 配置更新 revision 冲突响应和审计记录。
-
-### 安全测试
-
-- 两个并发初始化请求只能成功一个；
-- 初始化完成后旧 code 和 setup endpoint 均不可用；
-- 重启前后 setup code 行为符合设计；
-- Cookie flag、session rotation、CSRF 和 rate limiting；
-- 日志不出现密码、Cookie 或 code hash。
-
-### 验收
-
-全新数据卷可以完成初始化，重建容器后管理员仍能登录；删除 App 容器不会重新开放初始化。
-
-## 6. M3：Sub2API 连接与用户/Key 同步
-
-- 状态：已实现（0.3.0；0.6.0 重构为用户/Key 直接统计）
-
-### 交付
-
-- 单 Sub2API connection 配置；
-- Admin API Key 加密存储和掩码更新；
-- connection test；
-- 用户同步与指定用户/全部有效用户范围；
-- 按所属用户同步 API Key；
-- Key 名称、状态和最后使用时间 snapshot；
-- 已删除/轮换 Key 的本地保留（`RetiredAt`）。
-
-0.6.0 移除：人员 CRUD、一人多 Key 归属有效期、未映射/重复映射检查与人员页面。
-Key 同步按钮仅作诊断用，报告生成前会自动执行。
-
-### Stub 场景
-
-- 正常分页；
-- 空数据；
-- 401/403；
-- 404 表示部署版本不兼容；
-- 429 + Retry-After；
-- 500/超时；
-- Key 被重命名、停用、删除；
-- Sub2API 返回未知字段。
-
-### 验收
-
-管理员可以连接测试实例、同步用户并选择范围、按用户同步 Key，并清楚看到已从上游
-移除的历史 Key。数据库和日志不保存完整业务 Key。
-
-## 7. M4：报告引擎
-
-- 状态：已实现（0.4.0；0.6.0 升级为 v3 用户 → Key 模型）
-
-### 交付
-
-- 生成报告前自动刷新 Sub2API 用户与 Key，失败则终止并记录到 `ReportGenerationRuns`；
-- 动态完整自然日窗口：默认滚动 7/30 日、上一自然周和上一自然月，手工报告支持自定义区间；
-- schema v4 canonical snapshot、v1-v3 读兼容，以及计划任务窗口规格/边界冻结；
-- `Asia/Shanghai` 及可配置 IANA 时区；
-- 按 Key 使用所属 `user_id` 调用 Sub2API stats；
-- bounded concurrency、timeout、retry；
-- 用户 → Key 分层聚合与用户小计；
-- 全部总计；
-- immutable canonical snapshot（v3；历史 v1/v2 快照只读兼容）；
-- UTF-8 BOM CSV；
-- 手工 dry-run，不发送渠道；
-- 报告列表和详情页。
-
-### 金额和数值
-
-- 数据库存储费用使用 decimal，不使用 binary float 做二次计算；
-- 保留 Sub2API 原始精度；
-- 展示层统一格式化；
-- Token 和请求数使用 64-bit integer；
-- snapshot 明确 schema version 和统计时区。
-
-### 验收
-
-固定 stub 数据生成的 JSON/CSV golden files 稳定；跨月、闰年和一人多 Key 汇总正确；部分 Key 失败时报告不会伪装成完整成功。
-
-## 8. M5：发送渠道
-
-- 状态：已实现（0.5.0）
-
-### 公共能力
-
-- M5 提前引入最小 `ReportRun`、`DeliveryRecord` 和 `DeliveryPart` 状态及手工投递
-API；Quartz 触发、计划幂等键和重启恢复仍属 M6，M6 在同一状态机上扩展；
-- `IReportSender` contract；
-- channel config 加密、掩码和 test send；
-- payload hash；
-- 每渠道独立状态和重试；
-- HTTP 200 + 业务错误码检查；
-- 消息长度预算和分片；
-- 渠道组合编排。
-
-### Email
-
-- SMTP TLS/STARTTLS；
-- HTML summary；
-- CSV attachment；
-- To/CC；
-- header injection 防护；
-- synthetic preview recipient。
-
-### DingTalk
-
-- HMAC-SHA256 签名；
-- Markdown 子集；
-- 限流响应；
-- webhook host 和 redirect 控制。
-
-### Feishu
-
-- HMAC-SHA256 签名；
-- `post` 富文本；
-- payload size 和频率控制；
-- webhook host 和 redirect 控制。
-
-### 群报告下载
-
-- 钉钉/飞书摘要使用独立渠道模板，并可附限时 CSV 下载链接；
-- 外部地址、1 小时至 30 天有效期、有限次数/不限制策略动态存储于 SQLite；
-- 令牌哈希和 Data Protection 密文、成功后激活、下载计数、到期、次数上限和管理员撤销；
-- 下载响应不缓存、不发送 Referer，并使用独立匿名限流。
-
-### 验收
-
-任意渠道失败不阻断其他渠道；补发只触发失败渠道；限时链接按冻结期限、次数上限和撤销状态失效；测试、日志和截图不包含真实 webhook、收件人或下载令牌。
-
-## 9. M6：计划任务和运行历史
-
-- 状态：已实现（0.7.0）
-
-### 交付
-
-- 在 M5 已落地的运行和投递状态机之上增加调度，不重建状态机；
-- Quartz persistent JobStore；
-- 单例月报计划，支持每月 1-28 日、时间和 IANA 时区设置；
-- 默认每月 1 日 09:00 `Asia/Shanghai`；
-- disallow concurrent execution；
-- misfire 使用 fire-once-now，错过多次只补一次；
-- scheduled idempotency key；
-- 规范化任务执行记录，覆盖排队、采集、渲染、投递和最终状态；
-- 任务级错误码、安全错误摘要、阶段时间和配置 revision；
-- 手工立即运行，以及从失败阶段创建新的显式重试执行；
-- 渠道补发继续复用 M5 逐渠道/逐分片重试，不重复成功渠道；
-- 下次运行时间；
-- ReportRun/Delivery 状态和审计；
-- 进程重启恢复；发送结果未知时标记 `outcome_unknown`，禁止自动重发；
-- 计划运行使用运行时全部已启用渠道；部分报告保存快照但不自动发送。
-
-### 验收
-
-- 重复触发只产生一份计划报告；
-- 执行中重启后不会静默重复发送；
-- 失败重试创建可追溯的新执行并关联原执行，不覆盖历史结果；
-- 已成功渠道和结果未知渠道不会被自动重发；
-- 修改时区后持久化 trigger 与下次运行时间正确；
-- 页面能区分排队、执行中、成功、部分失败、采集失败、发送失败和中断。
-
-## 10. M7：Docker 和发布
-
-### 交付
-
-- multi-stage App Dockerfile；
-- amd64 Updater 镜像基础；
-- production Compose；
-- named volumes、healthcheck、security options；
-- install bundle 和 checksum；
-- GitHub Actions build/test/scan；
-- GHCR publish；
-- SBOM 和 artifact attestation；
-- signed release manifest；
-- weekly/manual backup；
-- 安装、升级前检查和恢复文档。
-
-### 验收
-
-干净 amd64 Linux VM 从 Release bundle 部署成功；容器重建不丢数据；镜像不包含源码、Node cache、测试结果、`.env` 或开发证书。
-
-## 11. M8：在线升级
-
-按 [online-update.md](online-update.md) 实施。
-
-### 交付
-
-- Controller internal API 和 shared token；
-- manifest 签名、digest、仓库和 contract 验证；
-- ephemeral worker；
-- upgrade lock 和 durable state；
-- preflight；
-- SQLite 一致性备份；
-- maintenance mode；
-- App replace、migration、health threshold；
-- Controller handoff；
-- automatic rollback；
-- update page 和 reconnect polling。
-
-### 发布门槛
-
-Updater 上线前必须完成威胁建模、代码审计和故障注入测试。若门槛未满足，0.8 版本只开放“检查更新”，不开放安装按钮。
-
-## 12. M9：稳定版加固
+不再单独设置 `0.10.0`。M9 完成后直接进入 `1.0.0` 候选和正式发布。
+
+## 3. 当前真实进度
+
+| 里程碑 | 对应版本 | 当前状态 | 真实结论 |
+| --- | --- | --- | --- |
+| M0 公开仓库基础 | 0.1.0 / 0.8.0 发布前置 | 部分完成 | GitHub 仓库已公开；Private Vulnerability Reporting、Secret Protection 和 Push protection 已启用，当前 0 个 Secret alert；`SECURITY.md` 和 CI 文件待提交推送 |
+| M1 应用骨架 | 0.1.0 | 已完成 | .NET 模块、React SPA、SQLite、配置、健康检查和质量门已落地 |
+| M2 初始化和认证 | 0.2.0 | 已完成 | 单管理员初始化、Cookie、CSRF、step-up 和主机恢复码已落地 |
+| M3 Sub2API 同步 | 0.3.0 / 0.6.0 | 已完成 | 用户与 API Key 直接统计模型已落地，人员归属模型已移除 |
+| M4 报告引擎 | 0.4.0 / 0.6.0 | 已完成 | 动态完整自然日窗口、schema v4 快照、CSV 和报告页面已落地 |
+| M5 投递渠道 | 0.5.0 | 已完成 | 邮件、钉钉、飞书、限时下载和失败补发已落地 |
+| M6 计划任务 | 0.7.0 | 已完成 | Quartz 持久化计划、窗口冻结、规范化执行记录、重试和恢复已落地 |
+| M7 Docker 和 Release | 0.8.0 | 工作区实现完成，验收未完成 | Dockerfile、Compose、bundle、签名、GitHub Actions 和 changelog 已实现但尚未提交、推送和在 Docker/干净 VM 验收 |
+| M8 在线升级 | 0.9.0 | 仅骨架 | Updater 只有 health/status，明确返回 `InstallationEnabled=false` 和 `State=scaffold` |
+| M9 稳定版加固 | 1.0.0 | 部分基础已完成 | CSP 等安全 Header、脱敏和完整质量门已有；高权限升级审计、恢复演练和稳定版文档未完成 |
+
+当前自动质量门最近一次通过：
+
+- .NET 格式检查和 Release 构建通过，`106` 个测试通过；
+- 前端 typecheck、lint、build 通过，`18` 个测试通过；
+- ShellCheck、Actionlint、changelog 提取、签名校验和篡改拒绝测试通过。
+
+当前发布状态不能算完成：
+
+- `main` 比 `origin/main` ahead 2，M7/许可证/变更日志改动仍在工作区；
+- 仓库没有版本 Tag；
+- 当前环境没有 Docker，因此未实际构建最终镜像或执行干净 VM 安装；
+- `Directory.Build.props` 和 changelog 仍为 `0.7.0`，与 M7 的 `0.8.0` 版本定位需要统一。
+
+## 4. 已完成业务基线（M1-M6）
+
+以下能力不再重复规划，只在回归失败时修复：
+
+- .NET 10 模块化单体、React/TypeScript/Vite SPA 和 SQLite；
+- 数据库动态配置、revision 并发控制和运行期刷新；
+- 单管理员安全初始化、登录、密码修改、step-up 和恢复码；
+- Sub2API 连接、Secret 加密、用户与 API Key 自动同步；
+- 滚动 7/30 日、上一自然周/月和手工自定义自然日窗口；
+- schema v4 不可变快照、历史读取兼容和 UTF-8 BOM CSV；
+- 邮件、钉钉和飞书组合投递、逐渠道状态和失败补发；
+- 限时 CSV 下载授权；
+- Quartz 持久化月报计划、窗口冻结、幂等、任务级重试和重启恢复；
+- 报告、计划、渠道、Key 和系统设置页面。
+
+## 5. M7：完成 0.8.0 生产发布
+
+### 5.1 工作区已实现
+
+- multi-stage App 和 Updater Dockerfile；
+- production Compose 使用本地镜像标签并设置 `pull_policy: never`；
+- 独立开发 Compose override 和 `dev-up.sh`；
+- `docker save` 生成的 linux/amd64 App/Updater 压缩镜像归档；
+- 签名 release manifest、SHA-256、镜像 ID、架构和版本校验；
+- `install.sh` 首次安装；
+- `update.sh` 手工部署契约更新、独立数据库备份和失败恢复；
+- GitHub PR/Main 质量 workflow；
+- GitHub Tag Release workflow、Critical 漏洞扫描、SBOM 和 artifact attestation；
+- Apache-2.0 许可证进入源码、镜像、Release Assets 和完整 bundle；
+- `CHANGELOG.md`、版本章节校验、Release 页面说明和随包 Release notes；
+- Release workflow 中的 bundle 校验和安装 smoke test。
+
+### 5.2 必须完成
+
+1. 将 M7 版本统一为 `0.8.0`：更新 `VersionPrefix`、Node package 版本和 changelog 章节。
+2. 审查并提交当前工作区改动，推送 GitHub。
+3. 配置 `RELEASE_SIGNING_KEY_PEM`，保留离线备份并记录恢复方式。
+4. 在 GitHub Actions 中成功生成一次 draft `v0.8.0` Release。
+5. 在干净 linux/amd64 VM 从完整 bundle 执行 `install.sh`。
+6. 验证首次初始化、登录、容器重建和数据卷持久化。
+7. 从前一 bundle 执行 `update.sh`，验证配置、token、实例 ID 和数据保留。
+8. 注入 migration 失败和 readiness 失败，验证旧镜像和升级前数据库恢复。
+9. 验证 Release Assets 的 checksum、签名、SBOM、attestation、许可证和 changelog。
+10. 提供并演练一套可执行的主机备份/恢复命令；不要求自动周备份。
+
+### 5.3 M7 完成门
+
+只有以下结果全部成立，M7 才能标记完成：
+
+- `v0.8.0` draft Release workflow 成功；
+- 干净 amd64 VM 安装成功；
+- 容器重建不丢数据；
+- 手工部署契约更新成功；
+- 至少一次失败更新完整恢复旧 App 和 SQLite；
+- 镜像不包含源码、`.env`、数据库、报告、日志或测试结果；
+- 仓库和 Release 不包含真实身份、凭证或生产数据。
+
+## 6. M8：实现 0.9.0 App-only 在线升级
+
+### 6.1 最小范围
+
+在线升级只替换 App。Updater、Compose、端口、卷、权限或部署契约变化继续要求管理员下载完整 bundle 并执行 `update.sh`。
+
+必须实现：
+
+1. App 更新检查、计划、安装和状态 API；安装操作要求管理员 step-up。
+2. App 与 Updater 之间的固定 shared-token 认证和最小请求模型。
+3. 固定 GitHub owner/repository、HTTPS Release 路径和 redirect allowlist。
+4. manifest 签名、SemVer、linux/amd64、deployment contract、归档 SHA-256、大小、镜像 ID 和 Release notes 校验。
+5. 持久化 upgrade lock、operation state 和中断恢复。
+6. 报告任务、磁盘、Docker、数据卷、当前健康状态和版本兼容 preflight。
+7. App 镜像归档流式下载、大小限制、超时、临时文件和原子完成。
+8. 通过受限 Docker API 加载版本镜像，不允许任意 URL、命令、容器或 Docker 操作。
+9. SQLite 一致性备份和校验。
+10. 维护模式、停止新业务写入并等待活动任务结束。
+11. 候选 App 替换、Migrator、连续健康阈值和版本/schema/contract 验证。
+12. 失败时自动恢复旧 image ID 和升级前数据库。
+13. 更新页面显示版本说明、preflight、阶段、错误摘要和重连状态。
+
+### 6.2 安全完成门
+
+- Updater 威胁模型和代码审查完成；
+- App 容器始终没有 Docker Socket；
+- Updater 没有主机端口，只管理当前 instance ID 的 App；
+- 未知路由、字段、URL、镜像和 Docker 动作被拒绝；
+- 下载中断、磁盘不足、备份失败、migration 失败、候选 App 退出、readiness 超时、Updater 中止和 Docker daemon 短时不可用均有故障注入测试；
+- 失败更新可以自动恢复并留下脱敏审计记录；
+- 上述门槛全部通过后，才能挂载 Docker Socket 并将 `InstallationEnabled` 改为 `true`。
+
+## 7. M9：完成 1.0 稳定版
+
+M9 只保留稳定发布必需项：
 
 ### 安全
 
-- CSP、frame ancestors、nosniff、referrer/permissions policy；
-- Fetch Metadata；
-- dependency and container vulnerability review；
-- secret redaction tests；
-- backup/restore drill；
-- release signing drill；
-- updater penetration review。
+- 高权限 Updater 独立审查无未解决的高危问题；
+- 依赖和最终容器镜像没有未接受的 Critical 漏洞；
+- Secret、token、webhook、报告内容和升级错误日志脱敏测试通过；
+- Release 签名密钥备份、丢失恢复和轮换演练完成；
+- 公开仓库敏感信息扫描通过。
+
+### 恢复和运维
+
+- 主机备份、恢复、升级失败和数据库损坏流程至少演练一次；
+- 安装、初始化、配置、备份、升级、回滚和故障恢复文档可按步骤执行；
+- 明确支持的 Docker Engine、Compose v2 和 linux/amd64 基线；
+- 从 `v0.8.0` 到最终候选版本的升级路径通过。
 
 ### 质量
 
-- 关键页面 keyboard-only 验证；
-- axe 扫描；
-- 100 Key 性能场景；
-- 长消息分片；
-- SQLite 磁盘满和锁冲突；
-- Sub2API 长时间不可用；
-- SMTP/webhook 限流。
+- `pnpm quality` 通过；
+- Release workflow 和干净 VM smoke test 通过；
+- 核心报告、投递、调度和升级故障测试通过；
+- 无阻塞发布的已知数据丢失、认证绕过或升级失效问题。
 
-### 文档
+完成后先创建 `1.0.0` draft Release，人工审核 Assets、changelog 和恢复证据，再发布正式版本。
 
-- 安装、初始化、配置、报告、备份、升级、恢复；
-- 安全报告流程；
-- 数据保留和隐私说明；
-- Release notes 和迁移说明。
+## 8. 1.0 非阻塞项
 
-## 13. CI 检查矩阵
+以下项目有价值，但不影响当前单管理员 Compose 产品达到 1.0：
 
-| 检查 | PR | Main | Release |
-| --- | ---: | ---: | ---: |
-| .NET format/build/test | yes | yes | yes |
-| frontend lint/typecheck/test/build | yes | yes | yes |
-| architecture dependency tests | yes | yes | yes |
-| API integration tests | yes | yes | yes |
-| secret/privacy scan | yes | yes | yes |
-| CodeQL | yes | yes | yes |
-| dependency review | yes | yes | yes |
-| container build | optional | yes | yes |
-| container vulnerability scan | no | yes | yes |
-| SBOM/attestation/signing | no | no | yes |
-| update/rollback fault tests | no | nightly | yes |
+- `CONTRIBUTING.md`、Code of Conduct、Issue/PR 模板和 CODEOWNERS；
+- Dependabot/Renovate、CodeQL 和复杂 branch protection；
+- 自动周备份、远端备份上传和备份管理页面；
+- Updater 在线自更新；
+- 自动后台安装、任意历史版本降级和多发布通道；
+- 公共容器 Registry；
+- arm64、rootless Docker、Podman、Swarm 和 Kubernetes；
+- 多管理员、多租户、实时用量监控和请求内容审计；
+- 全站自动 axe 门、完整键盘审计和专门的 100 Key 性能基准；
+- 多语言 UI。
 
-## 14. Definition of Done
+这些项目可以在 1.0 后按实际用户需求进入独立里程碑。基础可访问性、无水平溢出和普通规模性能问题仍按缺陷处理。
 
-功能只有在以下条件全部满足后才能完成：
+## 9. 最小 CI 门
 
-- 行为和失败语义已实现；
-- 单元/集成测试覆盖核心规则；
-- API 契约和前端类型同步；
-- 日志和审计脱敏；
-- 文档更新；
-- 无已知高危依赖漏洞；
-- 无真实身份、内部信息、凭证或生产数据；
-- Docker 构建和健康检查通过；
-- 相关迁移经过空库和前一稳定版数据库验证。
+| 检查 | PR/Main | Release |
+| --- | ---: | ---: |
+| .NET format/build/test | 必须 | 必须 |
+| frontend typecheck/lint/test/build | 必须 | 必须 |
+| Bash、Compose 和 changelog 校验 | 必须 | 必须 |
+| Secret/私钥扫描 | 必须 | 必须 |
+| linux/amd64 容器构建 | Main 可延后 | 必须 |
+| Critical 容器漏洞扫描 | 否 | 必须 |
+| SBOM、签名和 attestation | 否 | 必须 |
+| bundle 解包、签名验证和安装 smoke test | 否 | 必须 |
+| 在线升级故障注入 | M8 后必须 | 必须 |
 
-## 15. 开发开始前仍需决策
+不再要求 nightly Job 作为 1.0 前置；关键故障测试直接进入 PR 或 Release 门。
 
-- 项目正式名称；
-- GitHub owner 和 GHCR namespace；
-- 开源许可证；
-- 默认 UI 是否只提供中文；
-- 安全漏洞接收邮箱或 GitHub Security Advisories 流程；
-- Release manifest 签名密钥托管方式；
-- 正式支持的 Docker Engine 最低版本；
-- 首版是否包含 TOTP，或放到 1.x。
+## 10. Definition of Done
+
+功能或里程碑只有在以下条件满足后才能标记完成：
+
+- 行为和失败语义已经实现，不是 scaffold 或只写文档；
+- 核心规则有自动测试；
+- API、前端、部署脚本和文档保持一致；
+- 日志、审计、测试和发布物不包含敏感数据；
+- `pnpm quality` 通过；
+- 涉及 Docker 或升级时，真实容器和失败恢复验收通过；
+- 对应 changelog 已更新；
+- 不存在会导致数据丢失、认证绕过或不可恢复升级失败的已知问题。
+
+## 11. 下一执行顺序
+
+1. 将当前 M7 改动整理为 `0.8.0` 并更新 changelog。
+2. 提交并推送当前工作区改动。
+3. 配置 Release 签名 Secret，生成 `v0.8.0` draft Release。
+4. 完成干净 VM 安装、持久化、手工更新和失败恢复验收。
+5. 标记 M7 完成，再开始 M8 Updater 实现。
+6. M8 安全门通过后进入 M9 恢复演练和 `1.0.0` 发布。

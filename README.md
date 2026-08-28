@@ -2,7 +2,7 @@
 
 Sub2API Report 是一个面向单管理员部署的 Codex API Key 用量报告工具。它从 Sub2API 读取账号下每个 API Key 的用量，按 Sub2API 用户 → Key 分层展示可配置统计窗口，并可通过邮箱、钉钉和飞书发送报告。
 
-> 项目当前处于 0.7.0 持久化计划任务阶段：报告支持滚动 7/30 日、上一自然周、上一自然月和手工自定义区间，生成 schema v4 不可变快照与动态 CSV；计划窗口保存在 SQLite 并在 Quartz 任务入队时冻结。规范化执行记录、任务级重试、逐渠道状态与失败补发已经实现。在线升级与正式发布尚未实现。
+> 项目当前处于 0.7.0 持久化计划任务阶段：报告支持滚动 7/30 日、上一自然周、上一自然月和手工自定义区间，生成 schema v4 不可变快照与动态 CSV；计划窗口保存在 SQLite 并在 Quartz 任务入队时冻结。规范化执行记录、任务级重试、逐渠道状态与失败补发已经实现。GitHub Release 离线 bundle 工作流已建立，但尚未发布正式版本；在线升级安装仍未实现。
 
 ## 设计目标
 
@@ -15,12 +15,14 @@ Sub2API Report 是一个面向单管理员部署的 Codex API Key 用量报告�
 - 单管理员账户
 - 首次启动使用 Docker 日志一次性初始化码创建管理员
 - 邮箱、钉钉、飞书任意组合发送
-- GitHub Release 和 GHCR 发布
+- GitHub Release Assets 发布签名离线镜像包，不依赖公共容器 Registry
 - 管理页面一键升级、健康检查和失败回滚
 - linux/amd64
 
 ## 文档
 
+- [变更日志](CHANGELOG.md)
+- [安全政策与私密漏洞报告](SECURITY.md)
 - [本地开发](docs/development.md)
 - [系统架构与技术方案](docs/architecture.md)
 - [配置管理策略](docs/configuration.md)
@@ -38,8 +40,8 @@ Sub2API Report 是一个面向单管理员部署的 Codex API Key 用量报告�
 
 这是公开仓库。代码、文档、测试、截图、日志和 Issue 中不得包含真实身份、内部地址、凭证、聊天记录或生产报告。所有示例和测试必须使用合成数据。
 
-发现安全问题时，不要在公开 Issue 中提交凭证、数据库、报告或可识别的运行日志。
+发现安全问题时，请按 [安全政策](SECURITY.md) 使用 GitHub Private Vulnerability Reporting；不要在公开 Issue 中提交未修复漏洞、凭证、数据库、报告或可识别的运行日志。
 
 ## License
 
-License 尚未确定，在选定开源许可证前不发布稳定版本。
+本项目采用 [Apache License 2.0](LICENSE)。允许使用、修改和商业分发，并提供明确的贡献者专利授权；重新分发时必须保留许可证及适用的归属声明。

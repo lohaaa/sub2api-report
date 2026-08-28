@@ -39,6 +39,9 @@ Sub2API Codex 用量，并定时发送报告。
 内部主机信息、凭证、生产报告或生产日志。示例和测试必须使用合成数据与保留的
 示例域名。
 
+仓库许可证固定为 Apache License 2.0（SPDX：`Apache-2.0`）。源码包、容器镜像和
+Release bundle 必须保留许可证文本及适用的归属声明。
+
 必须遵守 `docs/public-repository-policy.md`。Secret、SQLite 文件、生成的报告、
 备份、日志、浏览器追踪文件和 Backpass 证据不得提交到 Git。
 
@@ -62,6 +65,9 @@ SQLite 与 Data Protection 绝对路径；不得让 IDE Content Root、当前目
 Release 构建和全部 .NET 测试；任何阶段出现问题都不得宣称完成。完整里程碑和
 提交前必须执行 `pnpm quality`，覆盖后端和前端全部质量门。
 
+创建版本 Tag 前必须更新 `CHANGELOG.md` 的对应版本章节；GitHub Release 页面说明和随包
+Release notes 必须从该章节生成，禁止仅依赖自动提交摘要。
+
 ## Agent Memory
 
 - `AGENTS.md` 是本仓库唯一的 Agent Memory 文件
@@ -74,8 +80,9 @@ Release 构建和全部 .NET 测试；任何阶段出现问题都不得宣称完
 项目目前处于 0.7.0 持久化计划任务阶段：报告统计主体是 Sub2API 用户 → API Key
 （稳定标识 user_id + api_key_id，Key 名称仅保存快照），人员/Key 归属功能已移除。已实现安全初始化、自动刷新用户与 Key、动态完整自然日窗口（默认滚动 7/30 日、上一自然周/月，手工支持自定义区间）、schema v4 不可变快照、UTF-8 BOM 动态 CSV、
 邮件/钉钉/飞书投递、Quartz 月报计划与窗口冻结、规范化执行记录、任务级重试、逐渠道状态与
-失败补发。在线升级尚未实现，不得声称已经存在可运行的正式版本。前端依赖统一使用
-pnpm，禁止生成 npm 或 Yarn 锁文件。
+失败补发。已实现不依赖公共 Registry 的 GitHub Release 离线镜像 bundle 构建、签名校验、
+安装和手工部署契约更新脚本；尚未发布正式版本。应用内在线升级尚未实现，不得声称已经
+存在可运行的正式版本。前端依赖统一使用 pnpm，禁止生成 npm 或 Yarn 锁文件。
 
 ## 文件维护
 

@@ -3,6 +3,13 @@ set -euo pipefail
 
 bundle_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 install_dir=${SUB2API_REPORT_INSTALL_DIR:-/opt/sub2api-report}
+app_health_timeout=${SUB2API_REPORT_APP_HEALTH_TIMEOUT:-120}
+updater_health_timeout=${SUB2API_REPORT_UPDATER_HEALTH_TIMEOUT:-60}
+if [[ ! $app_health_timeout =~ ^[1-9][0-9]*$ \
+  || ! $updater_health_timeout =~ ^[1-9][0-9]*$ ]]; then
+  echo "Health timeouts must be positive integers." >&2
+  exit 2
+fi
 
 if [[ $(id -u) -ne 0 ]]; then
   echo "Run this updater as root (for example: sudo ./update.sh)." >&2
@@ -92,8 +99,8 @@ rollback_release() {
     exit "$exit_code"
   fi
   docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml" up --detach --no-build --force-recreate
-  if wait_for_service_health "$install_dir" app 120 \
-    && wait_for_service_health "$install_dir" updater 60; then
+  if wait_for_service_health "$install_dir" app "$app_health_timeout" \
+    && wait_for_service_health "$install_dir" updater "$updater_health_timeout"; then
     echo "Previous deployment restored. Backup retained at $data_backup." >&2
   else
     echo "Previous deployment was restored but did not become healthy; operator intervention is required. Backup: $data_backup" >&2
@@ -115,10 +122,10 @@ docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml"
 docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml" \
   up --detach --no-build --force-recreate
 
-if ! wait_for_service_health "$install_dir" app 120; then
+if ! wait_for_service_health "$install_dir" app "$app_health_timeout"; then
   rollback_release 1
 fi
-if ! wait_for_service_health "$install_dir" updater 60; then
+if ! wait_for_service_health "$install_dir" updater "$updater_health_timeout"; then
   rollback_release 1
 fi
 

@@ -219,7 +219,7 @@ wait_for_service_health() {
     if [[ -n $container_id ]]; then
       status=$(docker inspect "$container_id" --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}')
       [[ $status == healthy ]] && return 0
-      [[ $status == exited || $status == dead ]] && return 1
+      [[ $status == exited || $status == dead || $status == unhealthy ]] && return 1
     fi
     sleep 2
     elapsed=$((elapsed + 2))

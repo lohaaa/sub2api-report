@@ -32,14 +32,14 @@
 
 | 里程碑 | 对应版本 | 当前状态 | 真实结论 |
 | --- | --- | --- | --- |
-| M0 公开仓库基础 | 0.1.0 / 0.8.0 发布前置 | 部分完成 | GitHub 仓库已公开；Private Vulnerability Reporting、Secret Protection 和 Push protection 已启用，当前 0 个 Secret alert；`SECURITY.md` 和 CI 文件待提交推送 |
+| M0 公开仓库基础 | 0.1.0 / 0.8.0 发布前置 | 已完成 | GitHub 仓库已公开；README、Apache-2.0、`SECURITY.md` 和 CI 已推送；Private Vulnerability Reporting、Secret Protection 和 Push protection 已启用，当前 0 个 Secret alert |
 | M1 应用骨架 | 0.1.0 | 已完成 | .NET 模块、React SPA、SQLite、配置、健康检查和质量门已落地 |
 | M2 初始化和认证 | 0.2.0 | 已完成 | 单管理员初始化、Cookie、CSRF、step-up 和主机恢复码已落地 |
 | M3 Sub2API 同步 | 0.3.0 / 0.6.0 | 已完成 | 用户与 API Key 直接统计模型已落地，人员归属模型已移除 |
 | M4 报告引擎 | 0.4.0 / 0.6.0 | 已完成 | 动态完整自然日窗口、schema v4 快照、CSV 和报告页面已落地 |
 | M5 投递渠道 | 0.5.0 | 已完成 | 邮件、钉钉、飞书、限时下载和失败补发已落地 |
 | M6 计划任务 | 0.7.0 | 已完成 | Quartz 持久化计划、窗口冻结、规范化执行记录、重试和恢复已落地 |
-| M7 Docker 和 Release | 0.8.0 | 工作区实现完成，验收未完成 | Dockerfile、Compose、bundle、签名、GitHub Actions 和 changelog 已实现但尚未提交、推送和在 Docker/干净 VM 验收 |
+| M7 Docker 和 Release | 0.8.0 | 代码已合入 `main`，验收未完成 | Dockerfile、Compose、bundle、签名、GitHub Actions、许可证和 changelog 已推送；Docker/干净 VM 和失败恢复验收尚未完成 |
 | M8 在线升级 | 0.9.0 | 仅骨架 | Updater 只有 health/status，明确返回 `InstallationEnabled=false` 和 `State=scaffold` |
 | M9 稳定版加固 | 1.0.0 | 部分基础已完成 | CSP 等安全 Header、脱敏和完整质量门已有；高权限升级审计、恢复演练和稳定版文档未完成 |
 
@@ -51,7 +51,6 @@
 
 当前发布状态不能算完成：
 
-- `main` 比 `origin/main` ahead 2，M7/许可证/变更日志改动仍在工作区；
 - 仓库没有版本 Tag；
 - 当前环境没有 Docker，因此未实际构建最终镜像或执行干净 VM 安装；
 - `Directory.Build.props` 和 changelog 仍为 `0.7.0`，与 M7 的 `0.8.0` 版本定位需要统一。
@@ -73,7 +72,7 @@
 
 ## 5. M7：完成 0.8.0 生产发布
 
-### 5.1 工作区已实现
+### 5.1 `main` 已实现
 
 - multi-stage App 和 Updater Dockerfile；
 - production Compose 使用本地镜像标签并设置 `pull_policy: never`；
@@ -91,15 +90,14 @@
 ### 5.2 必须完成
 
 1. 将 M7 版本统一为 `0.8.0`：更新 `VersionPrefix`、Node package 版本和 changelog 章节。
-2. 审查并提交当前工作区改动，推送 GitHub。
-3. 配置 `RELEASE_SIGNING_KEY_PEM`，保留离线备份并记录恢复方式。
-4. 在 GitHub Actions 中成功生成一次 draft `v0.8.0` Release。
-5. 在干净 linux/amd64 VM 从完整 bundle 执行 `install.sh`。
-6. 验证首次初始化、登录、容器重建和数据卷持久化。
-7. 从前一 bundle 执行 `update.sh`，验证配置、token、实例 ID 和数据保留。
-8. 注入 migration 失败和 readiness 失败，验证旧镜像和升级前数据库恢复。
-9. 验证 Release Assets 的 checksum、签名、SBOM、attestation、许可证和 changelog。
-10. 提供并演练一套可执行的主机备份/恢复命令；不要求自动周备份。
+2. 配置 `RELEASE_SIGNING_KEY_PEM`，保留离线备份并记录恢复方式。
+3. 在 GitHub Actions 中成功生成一次 draft `v0.8.0` Release。
+4. 在干净 linux/amd64 VM 从完整 bundle 执行 `install.sh`。
+5. 验证首次初始化、登录、容器重建和数据卷持久化。
+6. 从前一 bundle 执行 `update.sh`，验证配置、token、实例 ID 和数据保留。
+7. 注入 migration 失败和 readiness 失败，验证旧镜像和升级前数据库恢复。
+8. 验证 Release Assets 的 checksum、签名、SBOM、attestation、许可证和 changelog。
+9. 提供并演练一套可执行的主机备份/恢复命令；不要求自动周备份。
 
 ### 5.3 M7 完成门
 
@@ -222,8 +220,7 @@ M9 只保留稳定发布必需项：
 ## 11. 下一执行顺序
 
 1. 将当前 M7 改动整理为 `0.8.0` 并更新 changelog。
-2. 提交并推送当前工作区改动。
-3. 配置 Release 签名 Secret，生成 `v0.8.0` draft Release。
-4. 完成干净 VM 安装、持久化、手工更新和失败恢复验收。
-5. 标记 M7 完成，再开始 M8 Updater 实现。
-6. M8 安全门通过后进入 M9 恢复演练和 `1.0.0` 发布。
+2. 配置 Release 签名 Secret，生成 `v0.8.0` draft Release。
+3. 完成干净 VM 安装、持久化、手工更新和失败恢复验收。
+4. 标记 M7 完成，再开始 M8 Updater 实现。
+5. M8 安全门通过后进入 M9 恢复演练和 `1.0.0` 发布。

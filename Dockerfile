@@ -12,7 +12,7 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS dotnet-build
 ARG VERSION=0.0.0-dev
 ARG REVISION=unknown
 WORKDIR /src
-COPY global.json Directory.Build.props Directory.Packages.props ./
+COPY .editorconfig global.json Directory.Build.props Directory.Packages.props ./
 COPY src ./src
 COPY --from=web-build /src/src/Sub2ApiReport.Api/wwwroot ./src/Sub2ApiReport.Api/wwwroot
 RUN dotnet restore src/Sub2ApiReport.Api/Sub2ApiReport.Api.csproj \

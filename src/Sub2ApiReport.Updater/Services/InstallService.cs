@@ -61,6 +61,15 @@ public sealed class InstallService(
         }
 
         var manifest = cached.Manifest;
+        if (!SemanticVersion.TryParse(manifest.MinimumUpdaterVersion, out var minimumUpdaterVersion)
+            || !SemanticVersion.TryParse(UpdaterVersion.GetCurrent(), out var currentUpdaterVersion)
+            || currentUpdaterVersion!.CompareTo(minimumUpdaterVersion) < 0)
+        {
+            return InstallSubmissionResult.Reject(
+                StatusCodes.Status409Conflict,
+                "当前 Updater 版本不满足目标版本要求，请执行手工完整 bundle 升级。");
+        }
+
         if (manifest.ManualUpgradeRequired)
         {
             return InstallSubmissionResult.Reject(

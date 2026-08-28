@@ -1,6 +1,6 @@
 # 在线升级架构
 
-- 状态：设计基线
+- 状态：实现基线，`v1.0.0` 发布验收中
 - 适用范围：Docker Compose 单实例部署
 
 ## 1. 目标
@@ -53,7 +53,7 @@ Docker Engine Socket 等价于宿主机 root 权限，因此：
 - Updater 只管理带当前 instance ID 和固定 role 标签的 App 容器；
 - Updater 只下载固定 GitHub owner/repository 的 HTTPS Release 路径；
 - manifest 签名、版本、架构、归档哈希和部署契约全部通过后才允许 `docker load`；
-- M8 威胁建模、审计和故障注入完成前不挂载 Docker Socket，安装能力保持关闭。
+- 只有通过 [Updater 威胁模型](updater-threat-model.md) 中的签名、权限和故障验收后，官方 Compose 才挂载 Docker Socket 并启用安装。
 
 Updater 仍是高权限组件，必须保持很小的 API 和代码边界。App 被攻破后不能借助 Updater 指定任意 URL、加载任意镜像、执行任意 Docker API 或修改宿主机文件。
 
@@ -86,6 +86,7 @@ Updater 常驻并将操作状态持久化到 `/update-state`。它不在线替�
   "deploymentContractVersion": 1,
   "minimumUpdaterVersion": "1.0.0",
   "manualUpgradeRequired": false,
+  "onlineInstallSupported": true,
   "signatureAlgorithm": "RSASSA-PKCS1-v1_5-SHA256",
   "app": {
     "archiveUrl": "https://github.com/example/sub2api-report/releases/download/v1.2.0/sub2api-report-app-v1.2.0-linux-amd64.tar.gz",
@@ -93,6 +94,14 @@ Updater 常驻并将操作状态持久化到 `/update-state`。它不在线替�
     "imageId": "sha256:<image-id>",
     "loadedTag": "sub2api-report-app:1.2.0",
     "size": 123456789
+  },
+  "updater": {
+    "archiveUrl": "https://github.com/example/sub2api-report/releases/download/v1.2.0/sub2api-report-updater-v1.2.0-linux-amd64.tar.gz",
+    "archiveSha256": "<sha256>",
+    "imageId": "sha256:<image-id>",
+    "loadedTag": "sub2api-report-updater:1.2.0",
+    "size": 45678901,
+    "selfUpdateSupported": false
   },
   "database": {
     "targetMigration": "20260826000000_ExampleMigration",
@@ -107,7 +116,7 @@ Updater 常驻并将操作状态持久化到 `/update-state`。它不在线替�
 }
 ```
 
-Updater 内置发布公钥并校验：
+Updater 从安装目录只读挂载的发布公钥建立本地信任锚并校验：
 
 - manifest schema；
 - 签名；

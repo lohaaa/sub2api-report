@@ -93,7 +93,7 @@ internal sealed class ReleaseManifestBuilder
     private string _architecture = "linux/amd64";
     private int _schemaVersion = UpdateContractConstants.ManifestSchemaVersion;
     private int _deploymentContractVersion = UpdateContractConstants.DeploymentContractVersion;
-    private string _minimumUpdaterVersion = TestReleases.DefaultVersion;
+    private string _minimumUpdaterVersion = "0.1.0";
     private bool _manualUpgradeRequired = true;
     private bool _onlineInstallSupported;
     private string _signatureAlgorithm = UpdateContractConstants.SignatureAlgorithm;
@@ -140,7 +140,6 @@ internal sealed class ReleaseManifestBuilder
     public ReleaseManifestBuilder WithVersion(string version)
     {
         _version = version;
-        _minimumUpdaterVersion = version;
         _appArchiveUrl = TestReleases.AppArchiveUrl(version);
         _appLoadedTag = UpdateContractConstants.AppLoadedTagPrefix + version;
         _updaterArchiveUrl = TestReleases.UpdaterArchiveUrl(version);

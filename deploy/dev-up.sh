@@ -12,15 +12,9 @@ for command_name in docker openssl; do
 done
 docker compose version >/dev/null
 
-if [[ ! -f .env ]]; then
-  grep -v '^INSTANCE_ID=' .env.example > .env
-  printf 'INSTANCE_ID=%s\n' "$(openssl rand -hex 16)" >> .env
-elif ! grep -Eq '^INSTANCE_ID=.+$' .env; then
-  grep -v '^INSTANCE_ID=' .env > .env.tmp
-  printf 'INSTANCE_ID=%s\n' "$(openssl rand -hex 16)" >> .env.tmp
-  mv .env.tmp .env
-fi
-chmod 0600 .env
+# shellcheck source=deploy/release-lib.sh
+source "$script_dir/release-lib.sh"
+write_instance_env "$script_dir"
 
 install -d -m 0700 secrets
 if [[ ! -s secrets/updater-token ]]; then

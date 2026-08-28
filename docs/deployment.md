@@ -141,18 +141,23 @@ Updater 状态卷：
 
 ```text
 /update-state/
+├─ status.json
 ├─ operations/
-├─ locks/
-└─ rejected-releases.json
+├─ cache/
+├─ downloads/
+├─ backups/
+└─ operations.lock
 ```
 
 ## 5. 启动配置与动态配置
 
-`.env.example` 只包含容器启动前必须确定的宿主机端口参数：
+`.env.example` 只包含容器启动前必须确定的端口、安装实例 ID 和 Docker Socket 补充组 GID；后两项由安装脚本生成：
 
 ```dotenv
 APP_PORT=8080
 BIND_ADDRESS=0.0.0.0
+INSTANCE_ID=
+DOCKER_GID=
 ```
 
 Compose 内部固定数据库路径、运行环境、Updater 地址和 token 文件路径。这些值属于启动闭环，不提供业务页面修改。
@@ -183,17 +188,19 @@ App：
 
 Updater：
 
-- 在线安装能力启用后，仅挂载 Docker Socket、受管数据卷、状态卷和 token secret；
-- M8 安全边界完成前不挂载 Docker Socket，状态接口明确返回安装未启用；
+- 只挂载 Docker Socket、App 数据卷、Updater 状态卷、token 和只读发布公钥；
+- 保持 non-root，通过安装脚本读取的 Socket GID 加入 supplemental group；
 - 不使用 host network；
 - 不映射端口；
 - 不挂载宿主机根目录；
 - 代码层只允许管理带当前 instance ID 标签的 App 容器；
 - 只接受固定 GitHub 仓库 Release 路径、有效签名和匹配 SHA-256 的镜像归档；
-- `docker load` 后校验镜像 ID、版本标签和 `linux/amd64`；
+- 通过 Docker Engine API 加载后校验镜像 ID、版本标签和 `linux/amd64`；
 - 所有 Docker 变更写结构化审计日志。
 
 Docker Socket 本身仍是 root 等价权限，不能通过 `cap_drop` 消除。安全边界主要依赖 updater 的最小接口、不可达性和操作 allowlist。
+
+详细威胁、权限和故障验收见 [Updater 威胁模型](updater-threat-model.md)。
 
 ## 7. 网络与 HTTPS
 

@@ -55,10 +55,20 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       Updater__StatePath: /update-state
       Updater__TokenFile: /run/secrets/updater-token
-      Updater__InstallationEnabled: "false"
+      Updater__InstallationEnabled: "true"
+      Updater__AppInstanceId: "${INSTANCE_ID:?INSTANCE_ID is required}"
+      Updater__DockerEndpoint: unix:///var/run/docker.sock
+      Updater__AppInternalBaseUrl: http://app:8080
+      Updater__DatabasePath: /managed-data/db/sub2api-report.db
+      Updater__PublicKeyPath: /run/secrets/update-public-key.pem
+    group_add:
+      - "${DOCKER_GID:?DOCKER_GID is required}"
     volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - app-data:/managed-data
       - updater-state:/update-state
       - ./secrets/updater-token:/run/secrets/updater-token:ro
+      - ./update-public-key.pem:/run/secrets/update-public-key.pem:ro
     networks:
       - control
       - updater-egress

@@ -99,6 +99,32 @@ public sealed class InstallEndpointTests : IDisposable
     }
 
     [Fact]
+    public async Task InstallRejectedWhenUpdaterVersionIsBelowMinimum()
+    {
+        var version = TestReleases.DefaultVersion;
+        var (key, publicPem) = TestKeys.CreateSigningKey();
+        using var rsa = key;
+        var manifest = new ReleaseManifestBuilder()
+            .WithVersion(version)
+            .WithMinimumUpdaterVersion("99.0.0")
+            .WithOnlineInstallSupported(true)
+            .WithManualUpgradeRequired(false)
+            .Build();
+        var server = await CreateServerWithReleaseAsync(
+            installationEnabled: true, key, publicPem, manifest);
+        using var client = CreateAuthorizedClient(server);
+        await CheckAsync(client);
+
+        using var response = await client.PostAsync(
+            "/internal/v1/install",
+            JsonBody($$"""{"currentVersion":"{{TestReleases.CurrentAppVersion}}"}"""));
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Contains("Updater 版本", problem.GetProperty("detail").GetString());
+    }
+
+    [Fact]
     public async Task InstallRejectedForVersionMismatch()
     {
         var server = await CreateServerWithReleaseAsync(installationEnabled: true);

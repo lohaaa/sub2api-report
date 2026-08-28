@@ -19,7 +19,10 @@
     "internalPort": 8081,
     "statePath": "/update-state",
     "tokenPath": "/run/secrets/updater-token",
-    "installationEnabled": false,
+    "installationEnabled": true,
+    "publicKeyPath": "/run/secrets/update-public-key.pem",
+    "managedDatabasePath": "/managed-data/db/sub2api-report.db",
+    "dockerEndpoint": "unix:///var/run/docker.sock",
     "selfUpdateEnabled": false
   }
 }

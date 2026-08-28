@@ -155,6 +155,11 @@ jobs:
           sudo env SUB2API_REPORT_INSTALL_DIR="$install_dir" "$previous_dir/install.sh"
           curl --fail --silent http://127.0.0.1:18080/health/ready >/dev/null
           [[ $(sudo jq -r '.version' "$install_dir/release-manifest.json") == "$PREVIOUS_VERSION" ]]
+          sudo docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml" \
+            exec -T updater sh -c 'test -r /var/run/docker.sock && test -w /var/run/docker.sock'
+          updater_status=$(sudo docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml" \
+            exec -T updater sh -c 'token=$(cat /run/secrets/updater-token); curl --fail --silent -H "Authorization: Bearer $token" http://127.0.0.1:8081/internal/v1/status')
+          [[ $(jq -r '.installationEnabled' <<<"$updater_status") == true ]]
 
           cp -a "$target_dir" "$failure_dir"
           sed -i \

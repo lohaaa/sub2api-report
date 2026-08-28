@@ -12,6 +12,19 @@ repo_root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 revision=${GITHUB_SHA:-$(git -C "$repo_root" rev-parse HEAD)}
 repository=${GITHUB_REPOSITORY:-example/sub2api-report}
 contract_version=1
+manual_upgrade_required=${MANUAL_UPGRADE_REQUIRED:-false}
+online_install_supported=${ONLINE_INSTALL_SUPPORTED:-true}
+minimum_updater_version=${MINIMUM_UPDATER_VERSION:-1.0.0}
+if [[ ! $minimum_updater_version =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]]; then
+  echo "MINIMUM_UPDATER_VERSION must be a valid SemVer." >&2
+  exit 2
+fi
+for boolean_value in "$manual_upgrade_required" "$online_install_supported"; do
+  [[ $boolean_value == true || $boolean_value == false ]] || {
+    echo "Release compatibility flags must be true or false." >&2
+    exit 2
+  }
+done
 
 if [[ ! $version =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]]; then
   echo "Invalid version: $version" >&2
@@ -115,7 +128,7 @@ published_at=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
 
 jq -n \
   --arg version "$version" \
-  --arg minimumUpdaterVersion "$version" \
+  --arg minimumUpdaterVersion "$minimum_updater_version" \
   --arg publishedAt "$published_at" \
   --arg repository "$repository" \
   --arg appAsset "$app_asset" \
@@ -130,6 +143,8 @@ jq -n \
   --argjson appSize "$app_size" \
   --argjson updaterSize "$updater_size" \
   --argjson releaseNotesSize "$release_notes_size" \
+  --argjson manualUpgradeRequired "$manual_upgrade_required" \
+  --argjson onlineInstallSupported "$online_install_supported" \
   --argjson contractVersion "$contract_version" \
   '{
     schemaVersion: 1,
@@ -139,8 +154,8 @@ jq -n \
     architecture: "linux/amd64",
     deploymentContractVersion: $contractVersion,
     minimumUpdaterVersion: $minimumUpdaterVersion,
-    manualUpgradeRequired: true,
-    onlineInstallSupported: false,
+    manualUpgradeRequired: $manualUpgradeRequired,
+    onlineInstallSupported: $onlineInstallSupported,
     signatureAlgorithm: "RSASSA-PKCS1-v1_5-SHA256",
     app: {
       archiveUrl: ("https://github.com/" + $repository + "/releases/download/v" + $version + "/" + $appAsset),

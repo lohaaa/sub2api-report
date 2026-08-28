@@ -168,22 +168,24 @@ activate_loaded_images() {
 
 write_instance_env() {
   local install_dir=$1
-  local instance_id
-  if [[ ! -f $install_dir/.env ]]; then
-    grep -v '^INSTANCE_ID=' "$install_dir/.env.example" > "$install_dir/.env"
+  local instance_id docker_gid
+  [[ -S /var/run/docker.sock ]] || {
+    echo "Docker Engine socket /var/run/docker.sock is required." >&2
+    return 1
+  }
+  instance_id=$(sed -n 's/^INSTANCE_ID=//p' "$install_dir/.env" 2>/dev/null | head -n 1)
+  if [[ -z $instance_id ]]; then
     instance_id=$(openssl rand -hex 16)
-    printf 'INSTANCE_ID=%s\n' "$instance_id" >> "$install_dir/.env"
-    chmod 0600 "$install_dir/.env"
-    return
   fi
-
-  if ! grep -Eq '^INSTANCE_ID=.+$' "$install_dir/.env"; then
-    instance_id=$(openssl rand -hex 16)
-    grep -v '^INSTANCE_ID=' "$install_dir/.env" > "$install_dir/.env.tmp"
-    printf 'INSTANCE_ID=%s\n' "$instance_id" >> "$install_dir/.env.tmp"
-    chmod 0600 "$install_dir/.env.tmp"
-    mv "$install_dir/.env.tmp" "$install_dir/.env"
+  docker_gid=$(stat -c '%g' /var/run/docker.sock)
+  if [[ -f $install_dir/.env ]]; then
+    grep -Ev '^(INSTANCE_ID|DOCKER_GID)=' "$install_dir/.env" > "$install_dir/.env.tmp"
+  else
+    grep -Ev '^(INSTANCE_ID|DOCKER_GID)=' "$install_dir/.env.example" > "$install_dir/.env.tmp"
   fi
+  printf 'INSTANCE_ID=%s\nDOCKER_GID=%s\n' "$instance_id" "$docker_gid" >> "$install_dir/.env.tmp"
+  chmod 0600 "$install_dir/.env.tmp"
+  mv "$install_dir/.env.tmp" "$install_dir/.env"
 }
 
 write_updater_token() {

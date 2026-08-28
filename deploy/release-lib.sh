@@ -173,7 +173,10 @@ write_instance_env() {
     echo "Docker Engine socket /var/run/docker.sock is required." >&2
     return 1
   }
-  instance_id=$(sed -n 's/^INSTANCE_ID=//p' "$install_dir/.env" 2>/dev/null | head -n 1)
+  instance_id=
+  if [[ -f $install_dir/.env ]]; then
+    instance_id=$(sed -n 's/^INSTANCE_ID=//p' "$install_dir/.env" | head -n 1)
+  fi
   if [[ -z $instance_id ]]; then
     instance_id=$(openssl rand -hex 16)
   fi

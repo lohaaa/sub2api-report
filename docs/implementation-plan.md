@@ -39,21 +39,21 @@
 | M4 报告引擎 | 0.4.0 / 0.6.0 | 已完成 | 动态完整自然日窗口、schema v4 快照、CSV 和报告页面已落地 |
 | M5 投递渠道 | 0.5.0 | 已完成 | 邮件、钉钉、飞书、限时下载和失败补发已落地 |
 | M6 计划任务 | 0.7.0 | 已完成 | Quartz 持久化计划、窗口冻结、规范化执行记录、重试和恢复已落地 |
-| M7 Docker 和签名 bundle | 0.8.0 内部里程碑 | 代码已合入 `main`，验收未完成 | Dockerfile、Compose、bundle、签名、GitHub Actions、许可证和 changelog 已推送；Docker/干净 VM 和失败恢复验收尚未完成 |
-| M8 在线升级 | 0.9.0 内部里程碑 | 仅骨架 | Updater 只有 health/status，明确返回 `InstallationEnabled=false` 和 `State=scaffold` |
-| M9 稳定版加固 | 首次公开 `v1.0.0` | 部分基础已完成 | CSP 等安全 Header、脱敏和完整质量门已有；高权限升级审查、恢复演练和稳定版文档未完成 |
+| M7 Docker 和签名 bundle | 0.8.0 内部里程碑 | 已完成 | Candidate workflow 在 linux/amd64 上通过签名、Critical 扫描、SBOM、安装、故障回滚、成功更新和 non-root Socket 权限验收 |
+| M8 在线升级 | 0.9.0 内部里程碑 | 已完成 | 固定仓库验签、严格下载、Docker App-only 事务、维护模式、SQLite 备份、恢复、App API、step-up 和更新页面已实现 |
+| M9 稳定版加固 | 首次公开 `v1.0.0` | 发布候选 | Updater 威胁模型、269 个 .NET 测试、20 个前端测试、Secret Protection 和候选恢复演练已完成；待最终 Release workflow |
 
 当前自动质量门最近一次通过：
 
-- .NET 格式检查和 Release 构建通过，`106` 个测试通过；
-- 前端 typecheck、lint、build 通过，`18` 个测试通过；
-- ShellCheck、Actionlint、changelog 提取、签名校验和篡改拒绝测试通过。
+- .NET 格式检查和 Release 构建通过，`269` 个测试通过；
+- 前端 typecheck、lint、build 通过，`20` 个测试通过；
+- ShellCheck、Actionlint、Critical 镜像扫描、SBOM、changelog、签名、安装和回滚候选测试通过。
 
-当前发布状态不能算完成：
+正式发布尚未完成：
 
-- 仓库没有版本 Tag；
-- 当前环境没有 Docker，因此未实际构建最终镜像或执行干净 VM 安装；
-- 当前 `VersionPrefix=0.7.0` 仅表示内部开发阶段；全部变更保留在 changelog 的 `Unreleased`，直到准备 `v1.0.0`。
+- 项目版本和 changelog 已冻结为 `1.0.0`；
+- 尚未创建首个 Tag `v1.0.0` 和 draft Release；
+- 最终 Release Assets、attestation 和正式 bundle smoke test 待 Tag workflow 验收。
 
 ## 4. 已完成业务基线（M1-M6）
 
@@ -218,10 +218,8 @@ M9 只保留稳定发布必需项：
 
 ## 11. 下一执行顺序
 
-1. 保持当前改动在 changelog 的 `Unreleased`，不创建 `0.x` Tag 或 Release。
-2. 配置 Release 签名 Secret，在隔离环境生成并验收内部候选 bundle。
-3. 完成干净 VM 安装、持久化、手工更新和失败恢复验收，标记 M7 完成。
-4. 实现并验收 M8 Updater。
-5. 完成 M9 安全审查、恢复演练和稳定版文档。
-6. 将 `Unreleased` 整理为 `1.0.0`，统一项目版本，创建首个 Tag `v1.0.0`。
-7. 审核 `v1.0.0` draft Release 的 Assets、签名、SBOM、attestation 和 smoke test 后正式发布。
+1. 提交并推送 `1.0.0` 版本、正式 README、changelog 和最终文档。
+2. 创建并推送仓库首个 Tag `v1.0.0`。
+3. 等待 Release workflow 完成质量、Critical 扫描、SBOM、签名、attestation 和 bundle smoke test。
+4. 下载并独立校验 draft Assets、manifest 签名、checksums 和安装包内容。
+5. 发布 draft Release，并确认公开下载地址、README 安装命令和安全报告入口可用。

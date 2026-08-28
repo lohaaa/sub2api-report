@@ -180,4 +180,4 @@ cp .env.example .env
 
 正式 `install.sh` 只接受 GitHub Release bundle 中已经校验的离线镜像归档，不从源码构建，也不访问公共 Registry。
 
-Updater 在在线升级安全边界完成前不会挂载 Docker Socket，状态接口明确返回安装未启用。当前开发机没有 Docker 时，仍可完成全部非容器构建和测试。
+官方 Compose 中只有 Updater 挂载 Docker Socket；App 永远不挂载。`dev-up.sh` 会读取 Socket GID 并生成本地 `.env`。当前开发机没有 Docker 时，仍可完成全部非容器构建和测试。

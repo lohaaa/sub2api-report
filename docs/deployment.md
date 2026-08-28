@@ -276,41 +276,50 @@ SQLite migration 或升级维护阶段 readiness 失败是预期行为，不能�
 
 ## 10. 备份
 
-### 10.1 自动备份
+### 10.1 升级备份
 
-- 每次在线升级前强制备份；
-- 默认每周生成一次计划备份；
-- 默认保留最近 10 份计划备份和最近 3 份升级备份；
-- 报表快照独立按 12 个月保留；
-- 备份生成后执行 integrity check 和 SHA-256。
+应用内升级和主机 `update.sh` 都会在替换 App 前创建数据库备份、执行 SQLite integrity check 并记录 SHA-256。应用内备份保存在 `updater-state`，手工部署契约更新备份保存在安装目录 `data-backups/`。
 
-SQLite 活动数据库必须通过 SQLite backup API 备份，不能直接 `cp` 数据文件。
+自动周备份、远端备份上传和备份管理页面不属于 1.0。
 
-### 10.2 手工备份
+### 10.2 主机完整备份
 
-页面触发备份后，管理员可从认证下载端点下载加密或未加密的备份包。下载前要求 step-up，响应设置 `Cache-Control: no-store`。
-
-主机侧也提供：
+主机完整备份包含 SQLite、Data Protection keys 和生成的报告。为保证一致性，先停止 App，再使用已经加载的 App 镜像创建 tar：
 
 ```bash
-docker compose exec app appctl backup create
+cd /opt/sub2api-report
+sudo install -d -m 0700 backups
+timestamp=$(date -u +%Y%m%dT%H%M%SZ)
+sudo docker compose stop app
+sudo docker compose run --rm --no-deps --user 0:0 \
+  --volume "$PWD/backups:/host-backup" \
+  --entrypoint sh app -c \
+  "tar -C /data -cf /host-backup/app-data-$timestamp.tar ."
+sudo docker compose up -d --no-build app
+sudo sha256sum "backups/app-data-$timestamp.tar" | sudo tee "backups/app-data-$timestamp.tar.sha256"
 ```
 
-命令输出备份 ID，不把数据库内容输出到 stdout。
+备份目录权限保持 `0700`，备份和 checksum 不得上传到公开 Issue、Actions artifact 或源码仓库。
 
-### 10.3 恢复
+### 10.3 主机恢复
 
-恢复要求：
+恢复会覆盖当前数据，必须在主机控制台操作：
 
-- step-up 或主机 CLI；
-- 自动先备份当前数据库；
-- 进入维护模式；
-- 校验 checksum 和 SQLite integrity；
-- schema version 必须与当前 App 兼容；
-- 恢复后重启并验证 readiness；
-- 写审计事件。
+```bash
+cd /opt/sub2api-report
+backup=backups/app-data-YYYYMMDDTHHMMSSZ.tar
+sudo sha256sum -c "$backup.sha256"
+sudo docker compose stop app updater
+sudo docker compose run --rm --no-deps --user 0:0 \
+  --cap-add DAC_OVERRIDE --cap-add FOWNER --cap-add CHOWN \
+  --volume "$PWD/backups:/host-backup:ro" \
+  --entrypoint sh app -c \
+  "rm -rf /data/* && tar -C /data -xf /host-backup/$(basename "$backup")"
+sudo docker compose up -d --no-build
+sudo docker compose ps
+```
 
-恢复失败不能删除原数据库和备份。
+恢复后必须等待 App 和 Updater 均为 healthy，并登录检查系统设置和报告。恢复失败时保留原备份和 checksum，不继续删除其他文件。
 
 ## 11. 在线升级
 

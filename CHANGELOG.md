@@ -4,9 +4,11 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
-首次公开版本将是 `v1.0.0`。在此之前，所有开发阶段变更都保留在 `Unreleased`，不创建 `0.x` GitHub Release。
+首个公开版本为 `v1.0.0`；此前的 `0.x` 仅作为内部开发里程碑，未创建 GitHub Release。
 
 ## [Unreleased]
+
+## [1.0.0] - 2026-08-28
 
 ### Added
 
@@ -18,6 +20,7 @@
 - 增加不依赖公共容器 Registry 的 linux/amd64 离线镜像归档、完整安装 bundle、SBOM 和 artifact attestation。
 - 增加生产 bundle 的签名校验、一键安装和手工部署契约更新脚本。
 - 项目采用 Apache License 2.0，并在源码、容器镜像和 Release bundle 中携带许可证。
+- 增加管理页面 App-only 在线升级、维护模式、SQLite 一致性备份、连续健康验证和自动回滚。
 
 ### Changed
 
@@ -32,7 +35,8 @@
 
 - Release manifest 使用独立 RSA 发布密钥签名，并校验归档 SHA-256、大小、架构、版本和镜像 ID。
 - 手工部署契约更新在迁移前创建独立数据库备份，并在失败回滚前验证备份哈希。
-- 应用内在线安装继续保持关闭；Updater 不挂载 Docker Socket。
+- App 容器不挂载 Docker Socket；Updater 通过 instance/container allowlist、固定 API 和 non-root Socket group 隔离高权限操作。
 - 增加公开安全政策，并将未修复漏洞引导至 GitHub Private Vulnerability Reporting。
 
-[Unreleased]: https://github.com/lohaaa/sub2api-report/commits/main
+[Unreleased]: https://github.com/lohaaa/sub2api-report/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/lohaaa/sub2api-report/releases/tag/v1.0.0

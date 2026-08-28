@@ -92,7 +92,9 @@ rollback_release() {
     exit "$exit_code"
   fi
   if ! docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml" \
-    run --rm --no-deps --user 0:0 --volume "$data_backup:/host-backup:ro" \
+    run --rm --no-deps --user 0:0 \
+    --cap-add DAC_OVERRIDE --cap-add FOWNER --cap-add CHOWN \
+    --volume "$data_backup:/host-backup:ro" \
     --entrypoint sh app -c \
     'rm -rf /data/db && tar -C /data -xf /host-backup/db.tar'; then
     echo "Database restore failed and requires operator intervention." >&2

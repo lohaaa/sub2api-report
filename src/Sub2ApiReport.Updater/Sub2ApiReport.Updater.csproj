@@ -5,4 +5,8 @@
   <ItemGroup>
     <ProjectReference Include="..\Sub2ApiReport.UpdateContracts\Sub2ApiReport.UpdateContracts.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Docker.DotNet" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+  </ItemGroup>
 </Project>

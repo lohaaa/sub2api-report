@@ -11,7 +11,9 @@ public sealed record UpdaterStatusResponse(
     bool InstallationEnabled,
     string State,
     DateTimeOffset? LastCheckedAt,
-    string? AvailableVersion);
+    string? AvailableVersion,
+    string? LastOperationId = null,
+    string? LastOperationState = null);
 
 public sealed record UpdateCheckResponse(
     bool UpdateAvailable,

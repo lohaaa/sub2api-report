@@ -1,5 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Sub2ApiReport.UpdateContracts;
+using Sub2ApiReport.Updater.Releases;
 
 namespace Sub2ApiReport.Updater.State;
 
@@ -46,13 +48,138 @@ public sealed class UpdateStateStore
         return directory;
     }
 
-    public async Task SaveStatusAsync(UpdateStatusSnapshot snapshot, CancellationToken cancellationToken)
+    public string GetBackupsDirectory()
     {
-        ArgumentNullException.ThrowIfNull(snapshot);
-        var tempPath = Path.Combine(_stateDirectory, $".{StatusFileName}.{Guid.NewGuid():N}.tmp");
+        var directory = Path.Combine(_stateDirectory, "backups");
+        Directory.CreateDirectory(directory);
+        return directory;
+    }
+
+    private string GetOperationsDirectory()
+    {
+        var directory = Path.Combine(_stateDirectory, "operations");
+        Directory.CreateDirectory(directory);
+        return directory;
+    }
+
+    public async Task SaveOperationAsync(InstallOperationRecord record, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(record, SerializerOptions);
+        var filePath = Path.Combine(GetOperationsDirectory(), $"{record.OperationId}.json");
+        await WriteAtomicAsync(filePath, bytes, cancellationToken);
+    }
+
+    public async Task DeleteOperationAsync(string operationId, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(operationId);
         try
         {
-            var bytes = JsonSerializer.SerializeToUtf8Bytes(snapshot, SerializerOptions);
+            File.Delete(Path.Combine(GetOperationsDirectory(), $"{operationId}.json"));
+        }
+        catch (Exception exception) when (exception is FileNotFoundException or DirectoryNotFoundException)
+        {
+        }
+
+        await Task.CompletedTask;
+    }
+
+    public async Task<InstallOperationRecord?> LoadOperationAsync(string operationId, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(operationId);
+        var filePath = Path.Combine(GetOperationsDirectory(), $"{operationId}.json");
+        byte[] bytes;
+        try
+        {
+            bytes = await File.ReadAllBytesAsync(filePath, cancellationToken);
+        }
+        catch (Exception exception) when (exception is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<InstallOperationRecord>(bytes, SerializerOptions);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    public async Task<IReadOnlyList<InstallOperationRecord>> LoadAllOperationsAsync(CancellationToken cancellationToken)
+    {
+        var directory = GetOperationsDirectory();
+        var records = new List<InstallOperationRecord>();
+        foreach (var filePath in Directory.EnumerateFiles(directory, "*.json", SearchOption.TopDirectoryOnly)
+                     .OrderBy(filePath => filePath, StringComparer.Ordinal))
+        {
+            byte[] bytes;
+            try
+            {
+                bytes = await File.ReadAllBytesAsync(filePath, cancellationToken);
+            }
+            catch (Exception exception) when (exception is FileNotFoundException or DirectoryNotFoundException)
+            {
+                continue;
+            }
+
+            try
+            {
+                if (JsonSerializer.Deserialize<InstallOperationRecord>(bytes, SerializerOptions) is { } record)
+                {
+                    records.Add(record);
+                }
+            }
+            catch (JsonException)
+            {
+                // 损坏的历史操作文件不阻断启动恢复。
+            }
+        }
+
+        return records;
+    }
+
+    public async Task SaveReleaseCacheAsync(ReleaseCacheEntry entry, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        var directory = Path.Combine(_stateDirectory, "cache");
+        Directory.CreateDirectory(directory);
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(entry, SerializerOptions);
+        await WriteAtomicAsync(Path.Combine(directory, "release-cache.json"), bytes, cancellationToken);
+    }
+
+    public async Task<ReleaseCacheEntry?> LoadReleaseCacheAsync(CancellationToken cancellationToken)
+    {
+        var filePath = Path.Combine(_stateDirectory, "cache", "release-cache.json");
+        byte[] bytes;
+        try
+        {
+            bytes = await File.ReadAllBytesAsync(filePath, cancellationToken);
+        }
+        catch (Exception exception) when (exception is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<ReleaseCacheEntry>(bytes, SerializerOptions);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private async Task WriteAtomicAsync(string filePath, byte[] bytes, CancellationToken cancellationToken)
+    {
+        var tempPath = Path.Combine(
+            Path.GetDirectoryName(filePath) ?? _stateDirectory,
+            $".{Path.GetFileName(filePath)}.{Guid.NewGuid():N}.tmp");
+        try
+        {
             await using (var stream = new FileStream(
                 tempPath,
                 FileMode.CreateNew,
@@ -66,7 +193,7 @@ public sealed class UpdateStateStore
                 stream.Flush(flushToDisk: true);
             }
 
-            File.Move(tempPath, _statusFilePath, overwrite: true);
+            File.Move(tempPath, filePath, overwrite: true);
         }
         finally
         {
@@ -75,6 +202,13 @@ public sealed class UpdateStateStore
                 File.Delete(tempPath);
             }
         }
+    }
+
+    public async Task SaveStatusAsync(UpdateStatusSnapshot snapshot, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(snapshot, SerializerOptions);
+        await WriteAtomicAsync(_statusFilePath, bytes, cancellationToken);
     }
 
     public async Task<UpdateStatusSnapshot?> LoadStatusAsync(CancellationToken cancellationToken)

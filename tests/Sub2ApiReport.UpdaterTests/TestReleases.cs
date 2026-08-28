@@ -199,6 +199,12 @@ internal sealed class ReleaseManifestBuilder
         return this;
     }
 
+    public ReleaseManifestBuilder WithManualUpgradeRequired(bool value)
+    {
+        _manualUpgradeRequired = value;
+        return this;
+    }
+
     public ReleaseManifestBuilder WithAppArchiveUrl(string value)
     {
         _appArchiveUrl = value;

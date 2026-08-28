@@ -27,6 +27,16 @@ public sealed class UpdaterTokenProvider(string tokenFilePath)
             && CryptographicOperations.FixedTimeEquals(providedBytes, expected);
     }
 
+    /// <summary>
+    /// 仅供 Updater 自身对外请求（App 维护握手 Bearer 认证）使用；未配置或无效时返回 null
+    /// （fail closed）。禁止写入日志或通过任何公开 API 暴露。
+    /// </summary>
+    internal string? GetBearerToken()
+    {
+        var token = GetToken();
+        return token is null ? null : Encoding.UTF8.GetString(token);
+    }
+
     private byte[]? GetToken()
     {
         if (_loadAttempted)

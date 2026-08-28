@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Sub2ApiReport.UpdateContracts;
 using Sub2ApiReport.Updater.Security;
@@ -37,6 +38,22 @@ internal static class UpdaterEndpoints
             .Produces<UpdaterStatusResponse>()
             .ProducesProblem(StatusCodes.Status401Unauthorized);
 
+        group.MapPost("/install", InstallAsync)
+            .WithName("InstallUpdaterRelease")
+            .WithSummary("发起在线安装（配置门禁开启后）")
+            .Accepts<InstallUpdateRequest>("application/json")
+            .Produces<InstallAcceptedResponse>(StatusCodes.Status202Accepted)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status409Conflict);
+
+        group.MapGet("/install/{operationId}", GetInstallOperationAsync)
+            .WithName("GetUpdaterInstallOperation")
+            .WithSummary("查询安装操作状态（供 App 轮询）")
+            .Produces<InstallOperationResponse>()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
         return endpoints;
     }
 
@@ -57,6 +74,7 @@ internal static class UpdaterEndpoints
 
     private static async Task<Results<Ok<UpdatePlanResponse>, ProblemHttpResult>> GetPlanAsync(
         UpdateStateStore stateStore,
+        UpdateOptions options,
         CancellationToken cancellationToken)
     {
         var snapshot = await stateStore.LoadStatusAsync(cancellationToken);
@@ -82,13 +100,61 @@ internal static class UpdaterEndpoints
         return TypedResults.Ok(new UpdatePlanResponse(
             snapshot.CurrentVersion ?? UpdaterVersion.GetCurrent(),
             snapshot.AvailableVersion,
-            InstallationEnabled: false,
+            options.InstallationEnabled,
             snapshot.ManualUpgradeRequired,
             steps));
     }
 
+    private static async Task<IResult> InstallAsync(
+        IInstallService installService,
+        InstallUpdateRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await installService.SubmitAsync(request, cancellationToken);
+        if (result.Accepted && result.Operation is not null)
+        {
+            return Results.Json(
+                new InstallAcceptedResponse(result.Operation.OperationId, result.Operation.State),
+                statusCode: StatusCodes.Status202Accepted);
+        }
+
+        return TypedResults.Problem(
+            statusCode: result.StatusCode,
+            title: result.StatusCode switch
+            {
+                StatusCodes.Status400BadRequest => "Bad Request",
+                _ => "Conflict",
+            },
+            detail: result.Detail ?? "安装请求被拒绝。");
+    }
+
+    private static async Task<Results<Ok<InstallOperationResponse>, NotFound>> GetInstallOperationAsync(
+        UpdateStateStore stateStore,
+        string operationId,
+        CancellationToken cancellationToken)
+    {
+        var operation = await stateStore.LoadOperationAsync(operationId, cancellationToken);
+        if (operation is null)
+        {
+            return TypedResults.NotFound();
+        }
+
+        return TypedResults.Ok(new InstallOperationResponse(
+            operation.OperationId,
+            operation.State,
+            InstallOperationStates.IsTerminal(operation.State) ? null : operation.State,
+            operation.CurrentVersion,
+            operation.TargetVersion,
+            operation.CreatedAt,
+            operation.UpdatedAt,
+            operation.CompletedAt,
+            operation.LastError,
+            operation.Stages));
+    }
+
     private static async Task<Ok<UpdaterStatusResponse>> GetStatusAsync(
         UpdateStateStore stateStore,
+        UpdateOptions options,
         CancellationToken cancellationToken)
     {
         var snapshot = await stateStore.LoadStatusAsync(cancellationToken);
@@ -100,12 +166,17 @@ internal static class UpdaterEndpoints
             _ => "up_to_date",
         };
 
+        var operations = await stateStore.LoadAllOperationsAsync(cancellationToken);
+        var lastOperation = operations.OrderByDescending(operation => operation.CreatedAt).FirstOrDefault();
+
         return TypedResults.Ok(new UpdaterStatusResponse(
             UpdaterVersion.GetCurrent(),
-            InstallationEnabled: false,
+            options.InstallationEnabled,
             state,
             snapshot?.LastCheckedAt,
-            snapshot?.AvailableVersion));
+            snapshot?.AvailableVersion,
+            lastOperation?.OperationId,
+            lastOperation?.State));
     }
 
     private static ProblemHttpResult Problem(UpdateOperationException exception)

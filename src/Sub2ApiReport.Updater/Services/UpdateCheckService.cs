@@ -15,21 +15,12 @@ public sealed class UpdateCheckService(
     IGitHubReleaseClient gitHubClient,
     IDownloader downloader,
     ReleasePublicKeyProvider publicKeyProvider,
+    IReleaseCacheService releaseCache,
     UpdateStateStore stateStore,
     GlobalOperationLock operationLock,
     UpdateOptions options,
     TimeProvider timeProvider)
 {
-    private static readonly JsonSerializerOptions ManifestSerializerOptions = new()
-    {
-        // 与 deploy/build-release-assets.sh 生成的 camelCase 字段名一致；未知字段仍被拒绝。
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        NumberHandling = JsonNumberHandling.Strict,
-        AllowDuplicateProperties = false,
-        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
-        MaxDepth = 16,
-    };
-
     public async Task<UpdateCheckResponse> CheckAsync(
         UpdateCheckRequest request,
         CancellationToken cancellationToken)
@@ -111,7 +102,7 @@ public sealed class UpdateCheckService(
         ReleaseManifest manifest;
         try
         {
-            manifest = JsonSerializer.Deserialize<ReleaseManifest>(manifestBytes, ManifestSerializerOptions)
+            manifest = ReleaseManifestJson.TryDeserialize(manifestBytes)
                 ?? throw new UpdateOperationException(
                     StatusCodes.Status502BadGateway,
                     "Release manifest 格式无效。");
@@ -145,6 +136,9 @@ public sealed class UpdateCheckService(
 
         var updateAvailable = SemanticVersion.TryParse(manifest.Version, out var available)
             && available!.CompareTo(currentVersion) > 0;
+
+        // 完整验签 manifest 与签名进入持久化缓存，安装事务只信任该缓存。
+        await releaseCache.SaveAsync(manifest, manifestBytes, signatureBytes, cancellationToken);
 
         return new UpdateCheckResponse(
             UpdateAvailable: updateAvailable,

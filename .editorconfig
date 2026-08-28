@@ -64,3 +64,4 @@ resharper_unused_type_global_highlighting = none
 # EF migration files are generated and removed only through dotnet-ef.
 [src/Sub2ApiReport.Infrastructure/Persistence/Migrations/*.cs]
 generated_code = true
+dotnet_diagnostic.CA1861.severity = none

@@ -41,7 +41,7 @@
 | M6 计划任务 | 0.7.0 | 已完成 | Quartz 持久化计划、窗口冻结、规范化执行记录、重试和恢复已落地 |
 | M7 Docker 和签名 bundle | 0.8.0 内部里程碑 | 已完成 | Candidate workflow 在 linux/amd64 上通过签名、Critical 扫描、SBOM、安装、故障回滚、成功更新和 non-root Socket 权限验收 |
 | M8 在线升级 | 0.9.0 内部里程碑 | 已完成 | 固定仓库验签、严格下载、Docker App-only 事务、维护模式、SQLite 备份、恢复、App API、step-up 和更新页面已实现 |
-| M9 稳定版加固 | 首次公开 `v1.0.0` | 发布候选 | Updater 威胁模型、269 个 .NET 测试、20 个前端测试、Secret Protection 和候选恢复演练已完成；待最终 Release workflow |
+| M9 稳定版加固 | 首次公开 `v1.0.0` | 已完成 | Updater 威胁模型、269 个 .NET 测试、20 个前端测试、Secret Protection、候选恢复演练和最终 Release workflow 全部通过 |
 
 当前自动质量门最近一次通过：
 
@@ -49,11 +49,12 @@
 - 前端 typecheck、lint、build 通过，`20` 个测试通过；
 - ShellCheck、Actionlint、Critical 镜像扫描、SBOM、changelog、签名、安装和回滚候选测试通过。
 
-正式发布尚未完成：
+正式发布已完成：
 
-- 项目版本和 changelog 已冻结为 `1.0.0`；
-- 尚未创建首个 Tag `v1.0.0` 和 draft Release；
-- 最终 Release Assets、attestation 和正式 bundle smoke test 待 Tag workflow 验收。
+- 仓库首个 Tag 和公开 Release 为 `v1.0.0`；
+- Release workflow 完成质量、Critical 扫描、SBOM、签名、attestation 和 bundle 安装；
+- 12 项 Release Assets 的 checksums、RSA 签名和内容已独立复核；
+- `v1.0.0` 已标记为 Latest。
 
 ## 4. 已完成业务基线（M1-M6）
 
@@ -216,10 +217,10 @@ M9 只保留稳定发布必需项：
 - 对应 changelog 已更新；
 - 不存在会导致数据丢失、认证绕过或不可恢复升级失败的已知问题。
 
-## 11. 下一执行顺序
+## 11. 1.x 维护原则
 
-1. 提交并推送 `1.0.0` 版本、正式 README、changelog 和最终文档。
-2. 创建并推送仓库首个 Tag `v1.0.0`。
-3. 等待 Release workflow 完成质量、Critical 扫描、SBOM、签名、attestation 和 bundle smoke test。
-4. 下载并独立校验 draft Assets、manifest 签名、checksums 和安装包内容。
-5. 发布 draft Release，并确认公开下载地址、README 安装命令和安全报告入口可用。
+1. 后续重要变更先记录到 changelog 的 `Unreleased`。
+2. App-only 修复版本保持 deployment contract 1 和 `minimumUpdaterVersion=1.0.0`，允许页面在线升级。
+3. Updater、Compose、卷、端口或权限变化必须标记 `manualUpgradeRequired=true`，使用完整 bundle 和主机 `update.sh`。
+4. 每个 Release 继续执行完整质量、Critical 扫描、SBOM、签名、attestation 和安装 smoke test。
+5. 发布密钥轮换只能通过经过人工确认的完整 bundle 进行。

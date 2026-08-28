@@ -1,6 +1,6 @@
 # 在线升级架构
 
-- 状态：实现基线，`v1.0.0` 发布验收中
+- 状态：已实现（`v1.0.0`）
 - 适用范围：Docker Compose 单实例部署
 
 ## 1. 目标
@@ -327,7 +327,7 @@ Tag `vX.Y.Z` 触发：
 10. 为归档、manifest、变更日志和 bundle 生成 GitHub artifact attestations；
 11. 组装完整 deploy bundle 和 checksums；
 12. 使用提取的版本说明创建 draft GitHub Release 并上传 Assets；
-13. 人工审核后发布并设置 immutable release。
+13. 人工审核后发布并标记 Latest；已发布 Assets 不覆盖，修正使用新版本。
 
 PR Job 不能读取发布签名秘密。在线安装启用前必须完成签名密钥托管和轮换演练。
 

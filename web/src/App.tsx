@@ -60,6 +60,11 @@ const SettingsPage = lazy(() =>
     default: module.SettingsPage,
   })),
 );
+const UpdatesPage = lazy(() =>
+  import("@/features/updates/updates-page").then((module) => ({
+    default: module.UpdatesPage,
+  })),
+);
 
 export default function App() {
   return (
@@ -134,6 +139,7 @@ function AuthenticatedRoutes() {
         <Route path="channels" element={<ChannelsPage />} />
         <Route path="schedule" element={<SchedulePage />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="updates" element={<UpdatesPage />} />
         <Route
           path="audit"
           element={

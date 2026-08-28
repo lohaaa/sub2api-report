@@ -5,6 +5,7 @@ import {
   KeyRoundIcon,
   LogOutIcon,
   MegaphoneIcon,
+  RefreshCwIcon,
   ScrollTextIcon,
   SettingsIcon,
   UsersIcon,
@@ -35,6 +36,7 @@ const navigation = [
   { title: '发送渠道', to: '/channels', icon: MegaphoneIcon },
   { title: '计划任务', to: '/schedule', icon: CalendarClockIcon },
   { title: '系统设置', to: '/settings', icon: SettingsIcon },
+  { title: '系统更新', to: '/updates', icon: RefreshCwIcon },
   { title: '审计日志', to: '/audit', icon: ScrollTextIcon },
 ] as const
 

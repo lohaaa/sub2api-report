@@ -1354,3 +1354,75 @@ describe("application authentication gate", () => {
     expect(updateRequests).toBe(2);
   });
 });
+
+describe("system updates", () => {
+  it("renders the signed update plan and step-up dialog", async () => {
+    useAuthenticatedHandlers();
+    server.use(
+      http.get("/api/v1/updates/status", () =>
+        HttpResponse.json({
+          version: "0.9.0",
+          installationEnabled: true,
+          state: "update_available",
+          lastCheckedAt: "2026-08-28T10:00:00Z",
+          availableVersion: "1.0.0",
+          lastOperationId: null,
+          lastOperationState: null,
+        }),
+      ),
+      http.get("/api/v1/updates/plan", () =>
+        HttpResponse.json({
+          currentVersion: "0.9.0",
+          targetVersion: "1.0.0",
+          installationEnabled: true,
+          manualUpgradeRequired: false,
+          steps: [
+            { order: 1, name: "preflight", description: "校验签名和部署契约。" },
+            { order: 2, name: "backup", description: "备份 SQLite。" },
+          ],
+        }),
+      ),
+    );
+
+    const user = userEvent.setup();
+    renderApp("/updates");
+
+    expect(await screen.findByRole("heading", { level: 1, name: "系统更新" })).toBeInTheDocument();
+    expect(await screen.findByText("v1.0.0")).toBeInTheDocument();
+    expect(await screen.findByText("校验签名和部署契约。")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "安装更新" }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByLabelText("当前密码")).toHaveAttribute("autocomplete", "current-password");
+  });
+
+  it("requires a host upgrade when the deployment contract changes", async () => {
+    useAuthenticatedHandlers();
+    server.use(
+      http.get("/api/v1/updates/status", () =>
+        HttpResponse.json({
+          version: "0.9.0",
+          installationEnabled: true,
+          state: "update_available",
+          lastCheckedAt: "2026-08-28T10:00:00Z",
+          availableVersion: "1.0.0",
+          lastOperationId: null,
+          lastOperationState: null,
+        }),
+      ),
+      http.get("/api/v1/updates/plan", () =>
+        HttpResponse.json({
+          currentVersion: "0.9.0",
+          targetVersion: "1.0.0",
+          installationEnabled: false,
+          manualUpgradeRequired: true,
+          steps: [],
+        }),
+      ),
+    );
+
+    renderApp("/updates");
+
+    expect(await screen.findByText("需要主机升级")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "安装更新" })).not.toBeInTheDocument();
+  });
+});

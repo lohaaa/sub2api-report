@@ -1,6 +1,21 @@
-@Sub2ApiReport.Updater_HostAddress = http://localhost:5055
+@Sub2ApiReport.Updater_HostAddress = http://localhost:5081
+@UpdaterToken = replace-with-shared-updater-token
 
-GET {{Sub2ApiReport.Updater_HostAddress}}/weatherforecast/
+### 存活探针（无需令牌）
+GET {{Sub2ApiReport.Updater_HostAddress}}/health/live
 Accept: application/json
 
-###
+### Updater 状态（需要令牌）
+GET {{Sub2ApiReport.Updater_HostAddress}}/internal/v1/status
+Authorization: Bearer {{UpdaterToken}}
+Accept: application/json
+
+### 检查固定仓库最新稳定 Release（需要令牌）
+POST {{Sub2ApiReport.Updater_HostAddress}}/internal/v1/check
+Authorization: Bearer {{UpdaterToken}}
+Accept: application/json
+
+### 查看升级计划（需要令牌，安装保持关闭）
+GET {{Sub2ApiReport.Updater_HostAddress}}/internal/v1/plan
+Authorization: Bearer {{UpdaterToken}}
+Accept: application/json

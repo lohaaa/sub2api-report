@@ -13,5 +13,6 @@
     <Project Path="tests/Sub2ApiReport.ArchitectureTests/Sub2ApiReport.ArchitectureTests.csproj" />
     <Project Path="tests/Sub2ApiReport.IntegrationTests/Sub2ApiReport.IntegrationTests.csproj" />
     <Project Path="tests/Sub2ApiReport.UnitTests/Sub2ApiReport.UnitTests.csproj" />
+    <Project Path="tests/Sub2ApiReport.UpdaterTests/Sub2ApiReport.UpdaterTests.csproj" />
   </Folder>
 </Solution>

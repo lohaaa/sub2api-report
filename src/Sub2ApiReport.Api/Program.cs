@@ -59,7 +59,8 @@ var configuredConnectionString = builder.Configuration.GetConnectionString("Data
 var connectionString = DatabaseDefaults.ResolveConnectionString(
     configuredConnectionString,
     builder.Environment.ContentRootPath);
-var useSecureCookies = !builder.Environment.IsDevelopment();
+var useSecureCookies = builder.Configuration.GetValue<bool?>("Security:SecureCookies")
+    ?? !builder.Environment.IsDevelopment();
 var configuredDataProtectionKeysPath = builder.Configuration["DataProtection:KeysPath"]
     ?? Path.Combine("data", "keys");
 var dataProtectionKeysPath = DatabaseDefaults.ResolvePath(

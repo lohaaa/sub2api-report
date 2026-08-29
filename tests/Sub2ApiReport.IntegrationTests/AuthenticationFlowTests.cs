@@ -135,6 +135,31 @@ public sealed class AuthenticationFlowTests
         Assert.Contains("path=/", cookie, StringComparison.OrdinalIgnoreCase);
     }
 
+
+    [Fact]
+    public async Task ProductionHttpDeploymentCanInitializeWhenSecureCookiesAreDisabled()
+    {
+        await using var factory = new ApiWebApplicationFactory(
+            databasePath: null,
+            deleteDatabaseOnDispose: true,
+            environmentName: Microsoft.Extensions.Hosting.Environments.Production,
+            settings: new Dictionary<string, string?>
+            {
+                ["Security:SecureCookies"] = "false",
+            });
+        var issue = await RotateSetupCodeAsync(factory);
+        using var client = CreateClient(factory);
+
+        using var request = await CreateJsonRequestAsync(
+            client,
+            HttpMethod.Post,
+            "/api/v1/setup/initialize",
+            new { code = issue.Code, username = Username, password = Password });
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+    }
+
     [Fact]
     public async Task PasswordChangeInvalidatesTheOldPassword()
     {

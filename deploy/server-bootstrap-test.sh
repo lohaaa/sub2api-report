@@ -14,7 +14,7 @@ mkdir -p "$fixture_dir/bundle" "$mock_bin"
 printf '#!/usr/bin/env bash\nexit 0\n' > "$fixture_dir/bundle/server-install.sh"
 chmod 0755 "$fixture_dir/bundle/server-install.sh"
 tar -czf "$fixture_dir/server.tar.gz" -C "$fixture_dir/bundle" .
-printf '%s  sub2api-report-server-v1.0.2-linux-amd64.tar.gz\n' \
+printf '%s  sub2api-report-server-v1.0.3-linux-amd64.tar.gz\n' \
   "$(sha256sum "$fixture_dir/server.tar.gz" | cut -d ' ' -f 1)" > "$fixture_dir/checksums.txt"
 
 cat > "$mock_bin/id" <<'EOF'
@@ -76,9 +76,9 @@ done
 printf '%s\n' "$url" >> "$BOOTSTRAP_TEST_ROOT/curl.log"
 case "$url" in
   */releases/latest)
-    printf 'https://github.com/lohaaa/sub2api-report/releases/tag/v1.0.2'
+    printf 'https://github.com/lohaaa/sub2api-report/releases/tag/v1.0.3'
     ;;
-  */sub2api-report-server-v1.0.2-linux-amd64.tar.gz)
+  */sub2api-report-server-v1.0.3-linux-amd64.tar.gz)
     cp "$BOOTSTRAP_TEST_ROOT/fixture/server.tar.gz" "$output"
     ;;
   */checksums.txt)
@@ -102,7 +102,7 @@ test "$(wc -l < "$test_root/sudo.log")" -eq 1
 grep -Eq '^bash /tmp/sub2api-report-server-bootstrap\..*/bundle/server-install\.sh$' \
   "$test_root/sudo.log"
 test "$(wc -l < "$test_root/curl.log")" -eq 3
-grep -q '^Release resolved: v1.0.2$' "$test_root/output.log"
+grep -q '^Release resolved: v1.0.3$' "$test_root/output.log"
 grep -q '^Server package (attempt 1/8, resume supported)$' "$test_root/output.log"
 grep -q '^Verifying SHA-256 checksum\.\.\.$' "$test_root/output.log"
 grep -q '^Installing systemd service\.\.\.$' "$test_root/output.log"

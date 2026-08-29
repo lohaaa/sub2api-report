@@ -8,9 +8,13 @@
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-08-29
+
 ### Fixed
 
 - 服务器 bootstrap 以普通用户完成 Release 下载与 checksum 校验，仅在系统安装阶段内部调用 `sudo`，避免提权后丢失用户网络环境。
+- 初始化教程分别提供 systemd 与 Docker Compose 的初始化码筛选和重新生成命令。
+- 修复官方 HTTP 部署在 Production 环境下因 Secure-only antiforgery Cookie 导致管理员初始化返回 `500`。
 
 ## [1.0.2] - 2026-08-28
 
@@ -61,7 +65,8 @@
 - App 容器不挂载 Docker Socket；Updater 通过 instance/container allowlist、固定 API 和 non-root Socket group 隔离高权限操作。
 - 增加公开安全政策，并将未修复漏洞引导至 GitHub Private Vulnerability Reporting。
 
-[Unreleased]: https://github.com/lohaaa/sub2api-report/compare/v1.0.2...HEAD
+[Unreleased]: https://github.com/lohaaa/sub2api-report/compare/v1.0.3...HEAD
+[1.0.3]: https://github.com/lohaaa/sub2api-report/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/lohaaa/sub2api-report/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/lohaaa/sub2api-report/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/lohaaa/sub2api-report/releases/tag/v1.0.0

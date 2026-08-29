@@ -70,8 +70,19 @@ curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/b
 
 ```bash
 cd /opt/sub2api-report
-sudo docker compose logs app
+sudo docker compose logs --no-log-prefix app 2>&1 | \
+  grep -F "One-time setup code"
 ```
+
+输出中 `One-time setup code:` 后的值即为初始化码，默认有效期 30 分钟。若页面仍处于未初始化状态但没有匹配日志，可重启 App 生成新码：
+
+```bash
+sudo docker compose restart app
+sudo docker compose logs --since 1m --no-log-prefix app 2>&1 | \
+  grep -F "One-time setup code"
+```
+
+未完成初始化时重启会使旧初始化码失效。初始化码不得粘贴到公开 Issue 或日志。
 
 ## 2. Compose 拓扑
 
@@ -171,14 +182,17 @@ Updater 状态卷：
 
 ## 5. 启动配置与动态配置
 
-`.env.example` 只包含容器启动前必须确定的端口、安装实例 ID 和 Docker Socket 补充组 GID；后两项由安装脚本生成：
+`.env.example` 只包含容器启动前必须确定的端口、Cookie 传输策略、安装实例 ID 和 Docker Socket 补充组 GID；后两项由安装脚本生成：
 
 ```dotenv
 APP_PORT=8080
 BIND_ADDRESS=0.0.0.0
+SECURE_COOKIES=false
 INSTANCE_ID=
 DOCKER_GID=
 ```
+
+默认 HTTP 部署使用 `SECURE_COOKIES=false`。接入 HTTPS 反向代理并正确转发 `X-Forwarded-Proto` 后，改为 `SECURE_COOKIES=true` 并重建 App 容器，以启用 `Secure` 和 `__Host-` Cookie。
 
 Compose 内部固定数据库路径、运行环境、Updater 地址和 token 文件路径。这些值属于启动闭环，不提供业务页面修改。
 

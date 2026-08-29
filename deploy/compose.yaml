@@ -10,6 +10,7 @@ services:
       - "${BIND_ADDRESS:-0.0.0.0}:${APP_PORT:-8080}:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Production
+      Security__SecureCookies: ${SECURE_COOKIES:-false}
       ConnectionStrings__Database: Data Source=/data/db/sub2api-report.db;Foreign Keys=True;Default Timeout=5;Pooling=True
       DataProtection__KeysPath: /data/keys
       Updater__BaseUrl: http://updater:8081

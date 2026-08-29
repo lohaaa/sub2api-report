@@ -41,6 +41,8 @@ sudo systemctl daemon-reload
 sudo systemctl restart sub2api-report
 ```
 
+直接通过默认 HTTP 端口访问时保持 `Security__SecureCookies=false`。接入 HTTPS 反向代理并正确转发 `X-Forwarded-Proto` 后，将其改为 `true` 并重启服务，以启用 `Secure` 和 `__Host-` Cookie。
+
 默认监听：
 
 ```text
@@ -54,8 +56,25 @@ http://0.0.0.0:8080
 首次启动后从日志读取一次性初始化码：
 
 ```bash
-sudo journalctl -u sub2api-report
+sudo journalctl -u sub2api-report -b --no-pager -o cat | \
+  grep -F "One-time setup code"
 ```
+
+预期输出包含：
+
+```text
+Admin setup required. One-time setup code: XXXX-XXXX-XXXX-XXXX. Expires at ...
+```
+
+`One-time setup code:` 后的值即为初始化码，默认有效期 30 分钟。若服务已经启动但没有匹配日志，且页面仍处于未初始化状态，可生成新码：
+
+```bash
+sudo systemctl restart sub2api-report
+sudo journalctl -u sub2api-report --since "1 minute ago" --no-pager -o cat | \
+  grep -F "One-time setup code"
+```
+
+未完成初始化时重启会使旧初始化码失效。初始化码不得粘贴到公开 Issue 或日志。
 
 生成管理员密码恢复码：
 

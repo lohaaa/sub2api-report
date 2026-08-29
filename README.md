@@ -81,15 +81,19 @@ Docker Compose 部署支持管理页面 App-only 在线更新和失败自动回�
 服务器直接部署：
 
 ```bash
-sudo journalctl -u sub2api-report
+sudo journalctl -u sub2api-report -b --no-pager -o cat | \
+  grep -F "One-time setup code"
 ```
 
 Docker Compose 部署：
 
 ```bash
 cd /opt/sub2api-report
-sudo docker compose logs app
+sudo docker compose logs --no-log-prefix app 2>&1 | \
+  grep -F "One-time setup code"
 ```
+
+输出中 `One-time setup code:` 后的值即为初始化码，默认有效期 30 分钟。若尚未输出，确认服务已启动后重试对应命令。
 
 打开 `http://<服务器地址>:8080`，使用初始化码创建管理员，然后配置 Sub2API、报告渠道和月报计划。
 

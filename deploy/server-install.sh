@@ -59,10 +59,14 @@ if [[ ! -f $config_dir/environment ]]; then
 ASPNETCORE_URLS=http://0.0.0.0:8080
 ConnectionStrings__Database="Data Source=$data_dir/db/sub2api-report.db;Foreign Keys=True;Default Timeout=5;Pooling=True"
 DataProtection__KeysPath=$data_dir/keys
+Security__SecureCookies=false
 DOTNET_EnableDiagnostics=0
 EOF
   chmod 0640 "$config_dir/environment"
   chown root:"$service_user" "$config_dir/environment"
+fi
+if ! grep -q '^Security__SecureCookies=' "$config_dir/environment"; then
+  printf '%s\n' 'Security__SecureCookies=false' >> "$config_dir/environment"
 fi
 
 old_target=$(readlink -f "$current_link" 2>/dev/null || true)

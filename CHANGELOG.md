@@ -8,6 +8,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- 增加官方单命令 bootstrap，自动下载、校验、安装或更新最新 Release。
+
 ## [1.0.0] - 2026-08-28
 
 ### Added

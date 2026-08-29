@@ -198,6 +198,7 @@ install -m 0644 "$repo_root/deploy/upgrade-contract.json" "$bundle_dir/upgrade-c
 install -m 0644 "$output_dir/CHANGELOG.md" "$bundle_dir/CHANGELOG.md"
 install -m 0644 "$output_dir/LICENSE" "$bundle_dir/LICENSE"
 install -m 0644 "$output_dir/$release_notes_asset" "$bundle_dir/RELEASE-NOTES.md"
+install -m 0755 "$repo_root/deploy/bootstrap.sh" "$bundle_dir/bootstrap.sh"
 install -m 0755 "$repo_root/deploy/release-lib.sh" "$bundle_dir/release-lib.sh"
 install -m 0755 "$repo_root/deploy/install.sh" "$bundle_dir/install.sh"
 install -m 0755 "$repo_root/deploy/update.sh" "$bundle_dir/update.sh"

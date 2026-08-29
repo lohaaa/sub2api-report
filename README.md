@@ -28,7 +28,32 @@ Sub2API Report 是一个公开、单管理员、单实例的 Codex API Key 用�
 
 ## 安装
 
-从 [GitHub Releases](https://github.com/lohaaa/sub2api-report/releases) 下载完整 bundle 和 `checksums.txt`：
+服务器已安装并启动 Docker Engine 和 Docker Compose v2 后，执行：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/bootstrap.sh | sudo bash
+```
+
+脚本会自动：
+
+1. 获取最新 GitHub Release；
+2. 下载完整 linux/amd64 bundle 和 checksums；
+3. 校验 bundle SHA-256；
+4. 解压并再次校验 RSA 签名、镜像 SHA-256、大小、架构、版本和镜像 ID；
+5. 执行 `docker load`，安装到 `/opt/sub2api-report` 并启动服务。
+
+同一命令可以再次执行：发现已有安装时会下载最新完整 bundle 并调用 `update.sh`，保留配置、内部 token、instance ID 和数据卷。
+
+默认访问地址为 `http://<server>:8080`。查看启动日志：
+
+```bash
+cd /opt/sub2api-report
+sudo docker compose logs -f app
+```
+
+### 手动下载和校验（可选）
+
+需要固定版本或自行审计脚本时，可以从 [GitHub Releases](https://github.com/lohaaa/sub2api-report/releases) 手动安装：
 
 ```bash
 VERSION=1.0.0
@@ -41,17 +66,13 @@ cd sub2api-report
 sudo ./install.sh
 ```
 
-安装脚本会再次校验 Release 签名、归档 SHA-256、大小、架构、版本和镜像 ID，然后执行 `docker load` 并安装到 `/opt/sub2api-report`。生产服务器不会从公共容器 Registry 拉取镜像。
-
-已安装 GitHub CLI 时可以额外验证构建证明：
+已安装 GitHub CLI 时还可以验证构建证明：
 
 ```bash
 gh attestation verify "sub2api-report-v${VERSION}-linux-amd64.tar.gz" --repo lohaaa/sub2api-report
 ```
 
-默认访问地址为 `http://<server>:8080`。如需修改监听地址或端口，在首次安装前编辑 bundle 中的 `.env.example`。
-
-> 不要使用未经校验的 `curl | sh` 安装方式。
+部署用户不需要发布私钥。私钥只由项目维护者和 GitHub Actions 用于签署 Release，服务器只使用 bundle 中的公开密钥验证签名。
 
 ## 首次初始化
 

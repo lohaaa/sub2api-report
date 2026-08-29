@@ -11,6 +11,7 @@
 deploy-bundle/
 ├─ compose.yaml
 ├─ .env.example
+├─ bootstrap.sh
 ├─ install.sh
 ├─ update.sh
 ├─ release-lib.sh
@@ -31,18 +32,19 @@ deploy-bundle/
 推荐安装方式：
 
 ```bash
-curl -fsSLO https://github.com/example/sub2api-report/releases/download/vX.Y.Z/sub2api-report-vX.Y.Z-linux-amd64.tar.gz
-curl -fsSLO https://github.com/example/sub2api-report/releases/download/vX.Y.Z/checksums.txt
-grep 'sub2api-report-vX.Y.Z-linux-amd64.tar.gz$' checksums.txt | sha256sum -c -
-mkdir -p sub2api-report
-tar -xzf sub2api-report-vX.Y.Z-linux-amd64.tar.gz -C sub2api-report
-cd sub2api-report
-sudo ./install.sh
+curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/bootstrap.sh | sudo bash
 ```
 
-已安装 GitHub CLI 时，应额外执行 `gh attestation verify sub2api-report-vX.Y.Z-linux-amd64.tar.gz --repo example/sub2api-report` 验证 GitHub artifact attestation。
+官方 bootstrap 自动解析最新 Release，安装所需的小型宿主工具，下载完整 bundle 和 checksums，校验 SHA-256 后调用 bundle 中的 `install.sh`。已有 `/opt/sub2api-report` 安装时，同一命令会调用新 bundle 的 `update.sh`。Docker Engine 和 Docker Compose v2 必须预先安装并运行。
 
-文档不把未经校验的 `curl | sh` 作为推荐命令。`install.sh` 只负责本地前置检查、校验包内镜像、执行 `docker load`、生成内部 token 和实例 ID，并执行 `docker compose up -d --no-build`。生产主机不从公共 Registry 拉取镜像。
+需要固定版本时传入环境变量：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/bootstrap.sh | \
+  sudo SUB2API_REPORT_VERSION=1.0.0 bash
+```
+
+手工下载、checksum 和 attestation 校验方式见 README。生产主机不从公共 Registry 拉取镜像，部署用户不持有发布私钥；bundle 内只包含用于验签的公钥。
 
 安装主机需要 Docker Engine、Docker Compose v2、OpenSSL、jq、gzip 和 sha256sum。脚本默认安装到 `/opt/sub2api-report`；可通过 `SUB2API_REPORT_INSTALL_DIR` 显式覆盖。后续部署契约升级在新 bundle 目录执行 `sudo ./update.sh`，脚本保留现有 `.env`、内部 token、实例 ID 和数据卷，并在停止 App 后将数据库一致性副本写到安装目录的 `data-backups/`，与 Docker data volume 分离。重复安装同一版本或降级默认被拒绝。
 

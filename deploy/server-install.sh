@@ -54,9 +54,29 @@ install -d -m 0755 "$config_dir"
 install -d -m 0700 "$backup_root"
 install -d -m 0755 "$systemd_dir" "$(dirname "$control_path")"
 
+requested_port=${SUB2API_REPORT_PORT:-}
+configured_port=
+if [[ -f $config_dir/environment ]]; then
+  configured_urls=$(sed -n 's/^ASPNETCORE_URLS=//p' "$config_dir/environment" | tail -n 1)
+  configured_urls=${configured_urls#\"}
+  configured_urls=${configured_urls%\"}
+  if [[ $configured_urls =~ ^http://0\.0\.0\.0:([0-9]+)$ ]]; then
+    configured_port=${BASH_REMATCH[1]}
+  elif [[ -z $requested_port && -n $configured_urls ]]; then
+    echo "Could not determine the existing App port from $config_dir/environment." >&2
+    echo "Retry with SUB2API_REPORT_PORT=<port>." >&2
+    exit 2
+  fi
+fi
+app_port=${requested_port:-${configured_port:-8081}}
+if [[ ! $app_port =~ ^[0-9]+$ ]] || (( 10#$app_port < 1 || 10#$app_port > 65535 )); then
+  echo "SUB2API_REPORT_PORT must be an integer from 1 to 65535." >&2
+  exit 2
+fi
+app_port=$((10#$app_port))
 if [[ ! -f $config_dir/environment ]]; then
   cat > "$config_dir/environment" <<EOF
-ASPNETCORE_URLS=http://0.0.0.0:8080
+ASPNETCORE_URLS=http://0.0.0.0:$app_port
 ConnectionStrings__Database="Data Source=$data_dir/db/sub2api-report.db;Foreign Keys=True;Default Timeout=5;Pooling=True"
 DataProtection__KeysPath=$data_dir/keys
 Security__SecureCookies=false
@@ -65,15 +85,38 @@ EOF
   chmod 0640 "$config_dir/environment"
   chown root:"$service_user" "$config_dir/environment"
 fi
+if [[ -n $requested_port ]]; then
+  if grep -q '^ASPNETCORE_URLS=' "$config_dir/environment"; then
+    sed -i "s#^ASPNETCORE_URLS=.*#ASPNETCORE_URLS=http://0.0.0.0:$app_port#" \
+      "$config_dir/environment"
+  else
+    printf 'ASPNETCORE_URLS=http://0.0.0.0:%s\n' "$app_port" >> "$config_dir/environment"
+  fi
+fi
 if ! grep -q '^Security__SecureCookies=' "$config_dir/environment"; then
   printf '%s\n' 'Security__SecureCookies=false' >> "$config_dir/environment"
 fi
 
+wait_for_readiness() {
+  for _ in $(seq 1 90); do
+    if systemctl is-active --quiet "$service_name" \
+      && curl --fail --silent "http://127.0.0.1:$app_port/health/ready" >/dev/null; then
+      return
+    fi
+    sleep 2
+  done
+  return 1
+}
 old_target=$(readlink -f "$current_link" 2>/dev/null || true)
 if [[ $old_target == "$release_dir" && -x $current_link/runtime/Sub2ApiReport.Api ]]; then
   systemctl daemon-reload
   systemctl enable --now "$service_name"
-  echo "Sub2API Report $version is already installed."
+  echo "Waiting for application readiness on port $app_port (up to 180 seconds)..."
+  wait_for_readiness || {
+    echo "The service did not become ready on port $app_port." >&2
+    exit 1
+  }
+  echo "Sub2API Report $version is already installed and running on port $app_port."
   exit 0
 fi
 
@@ -140,6 +183,7 @@ fi
 exec '$current_link/runtime/Sub2ApiReport.Cli' "\$@"
 EOF
 chmod 0755 "$control_path"
+systemctl daemon-reload
 
 backup_file=
 rollback() {
@@ -173,26 +217,16 @@ if [[ -n $old_target ]]; then
 fi
 
 ln -sfn "$release_dir" "$current_link"
-systemctl daemon-reload
 systemctl enable "$service_name"
 systemctl restart "$service_name"
-echo "[5/5] Waiting for application readiness (up to 180 seconds)..."
-
-healthy=false
-for _ in $(seq 1 90); do
-  if curl --fail --silent http://127.0.0.1:8080/health/ready >/dev/null; then
-    healthy=true
-    break
-  fi
-  sleep 2
-done
-[[ $healthy == true ]] || {
-  echo "The service did not become ready." >&2
+echo "[5/5] Waiting for application readiness on port $app_port (up to 180 seconds)..."
+wait_for_readiness || {
+  echo "The systemd service did not become ready on port $app_port." >&2
   false
 }
 
 trap - ERR
 find "$install_root/releases" -mindepth 1 -maxdepth 1 -type d -not -path "$release_dir" -mtime +30 -exec rm -rf {} +
 printf 'Sub2API Report %s is running as systemd service %s.\n' "$version" "$service_name"
-printf 'Open: http://<server>:8080\n'
+printf 'Open: http://<server>:%s\n' "$app_port"
 printf 'Logs: sudo journalctl -u %s -f\n' "$service_name"

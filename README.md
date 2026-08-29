@@ -21,12 +21,21 @@ Sub2API Report 是一个单管理员的 Codex API Key 用量报告系统。它�
 curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/server-bootstrap.sh | bash
 ```
 
+新安装默认监听 `8081`。需要指定其他端口时：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/server-bootstrap.sh | \
+  SUB2API_REPORT_PORT=18080 bash
+```
+
+更新现有安装时不传该变量会保留当前端口。
+
 脚本以当前用户下载并校验 self-contained 服务器程序，仅在安装依赖、写入系统目录和注册 systemd 服务时调用 `sudo`。
 
 默认访问地址：
 
 ```text
-http://<服务器地址>:8080
+http://<服务器地址>:8081
 ```
 
 常用命令：
@@ -95,7 +104,7 @@ sudo docker compose logs --no-log-prefix app 2>&1 | \
 
 输出中 `One-time setup code:` 后的值即为初始化码，默认有效期 30 分钟。若尚未输出，确认服务已启动后重试对应命令。
 
-打开 `http://<服务器地址>:8080`，使用初始化码创建管理员，然后配置 Sub2API、报告渠道和月报计划。
+打开 `http://<服务器地址>:8081`，使用初始化码创建管理员，然后配置 Sub2API、报告渠道和月报计划。
 
 更多配置、备份和恢复说明见 [服务器部署文档](docs/server-deployment.md) 或 [Docker 部署文档](docs/deployment.md)。
 

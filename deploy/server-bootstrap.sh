@@ -3,6 +3,13 @@ set -euo pipefail
 
 repository=lohaaa/sub2api-report
 requested_version=${SUB2API_REPORT_VERSION:-latest}
+requested_port=${SUB2API_REPORT_PORT:-}
+if [[ -n $requested_port ]] \
+  && { [[ ! $requested_port =~ ^[0-9]+$ ]] \
+    || (( 10#$requested_port < 1 || 10#$requested_port > 65535 )); }; then
+  echo "SUB2API_REPORT_PORT must be an integer from 1 to 65535." >&2
+  exit 2
+fi
 
 run_as_root() {
   if [[ $(id -u) -eq 0 ]]; then
@@ -167,4 +174,8 @@ mkdir -p "$bundle_dir"
 printf 'Extracting server package...\n'
 tar -xzf "$work_dir/$asset" -C "$bundle_dir"
 printf 'Installing systemd service...\n'
-run_as_root bash "$bundle_dir/server-install.sh"
+if [[ -n $requested_port ]]; then
+  run_as_root env SUB2API_REPORT_PORT="$requested_port" bash "$bundle_dir/server-install.sh"
+else
+  run_as_root bash "$bundle_dir/server-install.sh"
+fi

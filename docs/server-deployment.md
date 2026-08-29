@@ -11,6 +11,15 @@
 curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/server-bootstrap.sh | bash
 ```
 
+新安装默认使用主机端口 `8081`。显式选择其他空闲端口：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/server-bootstrap.sh | \
+  SUB2API_REPORT_PORT=18080 bash
+```
+
+更新现有安装时不传 `SUB2API_REPORT_PORT` 会从 `/etc/sub2api-report/environment` 读取并保留当前端口；显式传入时会更新监听端口。
+
 bootstrap 以当前用户解析 GitHub Release、下载 server package、显示进度并校验 checksum；仅在安装系统依赖和调用包内 `server-install.sh` 时通过 `sudo` 提权。
 
 安装器会：
@@ -46,7 +55,7 @@ sudo systemctl restart sub2api-report
 默认监听：
 
 ```text
-http://0.0.0.0:8080
+http://0.0.0.0:8081
 ```
 
 生产环境建议在前方使用 Caddy、Nginx 或云负载均衡提供 HTTPS。

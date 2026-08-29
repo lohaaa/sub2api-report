@@ -8,6 +8,17 @@
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-08-29
+
+### Changed
+
+- 新安装的 systemd 和 Docker Compose 部署默认使用主机端口 `8081`，systemd bootstrap 支持 `SUB2API_REPORT_PORT` 显式覆盖并在更新时保留现有端口。
+
+### Fixed
+
+- systemd 安装健康检查使用实际配置端口并验证 unit 处于 active，防止端口被其他服务占用时误判成功。
+- 调整 systemd unit reload 顺序，避免更新时出现配置已变化的无效警告。
+
 ## [1.0.3] - 2026-08-29
 
 ### Fixed
@@ -65,7 +76,8 @@
 - App 容器不挂载 Docker Socket；Updater 通过 instance/container allowlist、固定 API 和 non-root Socket group 隔离高权限操作。
 - 增加公开安全政策，并将未修复漏洞引导至 GitHub Private Vulnerability Reporting。
 
-[Unreleased]: https://github.com/lohaaa/sub2api-report/compare/v1.0.3...HEAD
+[Unreleased]: https://github.com/lohaaa/sub2api-report/compare/v1.0.4...HEAD
+[1.0.4]: https://github.com/lohaaa/sub2api-report/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/lohaaa/sub2api-report/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/lohaaa/sub2api-report/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/lohaaa/sub2api-report/compare/v1.0.0...v1.0.1

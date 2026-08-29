@@ -17,6 +17,10 @@ grep -Fq "$docker_command" "$docker_docs"
 grep -Fq "$setup_marker" "$readme"
 grep -Fq "$setup_marker" "$server_docs"
 grep -Fq "$setup_marker" "$docker_docs"
+grep -Fq 'SUB2API_REPORT_PORT=18080 bash' "$readme"
+grep -Fq 'SUB2API_REPORT_PORT=18080 bash' "$server_docs"
+grep -Fq 'APP_PORT=8081' "$repo_root/deploy/.env.example"
+grep -Fq "\${APP_PORT:-8081}:8080" "$repo_root/deploy/compose.yaml"
 
 if grep -Fq 'docker compose logs' "$server_docs"; then
   echo "Server deployment documentation must not use Docker log commands." >&2

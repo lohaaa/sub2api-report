@@ -92,7 +92,7 @@ services:
     image: sub2api-report-app:current
     pull_policy: never
     ports:
-      - "${BIND_ADDRESS:-0.0.0.0}:${APP_PORT:-8080}:8080"
+      - "${BIND_ADDRESS:-0.0.0.0}:${APP_PORT:-8081}:8080"
     volumes:
       - app-data:/data
       - ./secrets/updater-token:/run/secrets/updater-token:ro
@@ -185,7 +185,7 @@ Updater 状态卷：
 `.env.example` 只包含容器启动前必须确定的端口、Cookie 传输策略、安装实例 ID 和 Docker Socket 补充组 GID；后两项由安装脚本生成：
 
 ```dotenv
-APP_PORT=8080
+APP_PORT=8081
 BIND_ADDRESS=0.0.0.0
 SECURE_COOKIES=false
 INSTANCE_ID=
@@ -258,7 +258,7 @@ Internet/Intranet
 - 对登录和初始化保留应用返回的限流状态；
 - 不在 access log 中记录 query secret。
 
-直接暴露 `8080` 只适合受信内网测试。首次初始化码不能代替 HTTPS。
+直接暴露默认主机端口 `8081` 只适合受信内网测试。首次初始化码不能代替 HTTPS。
 
 ## 8. 首次启动
 

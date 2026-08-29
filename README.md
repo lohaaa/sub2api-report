@@ -21,7 +21,7 @@ Sub2API Report 是一个单管理员的 Codex API Key 用量报告系统。它�
 curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/server-bootstrap.sh | bash
 ```
 
-新安装默认监听 `8081`。需要指定其他端口时：
+Report 端口可独立指定，默认 `8081`。例如改为 `18080`：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/server-bootstrap.sh | \
@@ -37,6 +37,8 @@ curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/s
 ```text
 http://<服务器地址>:8081
 ```
+
+与已有 Sub2API 共机部署时，可在初始化后将 Sub2API 地址设为 `http://127.0.0.1:8080`。
 
 常用命令：
 
@@ -64,6 +66,8 @@ sudo systemctl restart sub2api-report
 curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/bootstrap.sh |
   sudo SUB2API_REPORT_START=false bash
 ```
+
+Compose 的 Report 主机端口在 `/opt/sub2api-report/.env` 中通过 `APP_PORT=18080` 指定。
 
 然后启动容器：
 

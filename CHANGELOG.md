@@ -8,6 +8,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- 服务器 bootstrap 仅在缺少 native runtime 时安装运行库，不再安装 ICU/OpenSSL 开发包；GitHub 下载增加 TLS/网络错误重试。
+
 ## [1.0.1] - 2026-08-28
 
 ### Added

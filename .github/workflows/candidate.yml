@@ -158,9 +158,9 @@ jobs:
             "$previous_dir/install.sh"
           test -z "$(sudo docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml" ps -q)"
           sudo docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml" up -d --no-build
-          source "$previous_dir/release-lib.sh"
-          wait_for_service_health "$install_dir" app 120
-          wait_for_service_health "$install_dir" updater 60
+          sudo bash -c \
+            'source "$1"; wait_for_service_health "$2" app 120; wait_for_service_health "$2" updater 60' \
+            _ "$previous_dir/release-lib.sh" "$install_dir"
           curl --fail --silent http://127.0.0.1:18080/health/ready >/dev/null
           [[ $(sudo jq -r '.version' "$install_dir/release-manifest.json") == "$PREVIOUS_VERSION" ]]
           sudo docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml" \

@@ -187,12 +187,11 @@ jobs:
             release/*.spdx.json
             release/*.md
 
-      - name: Create draft GitHub Release
+      - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" release/* \
-            --draft \
             --verify-tag \
             --title "Sub2API Report $GITHUB_REF_NAME" \
             --notes-file "release/release-notes-v${{ steps.version.outputs.value }}.md"

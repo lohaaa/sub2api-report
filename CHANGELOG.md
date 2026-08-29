@@ -8,6 +8,20 @@
 
 ## [Unreleased]
 
+## [1.0.6] - 2026-08-29
+
+### Changed
+
+- Release manifest schema v2 分别签名 OCI image config digest 和 manifest/index target digest。
+
+### Fixed
+
+- 修复 Docker 29 containerd image store 导入离线镜像后本地 `.Id` 变化导致安装和在线更新误拒绝。
+
+### Security
+
+- `docker load` 前校验签名归档的唯一 tag、config blob 和 target descriptor，加载后仅接受两种已签名 digest，并继续校验平台、版本和角色。
+
 ## [1.0.5] - 2026-08-29
 
 ### Changed
@@ -83,7 +97,8 @@
 - App 容器不挂载 Docker Socket；Updater 通过 instance/container allowlist、固定 API 和 non-root Socket group 隔离高权限操作。
 - 增加公开安全政策，并将未修复漏洞引导至 GitHub Private Vulnerability Reporting。
 
-[Unreleased]: https://github.com/lohaaa/sub2api-report/compare/v1.0.5...HEAD
+[Unreleased]: https://github.com/lohaaa/sub2api-report/compare/v1.0.6...HEAD
+[1.0.6]: https://github.com/lohaaa/sub2api-report/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/lohaaa/sub2api-report/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/lohaaa/sub2api-report/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/lohaaa/sub2api-report/compare/v1.0.2...v1.0.3

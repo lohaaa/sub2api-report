@@ -17,10 +17,11 @@ public interface IDockerAppManager
         string operationId,
         CancellationToken cancellationToken);
 
-    /// <summary>加载 docker save 归档并校验目标 image ID / OS / 架构 / 版本 label / loaded tag。</summary>
+    /// <summary>加载 docker save 归档，并接受签名的 config/target digest 作为后端相关 ID。</summary>
     Task<string> LoadImageArchiveAsync(
         Stream archiveStream,
-        string expectedImageId,
+        string expectedConfigDigest,
+        string expectedTargetDigest,
         string expectedLoadedTag,
         string expectedVersion,
         CancellationToken cancellationToken);

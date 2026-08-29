@@ -21,11 +21,57 @@ require_release_host() {
   }
 }
 
+verify_image_archive_metadata() {
+  local archive=$1
+  local expected_tag=$2
+  local expected_config_digest=$3
+  local expected_target_digest=$4
+  local docker_manifest index_json config_path config_hex actual_config_digest target_digest target_hex
+  docker_manifest=$(tar -xOzf "$archive" manifest.json) || return
+  jq -e --arg tag "$expected_tag" \
+    'length == 1 and .[0].RepoTags == [$tag] and (.[0].Layers | length > 0)' \
+    <<<"$docker_manifest" >/dev/null || {
+    echo "$archive does not contain exactly the signed image tag." >&2
+    return 1
+  }
+  config_path=$(jq -r '.[0].Config' <<<"$docker_manifest")
+  [[ $config_path =~ ^(blobs/sha256/)?[a-f0-9]{64}(\.json)?$ ]] || {
+    echo "$archive contains an invalid image config path." >&2
+    return 1
+  }
+  config_hex=${config_path#blobs/sha256/}
+  config_hex=${config_hex%.json}
+  actual_config_digest="sha256:$(tar -xOzf "$archive" "$config_path" | sha256sum | awk '{print $1}')"
+  [[ $actual_config_digest == "sha256:$config_hex" \
+    && $actual_config_digest == "$expected_config_digest" ]] || {
+    echo "$archive image config digest does not match the signed manifest." >&2
+    return 1
+  }
+  index_json=$(tar -xOzf "$archive" index.json) || return
+  jq -e '(.manifests | length) == 1' <<<"$index_json" >/dev/null || {
+    echo "$archive index must contain exactly one target descriptor." >&2
+    return 1
+  }
+  target_digest=$(jq -r '.manifests[0].digest' <<<"$index_json")
+  [[ $target_digest == "$expected_target_digest" \
+    && $target_digest =~ ^sha256:[a-f0-9]{64}$ ]] || {
+    echo "$archive target digest does not match the signed manifest." >&2
+    return 1
+  }
+  target_hex=${target_digest#sha256:}
+  [[ $(tar -xOzf "$archive" "blobs/sha256/$target_hex" | sha256sum | awk '{print $1}') == "$target_hex" ]] || {
+    echo "$archive target descriptor content does not match its digest." >&2
+    return 1
+  }
+}
+
 verify_release_bundle() {
   local bundle_dir=$1
   local app_archive="$bundle_dir/images/sub2api-report-app-linux-amd64.tar.gz"
   local updater_archive="$bundle_dir/images/sub2api-report-updater-linux-amd64.tar.gz"
   local expected_app_sha expected_updater_sha actual_app_sha actual_updater_sha
+  local expected_app_id expected_updater_id expected_app_target expected_updater_target
+  local expected_app_tag expected_updater_tag
   local expected_app_size expected_updater_size actual_app_size actual_updater_size manifest_version
   local expected_notes_sha expected_notes_size actual_notes_sha actual_notes_size release_heading
 
@@ -57,7 +103,7 @@ verify_release_bundle() {
     -signature "$bundle_dir/release-manifest.sig" \
     "$bundle_dir/release-manifest.json" >/dev/null
 
-  [[ $(jq -r '.schemaVersion' "$bundle_dir/release-manifest.json") == 1 \
+  [[ $(jq -r '.schemaVersion' "$bundle_dir/release-manifest.json") == 2 \
     && $(jq -r '.channel' "$bundle_dir/release-manifest.json") == stable ]] || {
     echo "Unsupported release manifest schema or channel." >&2
     return 1
@@ -111,6 +157,18 @@ verify_release_bundle() {
     echo "Updater archive does not match the signed release manifest." >&2
     return 1
   }
+  expected_app_id=$(jq -r '.app.imageId' "$bundle_dir/release-manifest.json")
+  expected_updater_id=$(jq -r '.updater.imageId' "$bundle_dir/release-manifest.json")
+  expected_app_target=$(jq -r '.app.targetDigest' "$bundle_dir/release-manifest.json")
+  expected_updater_target=$(jq -r '.updater.targetDigest' "$bundle_dir/release-manifest.json")
+  expected_app_tag=$(jq -r '.app.loadedTag' "$bundle_dir/release-manifest.json")
+  expected_updater_tag=$(jq -r '.updater.loadedTag' "$bundle_dir/release-manifest.json")
+  echo "Verifying signed App image metadata..."
+  verify_image_archive_metadata \
+    "$app_archive" "$expected_app_tag" "$expected_app_id" "$expected_app_target"
+  echo "Verifying signed Updater image metadata..."
+  verify_image_archive_metadata \
+    "$updater_archive" "$expected_updater_tag" "$expected_updater_id" "$expected_updater_target"
 }
 
 load_release_images() {
@@ -124,7 +182,8 @@ load_release_images() {
 validate_loaded_images() {
   local bundle_dir=$1
   local app_tag updater_tag app_id updater_id expected_app_id expected_updater_id
-  local app_platform updater_platform app_version updater_version manifest_version
+  local expected_app_target expected_updater_target
+  local app_platform updater_platform app_version updater_version app_role updater_role manifest_version
 
   manifest_version=$(jq -r '.version' "$bundle_dir/release-manifest.json")
   app_tag=$(jq -r '.app.loadedTag' "$bundle_dir/release-manifest.json")
@@ -139,8 +198,14 @@ validate_loaded_images() {
   updater_id=$(docker image inspect "$updater_tag" --format '{{.Id}}')
   expected_app_id=$(jq -r '.app.imageId' "$bundle_dir/release-manifest.json")
   expected_updater_id=$(jq -r '.updater.imageId' "$bundle_dir/release-manifest.json")
-  [[ $app_id == "$expected_app_id" && $updater_id == "$expected_updater_id" ]] || {
-    echo "Loaded image IDs do not match the signed release manifest." >&2
+  expected_app_target=$(jq -r '.app.targetDigest' "$bundle_dir/release-manifest.json")
+  expected_updater_target=$(jq -r '.updater.targetDigest' "$bundle_dir/release-manifest.json")
+  [[ $app_id == "$expected_app_id" || $app_id == "$expected_app_target" ]] || {
+    printf 'Loaded App image ID %s matches neither signed config nor target digest.\n' "$app_id" >&2
+    return 1
+  }
+  [[ $updater_id == "$expected_updater_id" || $updater_id == "$expected_updater_target" ]] || {
+    printf 'Loaded Updater image ID %s matches neither signed config nor target digest.\n' "$updater_id" >&2
     return 1
   }
 
@@ -153,8 +218,14 @@ validate_loaded_images() {
 
   app_version=$(docker image inspect "$app_tag" --format '{{index .Config.Labels "org.opencontainers.image.version"}}')
   updater_version=$(docker image inspect "$updater_tag" --format '{{index .Config.Labels "org.opencontainers.image.version"}}')
+  app_role=$(docker image inspect "$app_tag" --format '{{index .Config.Labels "io.sub2api-report.role"}}')
+  updater_role=$(docker image inspect "$updater_tag" --format '{{index .Config.Labels "io.sub2api-report.role"}}')
   [[ $app_version == "$manifest_version" && $updater_version == "$manifest_version" ]] || {
     echo "Loaded image versions do not match the signed release manifest." >&2
+    return 1
+  }
+  [[ $app_role == app && $updater_role == updater ]] || {
+    echo "Loaded image roles do not match the signed release contract." >&2
     return 1
   }
 }

@@ -19,7 +19,7 @@ public sealed class ReleaseManifestValidatorTests
 
     [Fact]
     public void RejectsUnsupportedSchemaVersion() =>
-        AssertRejected(new ReleaseManifestBuilder().WithSchemaVersion(2).Build(), "schemaVersion");
+        AssertRejected(new ReleaseManifestBuilder().WithSchemaVersion(1).Build(), "schemaVersion");
 
     [Fact]
     public void RejectsNonStableChannel() =>
@@ -98,6 +98,13 @@ public sealed class ReleaseManifestValidatorTests
             new ReleaseManifestBuilder().WithAppImageId(TestReleases.Hex('b')).Build(),
             "app.imageId");
 
+
+    [Fact]
+    public void RejectsInvalidAppTargetDigest() =>
+        AssertRejected(
+            new ReleaseManifestBuilder().WithAppTargetDigest("sha256:short").Build(),
+            "app.targetDigest");
+
     [Fact]
     public void RejectsAppLoadedTagMismatch() =>
         AssertRejected(
@@ -136,6 +143,12 @@ public sealed class ReleaseManifestValidatorTests
         AssertRejected(
             new ReleaseManifestBuilder().WithUpdaterImageId("sha256:short").Build(),
             "updater.imageId");
+
+    [Fact]
+    public void RejectsInvalidUpdaterTargetDigest() =>
+        AssertRejected(
+            new ReleaseManifestBuilder().WithUpdaterTargetDigest("invalid").Build(),
+            "updater.targetDigest");
 
     [Fact]
     public void RejectsUpdaterArchiveUrlOutsideFixedRepo() =>

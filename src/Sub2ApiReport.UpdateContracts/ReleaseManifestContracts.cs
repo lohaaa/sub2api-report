@@ -24,6 +24,7 @@ public sealed record ReleaseAppArtifact(
     string ArchiveUrl,
     string ArchiveSha256,
     string ImageId,
+    string TargetDigest,
     string LoadedTag,
     long Size);
 
@@ -35,6 +36,7 @@ public sealed record ReleaseUpdaterArtifact(
     string ArchiveUrl,
     string ArchiveSha256,
     string ImageId,
+    string TargetDigest,
     string LoadedTag,
     long Size,
     bool SelfUpdateSupported);

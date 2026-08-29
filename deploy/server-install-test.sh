@@ -11,7 +11,7 @@ trap cleanup EXIT
 bundle="$test_root/bundle"
 mock_bin="$test_root/bin"
 mkdir -p "$bundle/runtime" "$mock_bin"
-printf '1.0.5\n' > "$bundle/VERSION"
+printf '1.0.6\n' > "$bundle/VERSION"
 printf 'license\n' > "$bundle/LICENSE"
 printf 'changelog\n' > "$bundle/CHANGELOG.md"
 for executable in runtime/Sub2ApiReport.Api runtime/Sub2ApiReport.Migrator runtime/Sub2ApiReport.Cli; do
@@ -61,7 +61,7 @@ export SUB2API_REPORT_PORT=18080
 "$bundle/server-install.sh"
 
 test -L "$test_root/opt/current"
-test "$(readlink -f "$test_root/opt/current")" = "$test_root/opt/releases/1.0.5"
+test "$(readlink -f "$test_root/opt/current")" = "$test_root/opt/releases/1.0.6"
 test -x "$test_root/opt/current/runtime/Sub2ApiReport.Api"
 test -f "$test_root/systemd/sub2api-report-test.service"
 test -x "$test_root/usr/sub2api-reportctl"

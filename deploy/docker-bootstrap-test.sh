@@ -15,7 +15,7 @@ printf '#!/usr/bin/env bash\n# SUB2API_REPORT_START\nexit 0\n' > "$fixture_dir/b
 printf '#!/usr/bin/env bash\nexit 0\n' > "$fixture_dir/bundle/update.sh"
 chmod 0755 "$fixture_dir/bundle/install.sh" "$fixture_dir/bundle/update.sh"
 tar -czf "$fixture_dir/bundle.tar.gz" -C "$fixture_dir/bundle" .
-printf '%s  sub2api-report-v1.0.5-linux-amd64.tar.gz\n' \
+printf '%s  sub2api-report-v1.0.6-linux-amd64.tar.gz\n' \
   "$(sha256sum "$fixture_dir/bundle.tar.gz" | cut -d ' ' -f 1)" > "$fixture_dir/checksums.txt"
 
 cat > "$mock_bin/id" <<'EOF'
@@ -64,9 +64,9 @@ done
 printf '%s\n' "$url" >> "$DOCKER_BOOTSTRAP_TEST_ROOT/curl.log"
 case "$url" in
   */releases/latest)
-    printf 'https://github.com/lohaaa/sub2api-report/releases/tag/v1.0.5'
+    printf 'https://github.com/lohaaa/sub2api-report/releases/tag/v1.0.6'
     ;;
-  */sub2api-report-v1.0.5-linux-amd64.tar.gz)
+  */sub2api-report-v1.0.6-linux-amd64.tar.gz)
     cp "$DOCKER_BOOTSTRAP_TEST_ROOT/fixture/bundle.tar.gz" "$output"
     ;;
   */checksums.txt)
@@ -92,9 +92,9 @@ grep -q '^docker info$' "$test_root/sudo.log"
 grep -q '^docker compose version$' "$test_root/sudo.log"
 grep -Eq "^env SUB2API_REPORT_INSTALL_DIR=$test_root/install SUB2API_REPORT_START=false bash /tmp/sub2api-report-bootstrap\\..*/bundle/install\\.sh$" \
   "$test_root/sudo.log"
-grep -q '^Release resolved: v1.0.5$' "$test_root/output.log"
+grep -q '^Release resolved: v1.0.6$' "$test_root/output.log"
 grep -q '^Docker deployment bundle (attempt 1/8, resume supported)$' "$test_root/output.log"
 grep -q '^Verifying SHA-256 checksum\.\.\.$' "$test_root/output.log"
-grep -q '^Sub2API Report v1.0.5 is prepared\.$' "$test_root/output.log"
+grep -q '^Sub2API Report v1.0.6 is prepared\.$' "$test_root/output.log"
 
 echo "docker bootstrap tests passed"

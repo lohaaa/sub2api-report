@@ -81,7 +81,8 @@ public sealed class DockerAppManager(DockerClient client, UpdateOptions options)
 
     public async Task<string> LoadImageArchiveAsync(
         Stream archiveStream,
-        string expectedImageId,
+        string expectedConfigDigest,
+        string expectedTargetDigest,
         string expectedLoadedTag,
         string expectedVersion,
         CancellationToken cancellationToken)
@@ -126,7 +127,7 @@ public sealed class DockerAppManager(DockerClient client, UpdateOptions options)
         ImageInspectResponse image;
         try
         {
-            image = await _client.Images.InspectImageAsync(expectedImageId, cancellationToken);
+            image = await _client.Images.InspectImageAsync(expectedLoadedTag, cancellationToken);
         }
         catch (DockerApiException exception) when (exception.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
@@ -135,7 +136,12 @@ public sealed class DockerAppManager(DockerClient client, UpdateOptions options)
                 "归档中未包含 manifest 声明的镜像。");
         }
 
-        ValidateLoadedImage(image, expectedImageId, expectedLoadedTag, expectedVersion);
+        ValidateLoadedImage(
+            image,
+            expectedConfigDigest,
+            expectedTargetDigest,
+            expectedLoadedTag,
+            expectedVersion);
         return image.ID;
     }
 
@@ -267,16 +273,18 @@ public sealed class DockerAppManager(DockerClient client, UpdateOptions options)
         return AppContractMapper.MapSnapshot(inspect);
     }
 
-    private static void ValidateLoadedImage(
+    internal static void ValidateLoadedImage(
         ImageInspectResponse image,
-        string expectedImageId,
+        string expectedConfigDigest,
+        string expectedTargetDigest,
         string expectedLoadedTag,
         string expectedVersion)
     {
         var errors = new List<string>();
-        if (!string.Equals(image.ID, expectedImageId, StringComparison.Ordinal))
+        if (!string.Equals(image.ID, expectedConfigDigest, StringComparison.Ordinal)
+            && !string.Equals(image.ID, expectedTargetDigest, StringComparison.Ordinal))
         {
-            errors.Add("加载后的镜像 ID 与 manifest 不一致。");
+            errors.Add("加载后的镜像 ID 与签名的 config/target digest 均不一致。");
         }
 
         if (!string.Equals(image.Os, "linux", StringComparison.Ordinal))
@@ -297,6 +305,13 @@ public sealed class DockerAppManager(DockerClient client, UpdateOptions options)
             || !string.Equals(imageVersion, expectedVersion, StringComparison.Ordinal))
         {
             errors.Add("加载后的镜像缺少正确的版本 label。");
+        }
+
+        if (labels is null
+            || !labels.TryGetValue(UpdateContractConstants.AppRoleLabelKey, out var imageRole)
+            || !string.Equals(imageRole, UpdateContractConstants.AppRoleLabelValue, StringComparison.Ordinal))
+        {
+            errors.Add("加载后的镜像缺少正确的 App role label。");
         }
 
         if (image.RepoTags is null

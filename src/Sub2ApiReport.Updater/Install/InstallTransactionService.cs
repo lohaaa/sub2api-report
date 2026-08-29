@@ -256,6 +256,7 @@ public sealed class InstallTransactionService(
         var imageId = await dockerAppManager.LoadImageArchiveAsync(
             archiveStream,
             manifest.App.ImageId,
+            manifest.App.TargetDigest,
             manifest.App.LoadedTag,
             manifest.Version,
             cancellationToken);

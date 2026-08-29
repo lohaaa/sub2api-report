@@ -92,6 +92,11 @@ public static class ReleaseManifestValidator
             errors.Add("app.imageId 无效。");
         }
 
+        if (!IsValidImageId(app.TargetDigest))
+        {
+            errors.Add("app.targetDigest 无效。");
+        }
+
         if (version is not null)
         {
             var expectedTag = $"v{manifest.Version}";
@@ -134,6 +139,11 @@ public static class ReleaseManifestValidator
         if (!IsValidImageId(updater.ImageId))
         {
             errors.Add("updater.imageId 无效。");
+        }
+
+        if (!IsValidImageId(updater.TargetDigest))
+        {
+            errors.Add("updater.targetDigest 无效。");
         }
 
         if (version is not null)

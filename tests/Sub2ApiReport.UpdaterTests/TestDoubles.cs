@@ -45,6 +45,7 @@ internal sealed class FakeDockerAppManager : IDockerAppManager
     public List<(AppContainerSnapshot Contract, string ImageId, string OperationId)> CreatedContainers { get; } = [];
     public List<string> RenamedContainers { get; } = [];
     public bool LoadedArchive;
+    public string? LoadedImageIdOverride;
 
     public Task<AppContainerSnapshot?> FindAppContainerAsync(CancellationToken cancellationToken)
     {
@@ -74,14 +75,15 @@ internal sealed class FakeDockerAppManager : IDockerAppManager
 
     public async Task<string> LoadImageArchiveAsync(
         Stream archiveStream,
-        string expectedImageId,
+        string expectedConfigDigest,
+        string expectedTargetDigest,
         string expectedLoadedTag,
         string expectedVersion,
         CancellationToken cancellationToken)
     {
         if (OnLoadImage is not null)
         {
-            await OnLoadImage(archiveStream, expectedImageId);
+            await OnLoadImage(archiveStream, expectedConfigDigest);
         }
         else
         {
@@ -89,7 +91,7 @@ internal sealed class FakeDockerAppManager : IDockerAppManager
         }
 
         LoadedArchive = true;
-        return expectedImageId;
+        return LoadedImageIdOverride ?? expectedConfigDigest;
     }
 
     public Task TagImageAsync(string imageId, string repository, string tag, CancellationToken cancellationToken)

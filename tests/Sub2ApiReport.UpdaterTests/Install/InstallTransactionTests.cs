@@ -54,6 +54,7 @@ public sealed class InstallTransactionTests : IDisposable
     [Fact]
     public async Task SuccessfulTransactionPersistsAllStagesAndReachesSucceeded()
     {
+        _docker.LoadedImageIdOverride = "sha256:" + TestReleases.Hex('f');
         var (transaction, operation) = await CreateTransactionAndOperationAsync();
 
         var result = await transaction.ExecuteAsync(operation, CancellationToken.None);
@@ -61,6 +62,7 @@ public sealed class InstallTransactionTests : IDisposable
         Assert.Equal(InstallOperationStates.Succeeded, result.State);
         Assert.Null(result.LastError);
         Assert.True(_docker.LoadedArchive);
+        Assert.Equal("sha256:" + TestReleases.Hex('f'), result.LoadedImageId);
         Assert.Equal(1, _maintenance.EnterCount);
         Assert.Equal(1, _maintenance.CompleteCount);
         Assert.Equal(1, _backup.CreateCount);

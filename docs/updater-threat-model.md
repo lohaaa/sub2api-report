@@ -33,7 +33,7 @@ Updater -> app-data (SQLite source) + updater-state (backup/state)
 | App 被攻破后调用任意 Docker API | Updater 只暴露固定 check/plan/install/status；请求不能提交 URL、镜像或命令 |
 | 未授权进程访问 Updater | 私有 control network、无主机端口、64-hex shared token、常量时间比较、缺失时 fail closed |
 | GitHub API 或 Release 被篡改 | 固定 owner/repository、HTTPS、redirect host allowlist、RSA 签名、严格 JSON、SHA-256、大小上限 |
-| 加载错误架构或伪造镜像 | 校验 image ID、linux/amd64、OCI version、role/contract label 和 loaded tag |
+| 加载错误架构或伪造镜像 | 加载前校验已签名 archive/config/target digest 与唯一 tag；加载后接受后端相关 ID，并校验 linux/amd64、OCI version、role/contract label 和 loaded tag |
 | 操作其他项目容器 | 必须同时匹配 `io.sub2api-report.role=app` 和安装生成的 instance ID；多匹配直接拒绝 |
 | 路径穿越或任意文件下载 | 资产名和 Release 路径精确匹配；下载只写 updater-state；临时文件原子完成 |
 | 并发或重放安装 | 持久化 operation、单槽队列、进程/文件双锁、目标版本必须等于最近验签缓存 |
@@ -79,7 +79,7 @@ Docker Socket 风险不能被容器 capability 完全消除。最小 API、固�
 开放 `InstallationEnabled=true` 前必须通过：
 
 - token 缺失/错误、未知字段、未知 URL 和篡改签名拒绝测试；
-- hash、大小、image ID、label、架构和 contract 不匹配测试；
+- hash、大小、config/target digest、Docker 28/29 本地 ID、label、架构和 contract 不匹配测试；
 - 下载中断、并发操作和 Updater 中止恢复测试；
 - SQLite 备份、篡改备份、migration/health 失败和回滚测试；
 - 干净 VM 上的 Socket 权限、签名候选安装和 App-only 更新测试；

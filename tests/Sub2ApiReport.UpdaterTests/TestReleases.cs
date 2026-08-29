@@ -100,11 +100,13 @@ internal sealed class ReleaseManifestBuilder
     private string _appArchiveUrl = TestReleases.AppArchiveUrl(TestReleases.DefaultVersion);
     private string _appArchiveSha256 = TestReleases.Hex('a');
     private string _appImageId = "sha256:" + TestReleases.Hex('b');
+    private string _appTargetDigest = "sha256:" + TestReleases.Hex('f');
     private string _appLoadedTag = UpdateContractConstants.AppLoadedTagPrefix + TestReleases.DefaultVersion;
     private long _appSize = 1024;
     private string _updaterArchiveUrl = TestReleases.UpdaterArchiveUrl(TestReleases.DefaultVersion);
     private string _updaterArchiveSha256 = TestReleases.Hex('c');
     private string _updaterImageId = "sha256:" + TestReleases.Hex('d');
+    private string _updaterTargetDigest = "sha256:" + TestReleases.Hex('9');
     private string _updaterLoadedTag = UpdateContractConstants.UpdaterLoadedTagPrefix + TestReleases.DefaultVersion;
     private long _updaterSize = 512;
     private bool _selfUpdateSupported;
@@ -126,11 +128,18 @@ internal sealed class ReleaseManifestBuilder
         _manualUpgradeRequired,
         _onlineInstallSupported,
         _signatureAlgorithm,
-        new ReleaseAppArtifact(_appArchiveUrl, _appArchiveSha256, _appImageId, _appLoadedTag, _appSize),
+        new ReleaseAppArtifact(
+            _appArchiveUrl,
+            _appArchiveSha256,
+            _appImageId,
+            _appTargetDigest,
+            _appLoadedTag,
+            _appSize),
         new ReleaseUpdaterArtifact(
             _updaterArchiveUrl,
             _updaterArchiveSha256,
             _updaterImageId,
+            _updaterTargetDigest,
             _updaterLoadedTag,
             _updaterSize,
             _selfUpdateSupported),
@@ -222,6 +231,12 @@ internal sealed class ReleaseManifestBuilder
         return this;
     }
 
+    public ReleaseManifestBuilder WithAppTargetDigest(string value)
+    {
+        _appTargetDigest = value;
+        return this;
+    }
+
     public ReleaseManifestBuilder WithAppLoadedTag(string value)
     {
         _appLoadedTag = value;
@@ -249,6 +264,12 @@ internal sealed class ReleaseManifestBuilder
     public ReleaseManifestBuilder WithUpdaterImageId(string value)
     {
         _updaterImageId = value;
+        return this;
+    }
+
+    public ReleaseManifestBuilder WithUpdaterTargetDigest(string value)
+    {
+        _updaterTargetDigest = value;
         return this;
     }
 

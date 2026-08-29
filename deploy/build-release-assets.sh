@@ -14,7 +14,7 @@ repository=${GITHUB_REPOSITORY:-example/sub2api-report}
 contract_version=1
 manual_upgrade_required=${MANUAL_UPGRADE_REQUIRED:-false}
 online_install_supported=${ONLINE_INSTALL_SUPPORTED:-true}
-minimum_updater_version=${MINIMUM_UPDATER_VERSION:-1.0.0}
+minimum_updater_version=${MINIMUM_UPDATER_VERSION:-1.0.6}
 if [[ ! $minimum_updater_version =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]]; then
   echo "MINIMUM_UPDATER_VERSION must be a valid SemVer." >&2
   exit 2
@@ -142,14 +142,60 @@ bundle_asset="sub2api-report-v${version}-linux-amd64.tar.gz"
 docker save "$app_version_tag" | gzip -n -9 > "$output_dir/$app_asset"
 docker save "$updater_version_tag" | gzip -n -9 > "$output_dir/$updater_asset"
 
+inspect_saved_image_archive() {
+  local archive=$1
+  local expected_tag=$2
+  local docker_manifest index_json config_path config_hex config_digest target_digest target_hex
+  docker_manifest=$(tar -xOzf "$archive" manifest.json)
+  jq -e --arg tag "$expected_tag" \
+    'length == 1 and .[0].RepoTags == [$tag] and (.[0].Layers | length > 0)' \
+    <<<"$docker_manifest" >/dev/null || {
+    echo "$archive does not contain exactly the expected image tag." >&2
+    return 1
+  }
+  config_path=$(jq -r '.[0].Config' <<<"$docker_manifest")
+  [[ $config_path =~ ^(blobs/sha256/)?[a-f0-9]{64}(\.json)?$ ]] || {
+    echo "$archive contains an invalid image config path." >&2
+    return 1
+  }
+  config_hex=${config_path#blobs/sha256/}
+  config_hex=${config_hex%.json}
+  config_digest="sha256:$(tar -xOzf "$archive" "$config_path" | sha256sum | awk '{print $1}')"
+  [[ $config_digest == "sha256:$config_hex" ]] || {
+    echo "$archive image config content does not match its digest path." >&2
+    return 1
+  }
+  index_json=$(tar -xOzf "$archive" index.json)
+  jq -e '(.manifests | length) == 1' <<<"$index_json" >/dev/null || {
+    echo "$archive index must contain exactly one target descriptor." >&2
+    return 1
+  }
+  target_digest=$(jq -r '.manifests[0].digest' <<<"$index_json")
+  [[ $target_digest =~ ^sha256:[a-f0-9]{64}$ ]] || {
+    echo "$archive contains an invalid target digest." >&2
+    return 1
+  }
+  target_hex=${target_digest#sha256:}
+  [[ $(tar -xOzf "$archive" "blobs/sha256/$target_hex" | sha256sum | awk '{print $1}') == "$target_hex" ]] || {
+    echo "$archive target descriptor content does not match its digest." >&2
+    return 1
+  }
+  printf '%s\t%s\n' "$config_digest" "$target_digest"
+}
+
+IFS=$'\t' read -r app_image_id app_target_digest < <(
+  inspect_saved_image_archive "$output_dir/$app_asset" "$app_version_tag"
+)
+IFS=$'\t' read -r updater_image_id updater_target_digest < <(
+  inspect_saved_image_archive "$output_dir/$updater_asset" "$updater_version_tag"
+)
+
 app_sha=$(sha256sum "$output_dir/$app_asset" | awk '{print $1}')
 updater_sha=$(sha256sum "$output_dir/$updater_asset" | awk '{print $1}')
 app_size=$(stat -c '%s' "$output_dir/$app_asset")
 updater_size=$(stat -c '%s' "$output_dir/$updater_asset")
 release_notes_sha=$(sha256sum "$output_dir/$release_notes_asset" | awk '{print $1}')
 release_notes_size=$(stat -c '%s' "$output_dir/$release_notes_asset")
-app_image_id=$(docker image inspect "$app_version_tag" --format '{{.Id}}')
-updater_image_id=$(docker image inspect "$updater_version_tag" --format '{{.Id}}')
 target_migration=$(find "$repo_root/src/Sub2ApiReport.Infrastructure/Persistence/Migrations" \
   -maxdepth 1 -type f -name '[0-9]*.cs' ! -name '*.Designer.cs' -printf '%f\n' \
   | sort | tail -n 1 | sed 's/\.cs$//')
@@ -163,9 +209,11 @@ jq -n \
   --arg appAsset "$app_asset" \
   --arg appSha "$app_sha" \
   --arg appImageId "$app_image_id" \
+  --arg appTargetDigest "$app_target_digest" \
   --arg updaterAsset "$updater_asset" \
   --arg updaterSha "$updater_sha" \
   --arg updaterImageId "$updater_image_id" \
+  --arg updaterTargetDigest "$updater_target_digest" \
   --arg releaseNotesAsset "$release_notes_asset" \
   --arg releaseNotesSha "$release_notes_sha" \
   --arg targetMigration "$target_migration" \
@@ -176,7 +224,7 @@ jq -n \
   --argjson onlineInstallSupported "$online_install_supported" \
   --argjson contractVersion "$contract_version" \
   '{
-    schemaVersion: 1,
+    schemaVersion: 2,
     version: $version,
     channel: "stable",
     publishedAt: $publishedAt,
@@ -190,6 +238,7 @@ jq -n \
       archiveUrl: ("https://github.com/" + $repository + "/releases/download/v" + $version + "/" + $appAsset),
       archiveSha256: $appSha,
       imageId: $appImageId,
+      targetDigest: $appTargetDigest,
       loadedTag: ("sub2api-report-app:" + $version),
       size: $appSize
     },
@@ -197,6 +246,7 @@ jq -n \
       archiveUrl: ("https://github.com/" + $repository + "/releases/download/v" + $version + "/" + $updaterAsset),
       archiveSha256: $updaterSha,
       imageId: $updaterImageId,
+      targetDigest: $updaterTargetDigest,
       loadedTag: ("sub2api-report-updater:" + $version),
       size: $updaterSize,
       selfUpdateSupported: false

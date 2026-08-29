@@ -4,11 +4,17 @@ set -euo pipefail
 repository=lohaaa/sub2api-report
 requested_version=${SUB2API_REPORT_VERSION:-latest}
 
-if [[ $(id -u) -ne 0 ]]; then
-  echo "Run as root: curl -fsSL https://raw.githubusercontent.com/$repository/main/deploy/server-bootstrap.sh | sudo bash" >&2
-  exit 2
-fi
-
+run_as_root() {
+  if [[ $(id -u) -eq 0 ]]; then
+    "$@"
+    return
+  fi
+  command -v sudo >/dev/null 2>&1 || {
+    echo "sudo is required to install system dependencies and the systemd service." >&2
+    exit 2
+  }
+  sudo "$@"
+}
 install_dependencies() {
   local missing=()
   for command_name in curl sha256sum tar; do
@@ -18,12 +24,13 @@ install_dependencies() {
 
   echo "Installing required host tools: ${missing[*]}"
   if command -v apt-get >/dev/null 2>&1; then
-    apt-get update
-    DEBIAN_FRONTEND=noninteractive apt-get install --yes curl coreutils tar
+    run_as_root apt-get update
+    run_as_root env DEBIAN_FRONTEND=noninteractive \
+      apt-get install --yes curl coreutils tar
   elif command -v dnf >/dev/null 2>&1; then
-    dnf install --assumeyes curl coreutils tar
+    run_as_root dnf install --assumeyes curl coreutils tar
   elif command -v yum >/dev/null 2>&1; then
-    yum install --assumeyes curl coreutils tar
+    run_as_root yum install --assumeyes curl coreutils tar
   else
     echo "Install curl, coreutils, and tar, then retry." >&2
     exit 2
@@ -44,10 +51,10 @@ install_runtime_dependencies() {
   runtime_dependencies_present && return
   echo "Installing missing .NET native runtime dependencies..."
   if command -v apt-get >/dev/null 2>&1; then
-    apt-get update
+    run_as_root apt-get update
     if apt-cache show dotnet-runtime-deps-10.0 >/dev/null 2>&1; then
-      DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends \
-        dotnet-runtime-deps-10.0
+      run_as_root env DEBIAN_FRONTEND=noninteractive \
+        apt-get install --yes --no-install-recommends dotnet-runtime-deps-10.0
     else
       local icu_package ssl_package
       icu_package=$(apt-cache search --names-only '^libicu[0-9]+$' | awk '{print $1}' | sort -V | tail -n 1)
@@ -61,13 +68,14 @@ install_runtime_dependencies() {
         echo "Could not resolve ICU/OpenSSL runtime packages for this distribution." >&2
         exit 2
       }
-      DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends \
+      run_as_root env DEBIAN_FRONTEND=noninteractive \
+        apt-get install --yes --no-install-recommends \
         "$icu_package" "$ssl_package" zlib1g libstdc++6 libgssapi-krb5-2 libunwind8
     fi
   elif command -v dnf >/dev/null 2>&1; then
-    dnf install --assumeyes libicu openssl-libs zlib libstdc++ libunwind krb5-libs
+    run_as_root dnf install --assumeyes libicu openssl-libs zlib libstdc++ libunwind krb5-libs
   elif command -v yum >/dev/null 2>&1; then
-    yum install --assumeyes libicu openssl-libs zlib libstdc++ libunwind krb5-libs
+    run_as_root yum install --assumeyes libicu openssl-libs zlib libstdc++ libunwind krb5-libs
   else
     echo "Direct deployment supports Debian/Ubuntu and RHEL-compatible systemd distributions." >&2
     exit 2
@@ -159,4 +167,4 @@ mkdir -p "$bundle_dir"
 printf 'Extracting server package...\n'
 tar -xzf "$work_dir/$asset" -C "$bundle_dir"
 printf 'Installing systemd service...\n'
-"$bundle_dir/server-install.sh"
+run_as_root bash "$bundle_dir/server-install.sh"

@@ -62,6 +62,7 @@ jobs:
       - run: |
           bash -n deploy/*.sh
           shellcheck -x deploy/*.sh
+          deploy/server-bootstrap-test.sh
           deploy/server-install-test.sh
 
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3

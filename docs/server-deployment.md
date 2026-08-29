@@ -8,10 +8,10 @@
 ## 安装和更新
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/server-bootstrap.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/server-bootstrap.sh | bash
 ```
 
-bootstrap 自动解析最新 GitHub Release，下载 `sub2api-report-server-vX.Y.Z-linux-amd64.tar.gz` 和 checksums，校验后调用包内 `server-install.sh`。
+bootstrap 以当前用户解析 GitHub Release、下载 server package、显示进度并校验 checksum；仅在安装系统依赖和调用包内 `server-install.sh` 时通过 `sudo` 提权。
 
 安装器会：
 
@@ -86,7 +86,7 @@ sudo sub2api-reportctl admin create-reset-code
 再次执行安装命令即可更新到最新版本：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/server-bootstrap.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/server-bootstrap.sh | bash
 ```
 
 服务器直接部署不运行 Docker Updater，管理页面的 App-only Docker 在线更新不可用；更新由 systemd bootstrap 完成，并包含停服、数据库备份、健康检查和失败回滚。

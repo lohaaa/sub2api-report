@@ -18,10 +18,10 @@ Sub2API Report 是一个单管理员的 Codex API Key 用量报告系统。它�
 适用于使用 systemd 的 Linux 服务器，**不需要 Docker，也不需要预装 .NET Runtime**。
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/server-bootstrap.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/server-bootstrap.sh | bash
 ```
 
-脚本会下载 self-contained 服务器程序，校验 Release checksum，安装 systemd 服务并启动。
+脚本以当前用户下载并校验 self-contained 服务器程序，仅在安装依赖、写入系统目录和注册 systemd 服务时调用 `sudo`。
 
 默认访问地址：
 

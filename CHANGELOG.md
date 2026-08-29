@@ -8,6 +8,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- 服务器 bootstrap 以普通用户完成 Release 下载与 checksum 校验，仅在系统安装阶段内部调用 `sudo`，避免提权后丢失用户网络环境。
+
 ## [1.0.2] - 2026-08-28
 
 ### Changed

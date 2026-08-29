@@ -20,8 +20,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          set -euo pipefail
-          release_id=$(gh api "repos/$GH_REPO/releases/tags/v1.0.4" --jq .id)
-          gh api --method PATCH "repos/$GH_REPO/releases/$release_id" \
-            --field draft=false \
-            --raw-field make_latest=true >/dev/null
+          gh release edit v1.0.4 --draft=false --latest --repo "$GH_REPO"

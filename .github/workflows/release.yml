@@ -79,9 +79,6 @@ jobs:
           chmod 0600 "$key_file"
           printf '%s\n' "$RELEASE_SIGNING_KEY_PEM" > "$key_file"
           RELEASE_SIGNING_KEY_FILE=$key_file \
-          MANUAL_UPGRADE_REQUIRED=true \
-          ONLINE_INSTALL_SUPPORTED=false \
-          MINIMUM_UPDATER_VERSION=1.0.6 \
             deploy/build-release-assets.sh '${{ steps.version.outputs.value }}' release
 
       - name: Verify generated bundle

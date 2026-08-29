@@ -64,27 +64,25 @@ trap 'rm -rf "$work_dir"' EXIT
 
 server_asset="sub2api-report-server-v${version}-linux-amd64.tar.gz"
 server_dir="$work_dir/server"
-mkdir -p "$server_dir/app" "$server_dir/migrator" "$server_dir/cli"
+mkdir -p "$server_dir/runtime"
 publish_server_project() {
   local project=$1
-  local destination=$2
   dotnet publish "$repo_root/$project" \
     --configuration Release \
     --runtime linux-x64 \
     --self-contained true \
-    --output "$destination" \
+    --output "$server_dir/runtime" \
     /p:UseAppHost=true \
-    /p:PublishSingleFile=true \
-    /p:IncludeNativeLibrariesForSelfExtract=true \
+    /p:PublishSingleFile=false \
     /p:PublishTrimmed=false \
     /p:DebugType=None \
     /p:Version="$version" \
     /p:SourceRevisionId="$revision" \
     /p:ContinuousIntegrationBuild=true
 }
-publish_server_project src/Sub2ApiReport.Api/Sub2ApiReport.Api.csproj "$server_dir/app"
-publish_server_project src/Sub2ApiReport.Migrator/Sub2ApiReport.Migrator.csproj "$server_dir/migrator"
-publish_server_project src/Sub2ApiReport.Cli/Sub2ApiReport.Cli.csproj "$server_dir/cli"
+publish_server_project src/Sub2ApiReport.Api/Sub2ApiReport.Api.csproj
+publish_server_project src/Sub2ApiReport.Migrator/Sub2ApiReport.Migrator.csproj
+publish_server_project src/Sub2ApiReport.Cli/Sub2ApiReport.Cli.csproj
 find "$server_dir" -type f -name '*.pdb' -delete
 install -m 0755 "$repo_root/deploy/server-install.sh" "$server_dir/server-install.sh"
 install -m 0644 "$repo_root/LICENSE" "$server_dir/LICENSE"

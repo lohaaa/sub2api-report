@@ -144,10 +144,10 @@ jobs:
           tar -xzf "candidate/sub2api-report-server-v${CANDIDATE_VERSION}-linux-amd64.tar.gz" -C "$server_root/bundle"
           connection="Data Source=$data_root/db/sub2api-report.db;Foreign Keys=True;Default Timeout=5;Pooling=True"
           env ConnectionStrings__Database="$connection" DataProtection__KeysPath="$data_root/keys" \
-            "$server_root/bundle/migrator/Sub2ApiReport.Migrator"
+            "$server_root/bundle/runtime/Sub2ApiReport.Migrator"
           env ASPNETCORE_ENVIRONMENT=Production ASPNETCORE_URLS=http://127.0.0.1:18081 \
             ConnectionStrings__Database="$connection" DataProtection__KeysPath="$data_root/keys" \
-            "$server_root/bundle/app/Sub2ApiReport.Api" >"$server_root/app.log" 2>&1 &
+            "$server_root/bundle/runtime/Sub2ApiReport.Api" >"$server_root/app.log" 2>&1 &
           app_pid=$!
           cleanup_server() {
             kill "$app_pid" >/dev/null 2>&1 || true

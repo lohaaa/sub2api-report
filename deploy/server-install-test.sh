@@ -10,11 +10,11 @@ trap cleanup EXIT
 
 bundle="$test_root/bundle"
 mock_bin="$test_root/bin"
-mkdir -p "$bundle/app" "$bundle/migrator" "$bundle/cli" "$mock_bin"
-printf '1.0.1\n' > "$bundle/VERSION"
+mkdir -p "$bundle/runtime" "$mock_bin"
+printf '1.0.2\n' > "$bundle/VERSION"
 printf 'license\n' > "$bundle/LICENSE"
 printf 'changelog\n' > "$bundle/CHANGELOG.md"
-for executable in app/Sub2ApiReport.Api migrator/Sub2ApiReport.Migrator cli/Sub2ApiReport.Cli; do
+for executable in runtime/Sub2ApiReport.Api runtime/Sub2ApiReport.Migrator runtime/Sub2ApiReport.Cli; do
   printf '#!/bin/sh\nexit 0\n' > "$bundle/$executable"
   chmod 0755 "$bundle/$executable"
 done
@@ -58,11 +58,11 @@ export SUB2API_REPORT_SERVICE_NAME=sub2api-report-test.service
 "$bundle/server-install.sh"
 
 test -L "$test_root/opt/current"
-test "$(readlink -f "$test_root/opt/current")" = "$test_root/opt/releases/1.0.1"
-test -x "$test_root/opt/current/app/Sub2ApiReport.Api"
+test "$(readlink -f "$test_root/opt/current")" = "$test_root/opt/releases/1.0.2"
+test -x "$test_root/opt/current/runtime/Sub2ApiReport.Api"
 test -f "$test_root/systemd/sub2api-report-test.service"
 test -x "$test_root/usr/sub2api-reportctl"
-grep -q "ExecStart=$test_root/opt/current/app/Sub2ApiReport.Api" \
+grep -q "ExecStart=$test_root/opt/current/runtime/Sub2ApiReport.Api" \
   "$test_root/systemd/sub2api-report-test.service"
 grep -q '^enable sub2api-report-test.service$' "$test_root/systemctl.log"
 grep -q '^restart sub2api-report-test.service$' "$test_root/systemctl.log"

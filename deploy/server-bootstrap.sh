@@ -80,8 +80,31 @@ install_runtime_dependencies() {
 
 github_curl() {
   curl --fail --silent --show-error --location \
-    --retry 8 --retry-all-errors --retry-delay 3 --connect-timeout 20 \
-    --speed-limit 1024 --speed-time 60 "$@"
+    --retry 8 --retry-all-errors --retry-delay 3 --connect-timeout 30 "$@"
+}
+
+download_with_progress() {
+  local url=$1
+  local output=$2
+  local label=$3
+  local attempt=1
+  local maximum_attempts=8
+  touch "$output"
+  while (( attempt <= maximum_attempts )); do
+    printf '\n%s (attempt %d/%d, resume supported)\n' "$label" "$attempt" "$maximum_attempts"
+    if curl --fail --show-error --location --progress-bar \
+      --continue-at - --connect-timeout 30 --speed-limit 128 --speed-time 300 \
+      --output "$output" "$url"; then
+      printf '%s complete: %s bytes\n' "$label" "$(stat -c '%s' "$output")"
+      return
+    fi
+    printf 'Download interrupted at %s bytes. Retrying in 3 seconds...\n' \
+      "$(stat -c '%s' "$output")" >&2
+    attempt=$((attempt + 1))
+    sleep 3
+  done
+  echo "$label failed after $maximum_attempts attempts." >&2
+  return 1
 }
 install_runtime_dependencies
 command -v systemctl >/dev/null 2>&1 || {
@@ -110,11 +133,12 @@ base_url="https://github.com/$repository/releases/download/v${version}"
 work_dir=$(mktemp -d /tmp/sub2api-report-server-bootstrap.XXXXXX)
 trap 'rm -rf "$work_dir"' EXIT
 
-printf 'Downloading Sub2API Report server package v%s...\n' "$version"
-github_curl --output "$work_dir/$asset" "$base_url/$asset" || {
-  echo "Server package download failed after multiple retries." >&2
-  exit 1
-}
+printf 'Release resolved: v%s\n' "$version"
+download_with_progress \
+  "$base_url/$asset" \
+  "$work_dir/$asset" \
+  "Server package"
+printf '\nDownloading checksum metadata...\n'
 github_curl --output "$work_dir/checksums.txt" "$base_url/checksums.txt" || {
   echo "Release checksum download failed after multiple retries." >&2
   exit 1
@@ -124,6 +148,7 @@ checksum_line=$(grep "  ${asset}$" "$work_dir/checksums.txt" || true)
   echo "Release checksum does not contain $asset." >&2
   exit 1
 }
+printf 'Verifying SHA-256 checksum...\n'
 (
   cd "$work_dir"
   printf '%s\n' "$checksum_line" | sha256sum --check --strict -
@@ -131,5 +156,7 @@ checksum_line=$(grep "  ${asset}$" "$work_dir/checksums.txt" || true)
 
 bundle_dir="$work_dir/bundle"
 mkdir -p "$bundle_dir"
+printf 'Extracting server package...\n'
 tar -xzf "$work_dir/$asset" -C "$bundle_dir"
+printf 'Installing systemd service...\n'
 "$bundle_dir/server-install.sh"

@@ -8,9 +8,17 @@
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-08-28
+
+### Changed
+
+- 服务器包改为 App、Migrator、CLI 共享一套 self-contained .NET Runtime，压缩体积由约 147 MiB 降至约 54 MiB。
+- 服务器 bootstrap 显示下载进度、已下载字节、重试次数及安装阶段。
+
 ### Fixed
 
-- 服务器 bootstrap 仅在缺少 native runtime 时安装运行库，不再安装 ICU/OpenSSL 开发包；GitHub 下载增加 TLS/网络错误重试。
+- 服务器 bootstrap 仅在缺少 native runtime 时安装运行库，不再安装 ICU/OpenSSL 开发包。
+- GitHub Release、server package 和 checksums 下载支持 TLS/网络错误重试及断点续传。
 
 ## [1.0.1] - 2026-08-28
 
@@ -49,6 +57,7 @@
 - App 容器不挂载 Docker Socket；Updater 通过 instance/container allowlist、固定 API 和 non-root Socket group 隔离高权限操作。
 - 增加公开安全政策，并将未修复漏洞引导至 GitHub Private Vulnerability Reporting。
 
-[Unreleased]: https://github.com/lohaaa/sub2api-report/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/lohaaa/sub2api-report/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/lohaaa/sub2api-report/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/lohaaa/sub2api-report/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/lohaaa/sub2api-report/releases/tag/v1.0.0

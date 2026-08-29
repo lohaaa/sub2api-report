@@ -32,13 +32,14 @@ for command_name in curl install ln tar; do
     exit 2
   }
 done
-for required in app/Sub2ApiReport.Api migrator/Sub2ApiReport.Migrator cli/Sub2ApiReport.Cli; do
+for required in runtime/Sub2ApiReport.Api runtime/Sub2ApiReport.Migrator runtime/Sub2ApiReport.Cli; do
   [[ -x $bundle_dir/$required ]] || {
     echo "Server package is missing $required." >&2
     exit 1
   }
 done
 
+echo "[1/5] Preparing service user and data directories..."
 if ! getent group "$service_user" >/dev/null 2>&1; then
   groupadd --system "$service_user"
 fi
@@ -65,28 +66,30 @@ EOF
 fi
 
 old_target=$(readlink -f "$current_link" 2>/dev/null || true)
-if [[ $old_target == "$release_dir" && -x $current_link/app/Sub2ApiReport.Api ]]; then
+if [[ $old_target == "$release_dir" && -x $current_link/runtime/Sub2ApiReport.Api ]]; then
   systemctl daemon-reload
   systemctl enable --now "$service_name"
   echo "Sub2API Report $version is already installed."
   exit 0
 fi
 
+echo "[2/5] Installing release files..."
 staging_dir="$install_root/releases/.${version}.tmp"
 rm -rf "$staging_dir"
 install -d -m 0755 "$staging_dir"
-cp -a "$bundle_dir/app" "$bundle_dir/migrator" "$bundle_dir/cli" "$staging_dir/"
+cp -a "$bundle_dir/runtime" "$staging_dir/"
 install -m 0644 "$bundle_dir/LICENSE" "$staging_dir/LICENSE"
 install -m 0644 "$bundle_dir/CHANGELOG.md" "$staging_dir/CHANGELOG.md"
 chown -R root:root "$staging_dir"
 find "$staging_dir" -type d -exec chmod 0755 {} +
 find "$staging_dir" -type f -exec chmod 0644 {} +
-chmod 0755 "$staging_dir/app/Sub2ApiReport.Api" \
-  "$staging_dir/migrator/Sub2ApiReport.Migrator" \
-  "$staging_dir/cli/Sub2ApiReport.Cli"
+chmod 0755 "$staging_dir/runtime/Sub2ApiReport.Api" \
+  "$staging_dir/runtime/Sub2ApiReport.Migrator" \
+  "$staging_dir/runtime/Sub2ApiReport.Cli"
 rm -rf "$release_dir"
 mv "$staging_dir" "$release_dir"
 
+echo "[3/5] Configuring systemd service..."
 cat > "$systemd_dir/$service_name" <<EOF
 [Unit]
 Description=Sub2API Report
@@ -97,11 +100,11 @@ Wants=network-online.target
 Type=simple
 User=$service_user
 Group=$service_user
-WorkingDirectory=$current_link/app
+WorkingDirectory=$current_link/runtime
 Environment=ASPNETCORE_ENVIRONMENT=Production
 EnvironmentFile=$config_dir/environment
-ExecStartPre=$current_link/migrator/Sub2ApiReport.Migrator
-ExecStart=$current_link/app/Sub2ApiReport.Api
+ExecStartPre=$current_link/runtime/Sub2ApiReport.Migrator
+ExecStart=$current_link/runtime/Sub2ApiReport.Api
 Restart=always
 RestartSec=5
 TimeoutStartSec=180
@@ -128,9 +131,9 @@ set -eu
 export ConnectionStrings__Database='Data Source=$data_dir/db/sub2api-report.db;Foreign Keys=True;Default Timeout=5;Pooling=True'
 export DataProtection__KeysPath='$data_dir/keys'
 if [ "\$(id -u)" -eq 0 ] && command -v runuser >/dev/null 2>&1; then
-  exec runuser -u '$service_user' -- '$current_link/cli/Sub2ApiReport.Cli' "\$@"
+  exec runuser -u '$service_user' -- '$current_link/runtime/Sub2ApiReport.Cli' "\$@"
 fi
-exec '$current_link/cli/Sub2ApiReport.Cli' "\$@"
+exec '$current_link/runtime/Sub2ApiReport.Cli' "\$@"
 EOF
 chmod 0755 "$control_path"
 
@@ -155,6 +158,7 @@ rollback() {
   exit "$exit_code"
 }
 trap rollback ERR
+echo "[4/5] Backing up data and switching release..."
 
 if [[ -n $old_target ]]; then
   timestamp=$(date -u +%Y%m%dT%H%M%SZ)
@@ -168,6 +172,7 @@ ln -sfn "$release_dir" "$current_link"
 systemctl daemon-reload
 systemctl enable "$service_name"
 systemctl restart "$service_name"
+echo "[5/5] Waiting for application readiness (up to 180 seconds)..."
 
 healthy=false
 for _ in $(seq 1 90); do

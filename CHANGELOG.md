@@ -8,9 +8,12 @@
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-08-28
+
 ### Added
 
-- 增加服务器一键部署和 Docker Compose 手动准备模式，自动下载并校验最新 Release。
+- 增加无需 Docker 和 .NET Runtime 的 self-contained systemd 服务器发行包及一键安装、更新和回滚。
+- 增加 Docker Compose 手动准备模式，允许显式管理容器启动和停止。
 
 ## [1.0.0] - 2026-08-28
 
@@ -42,5 +45,6 @@
 - App 容器不挂载 Docker Socket；Updater 通过 instance/container allowlist、固定 API 和 non-root Socket group 隔离高权限操作。
 - 增加公开安全政策，并将未修复漏洞引导至 GitHub Private Vulnerability Reporting。
 
-[Unreleased]: https://github.com/lohaaa/sub2api-report/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/lohaaa/sub2api-report/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/lohaaa/sub2api-report/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/lohaaa/sub2api-report/releases/tag/v1.0.0

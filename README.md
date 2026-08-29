@@ -8,30 +8,20 @@ Sub2API Report 是一个单管理员的 Codex API Key 用量报告系统。它�
 - 支持不可变报告快照和 UTF-8 BOM CSV；
 - 支持邮件、钉钉、飞书组合投递和失败补发；
 - 支持 Quartz 持久化月报计划、任务重试和重启恢复；
-- 支持签名 Release、页面在线更新和失败自动回滚；
+- 支持签名 Release、更新备份和失败回滚；
 - 使用 SQLite 存储数据，无需单独部署数据库。
 
-## 部署要求
+正式发行版支持 Linux `amd64`，提供服务器直接部署和 Docker Compose 两种方案。
 
-- Linux `amd64`；
-- Docker Engine；
-- Docker Compose v2。
+## 方式一：服务器直接部署
 
-不支持 rootless Docker、Podman、Swarm、Kubernetes 和 arm64。
-
-## 方式一：服务器一键部署
-
-脚本会自动下载并校验最新 Release、加载镜像、生成配置并启动服务：
+适用于使用 systemd 的 Linux 服务器，**不需要 Docker，也不需要预装 .NET Runtime**。
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/bootstrap.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/server-bootstrap.sh | sudo bash
 ```
 
-安装目录：
-
-```text
-/opt/sub2api-report
-```
+脚本会下载 self-contained 服务器程序，校验 Release checksum，安装 systemd 服务并启动。
 
 默认访问地址：
 
@@ -39,25 +29,34 @@ curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/b
 http://<服务器地址>:8080
 ```
 
-查看日志：
+常用命令：
 
 ```bash
-cd /opt/sub2api-report
-sudo docker compose logs -f app
+sudo systemctl status sub2api-report
+sudo journalctl -u sub2api-report -f
+sudo systemctl restart sub2api-report
 ```
 
-以后再次执行同一条一键部署命令即可更新到最新版本。
+数据目录：
+
+```text
+/var/lib/sub2api-report
+```
+
+以后再次执行同一条安装命令即可更新到最新版本；更新失败时会恢复旧程序和更新前数据库。
 
 ## 方式二：Docker Compose 部署
 
-先准备最新 Release、镜像和 Compose 文件，但不启动容器：
+服务器需要提前安装 Docker Engine 和 Docker Compose v2。
+
+先下载并准备最新 Release、镜像和 Compose 文件：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/bootstrap.sh |
   sudo SUB2API_REPORT_START=false bash
 ```
 
-然后手工管理容器：
+然后启动容器：
 
 ```bash
 cd /opt/sub2api-report
@@ -66,16 +65,26 @@ sudo docker compose ps
 sudo docker compose logs -f app
 ```
 
-停止服务：
+停止容器：
 
 ```bash
 cd /opt/sub2api-report
 sudo docker compose down
 ```
 
+Docker Compose 部署支持管理页面 App-only 在线更新和失败自动回滚。再次执行 Docker bootstrap 命令也可以更新完整部署 bundle。
+
 ## 首次初始化
 
-首次启动后，从 App 日志中读取一次性管理员初始化码：
+首次启动后读取一次性管理员初始化码。
+
+服务器直接部署：
+
+```bash
+sudo journalctl -u sub2api-report
+```
+
+Docker Compose 部署：
 
 ```bash
 cd /opt/sub2api-report
@@ -84,7 +93,7 @@ sudo docker compose logs app
 
 打开 `http://<服务器地址>:8080`，使用初始化码创建管理员，然后配置 Sub2API、报告渠道和月报计划。
 
-更多配置、备份、恢复和升级说明见 [部署文档](docs/deployment.md)。
+更多配置、备份和恢复说明见 [服务器部署文档](docs/server-deployment.md) 或 [Docker 部署文档](docs/deployment.md)。
 
 ## License
 

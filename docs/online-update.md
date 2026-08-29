@@ -25,6 +25,7 @@
 
 ```text
 sub2api-report-v1.2.0-linux-amd64.tar.gz
+sub2api-report-server-v1.2.0-linux-amd64.tar.gz
 sub2api-report-app-v1.2.0-linux-amd64.tar.gz
 sub2api-report-updater-v1.2.0-linux-amd64.tar.gz
 release-manifest.json

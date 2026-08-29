@@ -35,7 +35,7 @@ if [[ -z ${RELEASE_SIGNING_KEY_FILE:-} || ! -f ${RELEASE_SIGNING_KEY_FILE:-} ]];
   exit 2
 fi
 
-for command_name in awk docker gzip install jq openssl sed sha256sum tar; do
+for command_name in awk docker dotnet gzip install jq openssl sed sha256sum tar; do
   command -v "$command_name" >/dev/null 2>&1 || {
     echo "$command_name is required." >&2
     exit 2
@@ -61,6 +61,37 @@ install -m 0644 "$repo_root/CHANGELOG.md" "$output_dir/CHANGELOG.md"
 install -m 0644 "$repo_root/LICENSE" "$output_dir/LICENSE"
 work_dir=$(mktemp -d)
 trap 'rm -rf "$work_dir"' EXIT
+
+server_asset="sub2api-report-server-v${version}-linux-amd64.tar.gz"
+server_dir="$work_dir/server"
+mkdir -p "$server_dir/app" "$server_dir/migrator" "$server_dir/cli"
+publish_server_project() {
+  local project=$1
+  local destination=$2
+  dotnet publish "$repo_root/$project" \
+    --configuration Release \
+    --runtime linux-x64 \
+    --self-contained true \
+    --output "$destination" \
+    /p:UseAppHost=true \
+    /p:PublishSingleFile=true \
+    /p:IncludeNativeLibrariesForSelfExtract=true \
+    /p:PublishTrimmed=false \
+    /p:DebugType=None \
+    /p:Version="$version" \
+    /p:SourceRevisionId="$revision" \
+    /p:ContinuousIntegrationBuild=true
+}
+publish_server_project src/Sub2ApiReport.Api/Sub2ApiReport.Api.csproj "$server_dir/app"
+publish_server_project src/Sub2ApiReport.Migrator/Sub2ApiReport.Migrator.csproj "$server_dir/migrator"
+publish_server_project src/Sub2ApiReport.Cli/Sub2ApiReport.Cli.csproj "$server_dir/cli"
+find "$server_dir" -type f -name '*.pdb' -delete
+install -m 0755 "$repo_root/deploy/server-install.sh" "$server_dir/server-install.sh"
+install -m 0644 "$repo_root/LICENSE" "$server_dir/LICENSE"
+install -m 0644 "$repo_root/CHANGELOG.md" "$server_dir/CHANGELOG.md"
+printf '%s\n' "$version" > "$server_dir/VERSION"
+tar --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner \
+  -C "$server_dir" -cf - . | gzip -n -9 > "$output_dir/$server_asset"
 
 source_url="https://github.com/${repository}"
 app_version_tag="sub2api-report-app:${version}"
@@ -219,7 +250,7 @@ tar --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner \
 
 (
   cd "$output_dir"
-  sha256sum "$app_asset" "$updater_asset" "$bundle_asset" \
+  sha256sum "$app_asset" "$updater_asset" "$bundle_asset" "$server_asset" \
     release-manifest.json release-manifest.sig update-public-key.pem \
     CHANGELOG.md LICENSE "$release_notes_asset" > checksums.txt
 )

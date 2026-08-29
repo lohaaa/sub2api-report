@@ -23,12 +23,12 @@ Sub2API Report 是一个单管理员、单实例的内部运营工具，用于�
 | 后端 | .NET 10 / ASP.NET Core | 用户指定；适合一体化 Web、后台任务和容器部署 |
 | 前端 | React + TypeScript + Vite + shadcn/ui | shadcn/ui 的标准 React 路线，构建后可由 ASP.NET Core 同源托管 |
 | 应用形态 | 模块化单体 | 单管理员、单实例，无需微服务复杂度 |
-| 主数据库 | SQLite | 零外部依赖，适合 Docker 一键部署和当前数据规模 |
+| 主数据库 | SQLite | 零外部依赖，适合单机 systemd 或 Docker Compose 部署和当前数据规模 |
 | 调度 | 应用内 Quartz.NET 持久化调度 | 可在页面配置、查看执行记录和手工补跑 |
 | 认证 | ASP.NET Core Identity + Cookie | 前后端同源，避免在浏览器保存 JWT |
-| 首次初始化 | Docker 日志一次性初始化码 | 防止公网首访者抢注管理员 |
-| 部署 | Docker Compose | 一条命令启动主应用和内部 updater |
-| 在线升级 | 页面触发 updater sidecar | 主应用不接触 Docker Socket，可健康检查和回滚 |
+| 首次初始化 | 服务日志一次性初始化码 | 防止公网首访者抢注管理员 |
+| 部署 | self-contained systemd 或 Docker Compose | 服务器可无 Docker 直接运行；容器部署带内部 Updater |
+| 更新 | systemd bootstrap 或页面 App-only 更新 | systemd 部署重跑安装命令；Docker 部署可健康检查和自动回滚 |
 | 配置管理 | SQLite typed settings + 运行期刷新 | 可变配置通过页面修改并动态生效，部署配置只负责启动闭环 |
 | 镜像架构 | linux/amd64 | 用户确认当前只需要 amd64 |
 | 发布 | GitHub Release Assets | 公开仓库统一管理源码、发行说明、离线镜像包、校验和与证明，不发布公共镜像 |
@@ -536,7 +536,7 @@ MVP 不强制引入 Prometheus；保留 OpenTelemetry 接入点。
 
 | 指标 | MVP 目标 |
 | --- | --- |
-| 部署 | amd64 Linux，Docker Compose 一条命令启动 |
+| 部署 | amd64 Linux；self-contained systemd 一键安装，或 Docker Compose 启动 |
 | 启动 | 常规机器 10 秒内 ready，不含首次镜像拉取 |
 | 数据规模 | 100 个 Sub2API 用户、每用户最多 10 个历史 Key |
 | 报表执行 | 100 Key 在 5 分钟内完成，受 Sub2API 延迟影响 |
@@ -569,8 +569,8 @@ MVP 不包含：
 4. 实现报表聚合（用户 → Key）、快照、CSV 和手工 dry-run。
 5. 实现邮箱、钉钉、飞书及组合发送。
 6. 接入 Quartz 月报计划、幂等和补发。
-7. 完成 Docker Compose、离线镜像制品、备份和 GitHub Release CI。
+7. 完成 self-contained systemd、Docker Compose、离线制品、备份和 GitHub Release CI。
 8. 实现 updater、签名验证、App 健康检查和自动回滚；Updater 或 Compose 变更使用手工 bundle 升级。
 9. 完成安全加固、发布文档和首个稳定版本。
 
-在线升级安排在业务闭环之后，但发布契约、数据目录和本地镜像标签必须从第一阶段就按升级方案设计，避免后期重构部署方式。生产服务器不从公共 Registry 拉取镜像；Release bundle 通过 `docker load` 导入经过校验的镜像归档。
+在线升级安排在业务闭环之后。systemd 部署使用 self-contained server package 和 bootstrap 更新；Docker 部署的发布契约、数据目录和本地镜像标签从第一阶段即保持稳定。生产服务器不依赖公共 Registry。

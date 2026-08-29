@@ -77,13 +77,14 @@ Release notes 必须从该章节生成，禁止仅依赖自动提交摘要。
 
 ## 当前开发状态
 
-项目当前版本为 1.0.0：报告统计主体是 Sub2API 用户 → API Key（稳定标识
+项目当前版本为 1.0.1：报告统计主体是 Sub2API 用户 → API Key（稳定标识
 user_id + api_key_id，Key 名称仅保存快照），人员/Key 归属功能已移除。已实现安全初始化、
 用户与 Key 自动刷新、动态完整自然日窗口、schema v4 不可变快照、UTF-8 BOM 动态 CSV、
-邮件/钉钉/飞书投递、Quartz 持久化计划、规范化执行记录、任务级重试和失败补发。正式部署
-使用不依赖公共 Registry 的签名 GitHub Release bundle；App-only 在线升级具备维护模式、
-SQLite 一致性备份、连续健康验证和自动回滚，Updater/Compose 契约变化仍使用主机
-`update.sh`。前端依赖统一使用 pnpm，禁止生成 npm 或 Yarn 锁文件。
+邮件/钉钉/飞书投递、Quartz 持久化计划、规范化执行记录、任务级重试和失败补发。正式发行
+提供无需 Docker/.NET Runtime 的 self-contained systemd 服务器包，以及不依赖公共 Registry
+的 Docker Compose 离线镜像 bundle。Docker 部署支持 App-only 在线升级、SQLite 一致性备份、
+连续健康验证和自动回滚；systemd 部署通过 server bootstrap 更新和回滚。前端依赖统一使用
+pnpm，禁止生成 npm 或 Yarn 锁文件。
 
 ## 文件维护
 

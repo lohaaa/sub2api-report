@@ -41,7 +41,7 @@
 | M6 计划任务 | 0.7.0 | 已完成 | Quartz 持久化计划、窗口冻结、规范化执行记录、重试和恢复已落地 |
 | M7 Docker 和签名 bundle | 0.8.0 内部里程碑 | 已完成 | Candidate workflow 在 linux/amd64 上通过签名、Critical 扫描、SBOM、安装、故障回滚、成功更新和 non-root Socket 权限验收 |
 | M8 在线升级 | 0.9.0 内部里程碑 | 已完成 | 固定仓库验签、严格下载、Docker App-only 事务、维护模式、SQLite 备份、恢复、App API、step-up 和更新页面已实现 |
-| M9 稳定版加固 | `v1.0.0` / `v1.0.1` | 已完成 | Updater 安全验收、269 个 .NET 测试、20 个前端测试和 Release workflow 全部通过；v1.0.1 增加 self-contained systemd 直接部署 |
+| M9 稳定版加固 | `v1.0.0` - `v1.0.2` | 已完成 | Updater 安全验收和 Release workflow 全部通过；v1.0.2 提供带断点续传和进度显示的精简 systemd 直接部署包 |
 
 当前自动质量门最近一次通过：
 
@@ -52,8 +52,8 @@
 正式发布已完成：
 
 - 仓库首个 Tag 和公开 Release 为 `v1.0.0`；
-- `v1.0.1` 为 Latest，Release workflow 完成质量、Docker 镜像、self-contained server package、Critical 扫描、SBOM、签名、attestation 和两类 smoke test；
-- `v1.0.1` 包含 13 项 Release Assets，其中 server artifact checksum 为 `010fb596dedeaed3e5cfc05c7fbbcf7fe9ebcb4112e8ed5fa3f2ff2c870ebd69`。
+- `v1.0.2` 为 Latest，Release workflow 完成质量、Docker 镜像、共享 Runtime server package、Critical 扫描、SBOM、签名、attestation 和两类 smoke test；
+- `v1.0.2` 包含 13 项 Release Assets，server artifact 为 56,016,652 bytes，checksum 为 `89a222e50ff95a11806913ca98576656f3f26982c96354f7cb81bcc165e8ed83`。
 
 ## 4. 已完成业务基线（M1-M6）
 

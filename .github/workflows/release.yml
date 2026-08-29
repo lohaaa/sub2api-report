@@ -61,6 +61,7 @@ jobs:
           bash -n deploy/*.sh
           shellcheck -x deploy/*.sh
           deploy/documentation-test.sh
+          deploy/docker-bootstrap-test.sh
           deploy/server-bootstrap-test.sh
           deploy/server-install-test.sh
 

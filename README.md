@@ -63,9 +63,11 @@ sudo systemctl restart sub2api-report
 先下载并准备最新 Release、镜像和 Compose 文件：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/bootstrap.sh |
-  sudo SUB2API_REPORT_START=false bash
+curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/bootstrap.sh | \
+  SUB2API_REPORT_START=false bash
 ```
+
+脚本以当前用户下载并校验 bundle，仅在加载镜像和写入安装目录时调用 `sudo`。
 
 Compose 的 Report 主机端口在 `/opt/sub2api-report/.env` 中通过 `APP_PORT=18080` 指定。
 

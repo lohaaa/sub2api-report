@@ -32,10 +32,10 @@ deploy-bundle/
 ### 1.1 服务器一键部署
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/bootstrap.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/bootstrap.sh | bash
 ```
 
-官方 bootstrap 自动解析最新 Release，安装所需的小型宿主工具，下载完整 bundle 和 checksums，校验 SHA-256 后调用 bundle 中的 `install.sh`。已有 `/opt/sub2api-report` 安装时，同一命令会调用新 bundle 的 `update.sh`。Docker Engine 和 Docker Compose v2 必须预先安装并运行。
+官方 bootstrap 以当前用户解析、下载并校验 Release bundle，显示进度且支持断点续传；仅在加载镜像和写入安装目录时调用 `sudo`。已有安装会调用新 bundle 的 `update.sh`。Docker Engine 和 Docker Compose v2 必须预先安装并运行。
 
 ### 1.2 Docker Compose 手动部署
 
@@ -43,7 +43,7 @@ curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/b
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/bootstrap.sh | \
-  sudo SUB2API_REPORT_START=false bash
+  SUB2API_REPORT_START=false bash
 ```
 
 再显式启动：
@@ -59,7 +59,7 @@ sudo docker compose logs -f app
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/bootstrap.sh | \
-  sudo SUB2API_REPORT_VERSION=1.0.0 bash
+  SUB2API_REPORT_VERSION=1.0.4 bash
 ```
 
 手工下载、checksum 和 attestation 校验方式见 README。生产主机不从公共 Registry 拉取镜像，部署用户不持有发布私钥；bundle 内只包含用于验签的公钥。

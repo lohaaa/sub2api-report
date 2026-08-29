@@ -21,6 +21,12 @@ grep -Fq 'SUB2API_REPORT_PORT=18080 bash' "$readme"
 grep -Fq 'SUB2API_REPORT_PORT=18080 bash' "$server_docs"
 grep -Fq 'APP_PORT=8081' "$repo_root/deploy/.env.example"
 grep -Fq "\${APP_PORT:-8081}:8080" "$repo_root/deploy/compose.yaml"
+grep -Fq 'SUB2API_REPORT_START=false bash' "$readme"
+grep -Fq 'SUB2API_REPORT_START=false bash' "$docker_docs"
+if grep -Eq 'sudo +SUB2API_REPORT_(START|VERSION)' "$readme" "$docker_docs"; then
+  echo "Docker bootstrap configuration must run in the unprivileged shell." >&2
+  exit 1
+fi
 
 if grep -Fq 'docker compose logs' "$server_docs"; then
   echo "Server deployment documentation must not use Docker log commands." >&2

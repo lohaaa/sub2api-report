@@ -45,6 +45,7 @@ jobs:
           bash -n deploy/*.sh
           shellcheck -x deploy/*.sh
           deploy/documentation-test.sh
+          deploy/docker-bootstrap-test.sh
           deploy/server-bootstrap-test.sh
           deploy/server-install-test.sh
           version=$(sed -n 's:.*<VersionPrefix>\(.*\)</VersionPrefix>.*:\1:p' Directory.Build.props)

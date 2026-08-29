@@ -115,7 +115,9 @@ verify_release_bundle() {
 
 load_release_images() {
   local bundle_dir=$1
+  echo "Loading App image into Docker Engine..."
   gzip -dc "$bundle_dir/images/sub2api-report-app-linux-amd64.tar.gz" | docker load
+  echo "Loading Updater image into Docker Engine..."
   gzip -dc "$bundle_dir/images/sub2api-report-updater-linux-amd64.tar.gz" | docker load
 }
 

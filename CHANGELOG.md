@@ -10,7 +10,7 @@
 
 ### Added
 
-- 增加官方单命令 bootstrap，自动下载、校验、安装或更新最新 Release。
+- 增加服务器一键部署和 Docker Compose 手动准备模式，自动下载并校验最新 Release。
 
 ## [1.0.0] - 2026-08-28
 

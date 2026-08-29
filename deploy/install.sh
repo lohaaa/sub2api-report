@@ -3,6 +3,11 @@ set -euo pipefail
 
 bundle_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 install_dir=${SUB2API_REPORT_INSTALL_DIR:-/opt/sub2api-report}
+start_services=${SUB2API_REPORT_START:-true}
+if [[ $start_services != true && $start_services != false ]]; then
+  echo "SUB2API_REPORT_START must be true or false." >&2
+  exit 2
+fi
 
 if [[ $(id -u) -ne 0 ]]; then
   echo "Run this installer as root (for example: sudo ./install.sh)." >&2
@@ -34,6 +39,12 @@ write_instance_env "$install_dir"
 write_updater_token "$install_dir"
 
 docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml" config --quiet
+if [[ $start_services == false ]]; then
+  version=$(jq -r '.version' "$install_dir/release-manifest.json")
+  echo "Sub2API Report $version is prepared in $install_dir."
+  echo "Start it with: cd $install_dir && sudo docker compose up -d"
+  exit 0
+fi
 docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml" up --detach --no-build
 
 if ! wait_for_service_health "$install_dir" app 120; then

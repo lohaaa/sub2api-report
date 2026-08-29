@@ -4,6 +4,11 @@ set -euo pipefail
 repository=lohaaa/sub2api-report
 install_dir=${SUB2API_REPORT_INSTALL_DIR:-/opt/sub2api-report}
 requested_version=${SUB2API_REPORT_VERSION:-latest}
+start_services=${SUB2API_REPORT_START:-true}
+if [[ $start_services != true && $start_services != false ]]; then
+  echo "SUB2API_REPORT_START must be true or false." >&2
+  exit 2
+fi
 
 if [[ $(id -u) -ne 0 ]]; then
   echo "Run as root: curl -fsSL https://raw.githubusercontent.com/$repository/main/deploy/bootstrap.sh | sudo bash" >&2
@@ -94,17 +99,33 @@ tar -xzf "$work_dir/$asset" -C "$bundle_dir"
 if [[ -f $install_dir/compose.yaml ]]; then
   installed_version=$(jq -r '.version // empty' "$install_dir/release-manifest.json" 2>/dev/null || true)
   if [[ $installed_version == "$version" ]]; then
-    printf 'Sub2API Report v%s is already installed.\n' "$version"
-    docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml" up -d --no-build
+    printf 'Sub2API Report v%s is already prepared.\n' "$version"
+    if [[ $start_services == true ]]; then
+      docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml" up -d --no-build
+    fi
     exit 0
   fi
   echo "Updating the existing installation in $install_dir..."
   SUB2API_REPORT_INSTALL_DIR="$install_dir" "$bundle_dir/update.sh"
 else
-  echo "Installing into $install_dir..."
+  echo "Preparing a new installation in $install_dir..."
+  legacy_prepare=false
+  if [[ $start_services == false ]] \
+    && ! grep -q 'SUB2API_REPORT_START' "$bundle_dir/install.sh"; then
+    legacy_prepare=true
+  fi
   SUB2API_REPORT_INSTALL_DIR="$install_dir" "$bundle_dir/install.sh"
+  if [[ $legacy_prepare == true ]]; then
+    docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml" down
+  fi
 fi
 
-printf '\nSub2API Report v%s is ready.\n' "$version"
-printf 'Open: http://<server>:%s\n' "$(sed -n 's/^APP_PORT=//p' "$install_dir/.env")"
-printf 'Logs: cd %s && sudo docker compose logs -f app\n' "$install_dir"
+if [[ $start_services == false ]]; then
+  printf '\nSub2API Report v%s is prepared.\n' "$version"
+  printf 'Start: cd %s && sudo docker compose up -d\n' "$install_dir"
+  printf 'Logs:  cd %s && sudo docker compose logs -f app\n' "$install_dir"
+else
+  printf '\nSub2API Report v%s is ready.\n' "$version"
+  printf 'Open: http://<server>:%s\n' "$(sed -n 's/^APP_PORT=//p' "$install_dir/.env")"
+  printf 'Logs: cd %s && sudo docker compose logs -f app\n' "$install_dir"
+fi

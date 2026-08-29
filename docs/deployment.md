@@ -29,13 +29,31 @@ deploy-bundle/
    └─ checksums.txt
 ```
 
-推荐安装方式：
+### 1.1 服务器一键部署
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/bootstrap.sh | sudo bash
 ```
 
 官方 bootstrap 自动解析最新 Release，安装所需的小型宿主工具，下载完整 bundle 和 checksums，校验 SHA-256 后调用 bundle 中的 `install.sh`。已有 `/opt/sub2api-report` 安装时，同一命令会调用新 bundle 的 `update.sh`。Docker Engine 和 Docker Compose v2 必须预先安装并运行。
+
+### 1.2 Docker Compose 手动部署
+
+让 bootstrap 只准备文件和镜像：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/bootstrap.sh | \
+  sudo SUB2API_REPORT_START=false bash
+```
+
+再显式启动：
+
+```bash
+cd /opt/sub2api-report
+sudo docker compose up -d
+sudo docker compose ps
+sudo docker compose logs -f app
+```
 
 需要固定版本时传入环境变量：
 

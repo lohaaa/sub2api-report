@@ -6,14 +6,14 @@ internal static class ReportDownloadEndpoints
 {
     public static IEndpointRouteBuilder MapReportDownloadEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapGet("/api/v1/report-downloads/csv", DownloadAsync)
+        endpoints.MapGet("/api/v1/report-downloads/xlsx", DownloadAsync)
             .AllowAnonymous()
             .RequireRateLimiting("report-download")
             .WithTags("Report Downloads")
-            .WithName("DownloadSharedReportCsv")
-            .WithSummary("使用限时授权下载报告 CSV")
+            .WithName("DownloadSharedReportXlsx")
+            .WithSummary("使用限时授权下载报告 XLSX 工作簿")
             .WithDescription("校验投递消息中的限时令牌，并记录成功下载次数。")
-            .Produces(StatusCodes.Status200OK, contentType: "text/csv")
+            .Produces(StatusCodes.Status200OK, contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status410Gone)
             .ProducesProblem(StatusCodes.Status429TooManyRequests);
@@ -32,7 +32,7 @@ internal static class ReportDownloadEndpoints
         {
             ReportDownloadAttemptStatus.Available => TypedResults.File(
                 attempt.Content!,
-                "text/csv; charset=utf-8",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 attempt.FileName,
                 enableRangeProcessing: false),
             ReportDownloadAttemptStatus.Inactive => TypedResults.Problem(

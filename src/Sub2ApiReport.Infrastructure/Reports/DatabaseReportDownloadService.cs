@@ -60,7 +60,7 @@ internal sealed class DatabaseReportDownloadService(
             token = protector.Unprotect(grant.TokenCiphertext);
         }
 
-        var url = $"{settings.ReportExternalBaseUrl}/api/v1/report-downloads/csv?token="
+        var url = $"{settings.ReportExternalBaseUrl}/api/v1/report-downloads/xlsx?token="
             + Uri.EscapeDataString(token);
         return new ReportDownloadLink(
             grant.Id,
@@ -126,8 +126,8 @@ internal sealed class DatabaseReportDownloadService(
         var report = ReportCanonicalSerializer.Deserialize(snapshot.CanonicalJson, snapshot.SchemaVersion);
         return new ReportDownloadAttempt(
             ReportDownloadAttemptStatus.Available,
-            ReportCsvSerializer.Serialize(report),
-            ReportCsvFileName.Create(report));
+            ReportXlsxSerializer.Serialize(report),
+            ReportXlsxFileName.Create(report));
     }
 
     public async Task<bool> RevokeAsync(

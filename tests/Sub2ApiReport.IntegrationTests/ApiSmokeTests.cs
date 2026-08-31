@@ -74,8 +74,8 @@ public sealed class ApiSmokeTests(ApiWebApplicationFactory factory)
         Assert.Contains("/api/v1/sub2api/users/scope", document, StringComparison.Ordinal);
         Assert.Contains("/api/v1/reports/generations", document, StringComparison.Ordinal);
         Assert.Contains("/api/v1/reports/dry-run", document, StringComparison.Ordinal);
-        Assert.Contains("/api/v1/reports/{id}/csv", document, StringComparison.Ordinal);
-        Assert.Contains("/api/v1/report-downloads/csv", document, StringComparison.Ordinal);
+        Assert.Contains("/api/v1/reports/{id}/xlsx", document, StringComparison.Ordinal);
+        Assert.Contains("/api/v1/report-downloads/xlsx", document, StringComparison.Ordinal);
         Assert.Contains("/api/v1/reports/{id}/download-grants/{grantId}/revoke", document, StringComparison.Ordinal);
     }
 

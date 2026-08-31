@@ -318,7 +318,7 @@ export function SystemSettingsForm() {
       >
         <FieldLegend>群报告下载授权</FieldLegend>
         <FieldDescription>
-          钉钉和飞书消息使用限时链接提供 CSV；每条投递冻结当时的期限和次数限制。
+          钉钉和飞书消息使用限时链接提供 XLSX 工作簿；每条投递冻结当时的期限和次数限制。
         </FieldDescription>
         <FieldGroup className="mt-4 sm:grid sm:grid-cols-2">
           <Field

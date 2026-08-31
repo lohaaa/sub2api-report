@@ -744,12 +744,14 @@ export function retryReportTaskRun(
   );
 }
 
-export async function downloadReportCsv(id: string, signal?: AbortSignal) {
+export async function downloadReportXlsx(id: string, signal?: AbortSignal) {
   const response = await fetch(
-    `${apiBaseUrl}/api/v1/reports/${encodeURIComponent(id)}/csv`,
+    `${apiBaseUrl}/api/v1/reports/${encodeURIComponent(id)}/xlsx`,
     {
       credentials: "same-origin",
-      headers: { Accept: "text/csv" },
+      headers: {
+        Accept: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      },
       signal,
     },
   );
@@ -763,7 +765,7 @@ export async function downloadReportCsv(id: string, signal?: AbortSignal) {
     blob: await response.blob(),
     fileName: encodedName
       ? decodeURIComponent(encodedName)
-      : `sub2api-report-${id}.csv`,
+      : `sub2api-report-${id}.xlsx`,
   };
 }
 

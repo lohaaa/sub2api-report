@@ -32,11 +32,11 @@ internal static class ReportEndpoints
             .Produces<ReportDetailResponse>()
             .Produces(StatusCodes.Status404NotFound);
 
-        group.MapGet("/{id:guid}/csv", GetCsvAsync)
-            .WithName("DownloadReportCsv")
-            .WithSummary("下载报告 CSV")
-            .WithDescription("从不可变 canonical snapshot 生成带 UTF-8 BOM 的 CSV。")
-            .Produces(StatusCodes.Status200OK, contentType: "text/csv")
+        group.MapGet("/{id:guid}/xlsx", GetXlsxAsync)
+            .WithName("DownloadReportXlsx")
+            .WithSummary("下载报告 XLSX 工作簿")
+            .WithDescription("从不可变 canonical snapshot 生成多工作表 XLSX 工作簿。")
+            .Produces(StatusCodes.Status200OK, contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
             .Produces(StatusCodes.Status404NotFound);
 
         group.MapPost("/dry-run", GenerateDryRunAsync)
@@ -93,7 +93,7 @@ internal static class ReportEndpoints
             .RequireRateLimiting("configuration")
             .WithName("RevokeReportDownloadGrant")
             .WithSummary("撤销报告下载授权")
-            .WithDescription("立即撤销一条已发送到群机器人的限时 CSV 下载授权。")
+            .WithDescription("立即撤销一条已发送到群机器人的限时 XLSX 下载授权。")
             .Produces(StatusCodes.Status204NoContent)
             .Produces(StatusCodes.Status404NotFound);
 
@@ -139,18 +139,18 @@ internal static class ReportEndpoints
             : TypedResults.Ok(Map(report));
     }
 
-    private static async Task<IResult> GetCsvAsync(
+    private static async Task<IResult> GetXlsxAsync(
         Guid id,
         IReportService reportService,
         CancellationToken cancellationToken)
     {
-        var csv = await reportService.GetCsvAsync(id, cancellationToken);
-        return csv is null
+        var xlsx = await reportService.GetXlsxAsync(id, cancellationToken);
+        return xlsx is null
             ? TypedResults.NotFound()
             : TypedResults.File(
-                csv.Content,
-                "text/csv; charset=utf-8",
-                csv.FileName,
+                xlsx.Content,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                xlsx.FileName,
                 enableRangeProcessing: false);
     }
 

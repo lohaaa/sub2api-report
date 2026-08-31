@@ -480,7 +480,7 @@ internal sealed class DatabaseReportDeliveryService(
         DeliveryPayloadHash.Compute(
             parts[0].Subject,
             string.Join("\n\n", parts.Select(part => part.Body)),
-            parts[0].CsvContent);
+            parts[0].AttachmentContent);
 
     private static ReportRunStatus ComputeRunStatus(IReadOnlyList<DeliveryRecord> deliveries)
     {

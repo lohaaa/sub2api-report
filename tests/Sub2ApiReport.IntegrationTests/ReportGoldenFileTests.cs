@@ -1,4 +1,4 @@
-using System.Text;
+using ClosedXML.Excel;
 using Sub2ApiReport.Application.Notifications;
 using Sub2ApiReport.Application.Reports;
 using Sub2ApiReport.Application.Sub2Api;
@@ -12,18 +12,149 @@ namespace Sub2ApiReport.IntegrationTests;
 public sealed class ReportGoldenFileTests
 {
     [Fact]
-    public void CanonicalJsonAndCsvMatchGoldenFiles()
+    public void CanonicalJsonMatchesGoldenFileAndXlsxWorkbookIsValid()
     {
         var report = CreateReport();
 
         var json = ReportCanonicalSerializer.Serialize(report);
-        var csv = ReportCsvSerializer.Serialize(report);
 
-        Assert.True(csv.AsSpan().StartsWith(Encoding.UTF8.GetPreamble()));
-        var csvText = Encoding.UTF8.GetString(csv[Encoding.UTF8.GetPreamble().Length..])
-            .Replace("\r\n", "\n", StringComparison.Ordinal);
         Assert.Equal(ReadGolden("report-v4.json").TrimEnd(), json);
-        Assert.Equal(ReadGolden("report-v4.csv").Replace("\r\n", "\n", StringComparison.Ordinal), csvText);
+
+        var xlsx = ReportXlsxSerializer.Serialize(report);
+        using var workbook = ReportXlsxAssert.Open(xlsx);
+
+        ReportXlsxAssert.AssertSheetOrder(
+            workbook,
+            ReportXlsxAssert.OverviewSheetName,
+            ReportXlsxAssert.KeyDetailsSheetName,
+            ReportXlsxAssert.UserSummarySheetName,
+            ReportXlsxAssert.FailuresSheetName,
+            ReportXlsxAssert.DataNotesSheetName);
+        ReportXlsxAssert.AssertOverviewTitle(workbook);
+        ReportXlsxAssert.AssertWorkbookIsPrintable(workbook);
+        ReportXlsxAssert.AssertAllSheetsHaveTables(workbook);
+        ReportXlsxAssert.AssertSheetFrozenHeader(workbook, ReportXlsxAssert.OverviewSheetName, headerRow: 14);
+        foreach (var sheetName in new[]
+                 {
+                     ReportXlsxAssert.KeyDetailsSheetName,
+                     ReportXlsxAssert.UserSummarySheetName,
+                     ReportXlsxAssert.FailuresSheetName,
+                     ReportXlsxAssert.DataNotesSheetName,
+                 })
+        {
+            ReportXlsxAssert.AssertSheetFrozenHeader(workbook, sheetName, headerRow: 4);
+        }
+
+        var keyDetails = workbook.Worksheet(ReportXlsxAssert.KeyDetailsSheetName);
+        Assert.Equal("API Key 用量明细", keyDetails.Cell(1, 1).GetString());
+        Assert.Equal("Sub2API 用户", keyDetails.Cell(4, 1).GetString());
+        Assert.Equal("总 Token 数（个）", keyDetails.Cell(4, 17).GetString());
+        Assert.Equal(2, keyDetails.SheetView.SplitColumn);
+
+        var userSummary = workbook.Worksheet(ReportXlsxAssert.UserSummarySheetName);
+        Assert.Equal("Sub2API 用户用量汇总", userSummary.Cell(1, 1).GetString());
+
+        var failures = workbook.Worksheet(ReportXlsxAssert.FailuresSheetName);
+        Assert.Equal("采集异常明细", failures.Cell(1, 1).GetString());
+        Assert.Equal("unavailable", failures.Cell(5, 8).GetString());
+
+        var dataNotes = workbook.Worksheet(ReportXlsxAssert.DataNotesSheetName);
+        Assert.Equal("数据与使用说明", dataNotes.Cell(1, 1).GetString());
+        Assert.Equal("项目", dataNotes.Cell(4, 1).GetString());
+        Assert.Equal("说明", dataNotes.Cell(4, 2).GetString());
+    }
+
+    [Fact]
+    public void XlsxStoresPrecisionSensitiveNumbersAsPlainText()
+    {
+        var report = CreateReport();
+        var xlsx = ReportXlsxSerializer.Serialize(report);
+
+        using var workbook = ReportXlsxAssert.Open(xlsx);
+
+        var overview = workbook.Worksheet(ReportXlsxAssert.OverviewSheetName);
+        var overviewTokens = overview.Cell(16, 7);
+        Assert.Equal(XLDataType.Text, overviewTokens.DataType);
+        Assert.Equal("9007199254740993", overviewTokens.GetString());
+
+        var keyDetails = workbook.Worksheet(ReportXlsxAssert.KeyDetailsSheetName);
+        var keyId = keyDetails.Cell(5, 3);
+        Assert.Equal(XLDataType.Text, keyId.DataType);
+        Assert.Equal("9007199254740993", keyId.GetString());
+        var keyTokens = keyDetails.Cell(6, 17);
+        Assert.Equal(XLDataType.Text, keyTokens.DataType);
+        Assert.Equal("9007199254740993", keyTokens.GetString());
+
+        var failures = workbook.Worksheet(ReportXlsxAssert.FailuresSheetName);
+        var failureUserId = failures.Cell(5, 1);
+        Assert.Equal(XLDataType.Number, failureUserId.DataType);
+        Assert.Equal(42, failureUserId.GetDouble());
+        var failureUser = failures.Cell(5, 2);
+        Assert.Equal(XLDataType.Text, failureUser.DataType);
+        Assert.False(failureUser.HasFormula);
+        Assert.Equal("=Synthetic User", failureUser.GetString());
+    }
+
+    [Fact]
+    public void XlsxNeverStoresUntrustedStringsAsFormulas()
+    {
+        var report = CreateReport();
+        using var workbook = ReportXlsxAssert.Open(ReportXlsxSerializer.Serialize(report));
+
+        foreach (var worksheet in workbook.Worksheets)
+        {
+            foreach (var cell in worksheet.CellsUsed())
+            {
+                Assert.False(cell.HasFormula, $"{worksheet.Name}!{cell.Address} 不允许保存公式。");
+            }
+        }
+    }
+
+    [Fact]
+    public void XlsxMarksFailedWindowsWithoutTouchingHealthyWindows()
+    {
+        var report = CreateReport();
+        using var workbook = ReportXlsxAssert.Open(ReportXlsxSerializer.Serialize(report));
+
+        var overview = workbook.Worksheet(ReportXlsxAssert.OverviewSheetName);
+        Assert.Equal("部分采集失败", overview.Cell(16, 10).GetString());
+        Assert.Equal("完整", overview.Cell(15, 10).GetString());
+
+        var keyDetails = workbook.Worksheet(ReportXlsxAssert.KeyDetailsSheetName);
+        Assert.Equal("完整", keyDetails.Cell(5, 20).GetString());
+        Assert.Equal("采集失败", keyDetails.Cell(6, 20).GetString());
+
+        var userSummary = workbook.Worksheet(ReportXlsxAssert.UserSummarySheetName);
+        Assert.Equal("完整", userSummary.Cell(5, 18).GetString());
+        Assert.Equal("部分采集失败", userSummary.Cell(6, 18).GetString());
+    }
+
+    [Fact]
+    public void XlsxOmitsFailureSheetWhenReportIsComplete()
+    {
+        var report = CreateReport() with
+        {
+            Diagnostics = new ReportDiagnostics([]),
+        };
+        var xlsx = ReportXlsxSerializer.Serialize(report);
+
+        using var workbook = ReportXlsxAssert.Open(xlsx);
+
+        ReportXlsxAssert.AssertSheetOrder(
+            workbook,
+            ReportXlsxAssert.OverviewSheetName,
+            ReportXlsxAssert.KeyDetailsSheetName,
+            ReportXlsxAssert.UserSummarySheetName,
+            ReportXlsxAssert.DataNotesSheetName);
+        Assert.Equal("完整", workbook.Worksheet(ReportXlsxAssert.OverviewSheetName).Cell(4, 2).GetString());
+    }
+
+    [Fact]
+    public void XlsxFileNameUsesLatestWindowDate()
+    {
+        var report = CreateReport();
+
+        Assert.Equal("sub2api-report-2026-08-25.xlsx", ReportXlsxFileName.Create(report));
     }
 
     [Fact]
@@ -49,11 +180,11 @@ public sealed class ReportGoldenFileTests
         var feishuLines = ReportMessageRenderer.BuildFeishuLines(report);
         var dingTalkLinkLines = ReportMessageRenderer.BuildDingTalkLines(
             report,
-            "https://reports.example.com/api/v1/report-downloads/csv?token=synthetic",
+            "https://reports.example.com/api/v1/report-downloads/xlsx?token=synthetic",
             "1 天内有效，最多下载 20 次");
         var feishuLinkLines = ReportMessageRenderer.BuildFeishuLines(
             report,
-            "https://reports.example.com/api/v1/report-downloads/csv?token=synthetic",
+            "https://reports.example.com/api/v1/report-downloads/xlsx?token=synthetic",
             "1 天内有效，下载次数不限");
         var html = ReportMessageRenderer.BuildHtmlBody(report);
 
@@ -65,21 +196,21 @@ public sealed class ReportGoldenFileTests
         Assert.Contains(feishuLines, line => line.Contains("实际费用（USD） 3.25", StringComparison.Ordinal));
         Assert.Contains(
             dingTalkLinkLines,
-            line => line.Contains("[下载 CSV 完整明细（1 天内有效，最多下载 20 次）]", StringComparison.Ordinal));
+            line => line.Contains("[下载 XLSX 完整明细（1 天内有效，最多下载 20 次）]", StringComparison.Ordinal));
         Assert.Contains(
             feishuLinkLines,
-            line => line.StartsWith("下载 CSV 完整明细（1 天内有效，下载次数不限）：https://", StringComparison.Ordinal));
+            line => line.StartsWith("下载 XLSX 完整明细（1 天内有效，下载次数不限）：https://", StringComparison.Ordinal));
         var feishuLinkNode = Assert.Single(FeishuReportSender.CreatePostRow(
-            feishuLinkLines.Single(line => line.StartsWith("下载 CSV 完整明细", StringComparison.Ordinal))));
+            feishuLinkLines.Single(line => line.StartsWith("下载 XLSX 完整明细", StringComparison.Ordinal))));
         Assert.Equal("a", feishuLinkNode.Tag);
-        Assert.Equal("https://reports.example.com/api/v1/report-downloads/csv?token=synthetic", feishuLinkNode.Href);
+        Assert.Equal("https://reports.example.com/api/v1/report-downloads/xlsx?token=synthetic", feishuLinkNode.Href);
         Assert.Contains("role=\"article\"", html, StringComparison.Ordinal);
         Assert.Contains(">最近 30 天</h2>", html, StringComparison.Ordinal);
         Assert.Contains(">Key 数（个）</th>", html, StringComparison.Ordinal);
         Assert.Contains(">Token 数（个）</th>", html, StringComparison.Ordinal);
         Assert.Contains(">实际费用（USD）</th>", html, StringComparison.Ordinal);
-        Assert.Contains(">附件</strong>：CSV 文件", html, StringComparison.Ordinal);
-        Assert.Equal("sub2api-report-2026-08-25.csv", ReportCsvFileName.Create(report));
+        Assert.Contains(">附件</strong>：XLSX 工作簿", html, StringComparison.Ordinal);
+        Assert.Equal("sub2api-report-2026-08-25.xlsx", ReportXlsxFileName.Create(report));
         Assert.DoesNotContain("¥", html, StringComparison.Ordinal);
         Assert.DoesNotContain("$", string.Join('\n', dingTalkLines), StringComparison.Ordinal);
         Assert.DoesNotContain("$", string.Join('\n', feishuLines), StringComparison.Ordinal);
@@ -87,7 +218,7 @@ public sealed class ReportGoldenFileTests
     }
 
     [Fact]
-    public void EmailRenderIncludesDatedCsvAttachmentMetadata()
+    public void EmailRenderIncludesDatedXlsxAttachmentAndBinaryContent()
     {
         var report = CreateReport();
         var sender = new EmailReportSender(TimeProvider.System);
@@ -107,11 +238,22 @@ public sealed class ReportGoldenFileTests
 
         var part = Assert.Single(sender.Render(report, context));
 
-        Assert.Equal("sub2api-report-2026-08-25.csv", part.CsvFileName);
-        Assert.NotNull(part.CsvContent);
-        Assert.StartsWith("\uFEFF", part.CsvContent, StringComparison.Ordinal);
+        Assert.Equal("sub2api-report-2026-08-25.xlsx", part.AttachmentFileName);
+        Assert.NotNull(part.AttachmentContent);
+        ReportXlsxAssert.AssertZipXlsxBytes(part.AttachmentContent);
+        Assert.Equal(
+            DeliveryPayloadHash.Compute(part.Subject, part.Body, part.AttachmentContent),
+            part.PayloadHash);
+        using var workbook = ReportXlsxAssert.Open(part.AttachmentContent);
+        ReportXlsxAssert.AssertOverviewTitle(workbook);
+        ReportXlsxAssert.AssertSheetOrder(
+            workbook,
+            ReportXlsxAssert.OverviewSheetName,
+            ReportXlsxAssert.KeyDetailsSheetName,
+            ReportXlsxAssert.UserSummarySheetName,
+            ReportXlsxAssert.FailuresSheetName,
+            ReportXlsxAssert.DataNotesSheetName);
     }
-
 
     private static ReportDocument CreateReport()
     {

@@ -21,7 +21,7 @@ public interface IReportService
 
     Task<ReportDocument?> GetAsync(Guid id, CancellationToken cancellationToken);
 
-    Task<ReportCsv?> GetCsvAsync(Guid id, CancellationToken cancellationToken);
+    Task<ReportXlsx?> GetXlsxAsync(Guid id, CancellationToken cancellationToken);
 
     Task<ReportGenerationRunPage> GetGenerationRunsAsync(
         int page,
@@ -40,7 +40,7 @@ public sealed record GenerateTaskReportCommand(
     IReadOnlyList<ResolvedReportWindow> Windows,
     ReportTrigger Trigger);
 
-public sealed record ReportCsv(byte[] Content, string FileName);
+public sealed record ReportXlsx(byte[] Content, string FileName);
 
 public sealed record ReportPage(
     IReadOnlyList<ReportListItem> Items,

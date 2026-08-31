@@ -38,7 +38,7 @@ import { FormError } from '@/features/auth/form-error'
 import {
   ApiError,
   createDefaultReportWindowSpecs,
-  downloadReportCsv,
+  downloadReportXlsx,
   generateReport,
   getReportGenerationRuns,
   getReports,
@@ -170,7 +170,7 @@ export function ReportsPage() {
     setDownloadError(null)
     setDownloadingId(id)
     try {
-      const file = await downloadReportCsv(id)
+      const file = await downloadReportXlsx(id)
       const url = URL.createObjectURL(file.blob)
       const anchor = document.createElement('a')
       anchor.href = url
@@ -179,7 +179,7 @@ export function ReportsPage() {
       window.setTimeout(() => URL.revokeObjectURL(url), 0)
     }
     catch (error) {
-      setDownloadError(error instanceof ApiError ? error.message : 'CSV 下载失败。')
+      setDownloadError(error instanceof ApiError ? error.message : 'XLSX 下载失败。')
     }
     finally {
       setDownloadingId(null)
@@ -313,8 +313,8 @@ export function ReportsPage() {
                           <Button
                             variant="ghost"
                             size="icon-sm"
-                            title="下载 CSV"
-                            aria-label={`下载 ${report.cutoffDate} 报告 CSV`}
+                            title="下载 XLSX"
+                            aria-label={`下载 ${report.cutoffDate} 报告 XLSX`}
                             disabled={downloadingId === report.id}
                             onClick={() => handleDownload(report.id)}
                           >

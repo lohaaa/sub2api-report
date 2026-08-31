@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text;
 using MailKit;
 using MailKit.Net.Smtp;
 using MailKit.Security;
@@ -28,7 +27,7 @@ internal sealed class EmailReportSender(TimeProvider timeProvider) : IReportSend
 
         var subject = ReportMessageRenderer.BuildSubject(report);
         var body = ReportMessageRenderer.BuildHtmlBody(report);
-        var csv = Encoding.UTF8.GetString(ReportCsvSerializer.Serialize(report));
+        var xlsx = ReportXlsxSerializer.Serialize(report);
         return
         [
             new OutboundPart(
@@ -36,9 +35,9 @@ internal sealed class EmailReportSender(TimeProvider timeProvider) : IReportSend
                 1,
                 subject,
                 body,
-                csv,
-                DeliveryPayloadHash.Compute(subject, body, csv),
-                ReportCsvFileName.Create(report)),
+                xlsx,
+                DeliveryPayloadHash.Compute(subject, body, xlsx),
+                ReportXlsxFileName.Create(report)),
         ];
     }
 
@@ -152,25 +151,17 @@ internal sealed class EmailReportSender(TimeProvider timeProvider) : IReportSend
 
         message.Subject = part.Subject;
         var bodyBuilder = new BodyBuilder { HtmlBody = part.Body };
-        if (part.CsvContent is { } csvContent)
+        if (part.AttachmentContent is { } attachmentContent)
         {
             bodyBuilder.Attachments.Add(
-                part.CsvFileName ?? "sub2api-report.csv",
-                BuildCsvAttachmentBytes(csvContent),
-                new ContentType("text", "csv") { Charset = "utf-8" });
+                part.AttachmentFileName ?? "sub2api-report.xlsx",
+                attachmentContent,
+                new ContentType(
+                    "application",
+                    "vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
         }
 
         message.Body = bodyBuilder.ToMessageBody();
         return message;
-    }
-
-    private static byte[] BuildCsvAttachmentBytes(string csvContent)
-    {
-        var contentBytes = Encoding.UTF8.GetBytes(csvContent.TrimStart('\uFEFF'));
-        var bom = Encoding.UTF8.GetPreamble();
-        var result = new byte[contentBytes.Length + bom.Length];
-        global::System.Buffer.BlockCopy(bom, 0, result, 0, bom.Length);
-        global::System.Buffer.BlockCopy(contentBytes, 0, result, bom.Length, contentBytes.Length);
-        return result;
     }
 }

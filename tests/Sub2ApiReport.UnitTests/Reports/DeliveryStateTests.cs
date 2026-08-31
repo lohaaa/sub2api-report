@@ -10,24 +10,36 @@ public sealed class DeliveryStateTests
     [Fact]
     public void DeliveryPayloadHashIsDeterministicAndCaseInsensitiveToLowerHex()
     {
-        var first = DeliveryPayloadHash.Compute("主题", "正文", "csv");
-        var second = DeliveryPayloadHash.Compute("主题", "正文", "csv");
+        var attachment = "xlsx-bytes"u8.ToArray();
+        var first = DeliveryPayloadHash.Compute("主题", "正文", attachment);
+        var second = DeliveryPayloadHash.Compute("主题", "正文", [.. attachment]);
 
         Assert.Equal(first, second);
         Assert.Equal(64, first.Length);
         Assert.Equal(first, first.ToLowerInvariant());
         Assert.True(first.All(character => Uri.IsHexDigit(character)));
-        Assert.NotEqual(first, DeliveryPayloadHash.Compute("主题", "其他内容", "csv"));
+        Assert.NotEqual(first, DeliveryPayloadHash.Compute("主题", "其他内容", attachment));
     }
 
     [Fact]
     public void DeliveryPayloadHashMatchesManualSha256()
     {
         var expected = Convert.ToHexString(
-            SHA256.HashData("subject\n\nbody\n\ncsv"u8))
+            SHA256.HashData("subject\n\nbody\n\nxlsx"u8))
             .ToLowerInvariant();
 
-        Assert.Equal(expected, DeliveryPayloadHash.Compute("subject", "body", "csv"));
+        Assert.Equal(expected, DeliveryPayloadHash.Compute("subject", "body", "xlsx"u8.ToArray()));
+    }
+
+    [Fact]
+    public void DeliveryPayloadHashChangesWhenAttachmentBytesChange()
+    {
+        var baseline = DeliveryPayloadHash.Compute("subject", "body", [0x50, 0x4B, 0x03, 0x04]);
+        var flipped = DeliveryPayloadHash.Compute("subject", "body", [0x50, 0x4B, 0x03, 0x05]);
+        var empty = DeliveryPayloadHash.Compute("subject", "body", null);
+
+        Assert.NotEqual(baseline, flipped);
+        Assert.NotEqual(baseline, empty);
     }
 
     [Fact]

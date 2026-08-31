@@ -298,14 +298,14 @@ internal sealed class DatabaseReportService(
         return ReportCanonicalSerializer.Deserialize(snapshot.CanonicalJson, snapshot.SchemaVersion);
     }
 
-    public async Task<ReportCsv?> GetCsvAsync(Guid id, CancellationToken cancellationToken)
+    public async Task<ReportXlsx?> GetXlsxAsync(Guid id, CancellationToken cancellationToken)
     {
         var report = await GetAsync(id, cancellationToken);
         return report is null
             ? null
-            : new ReportCsv(
-                ReportCsvSerializer.Serialize(report),
-                ReportCsvFileName.Create(report));
+            : new ReportXlsx(
+                ReportXlsxSerializer.Serialize(report),
+                ReportXlsxFileName.Create(report));
     }
 
     private static IReadOnlyList<ResolvedReportWindow> ValidateFrozenWindows(

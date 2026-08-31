@@ -107,7 +107,7 @@ function EmailPreview({ report }: { report: ReportDetail }) {
           <div className="flex min-w-0 flex-col">
             <strong className="truncate">{getAttachmentName(report)}</strong>
             <span className="text-xs text-muted-foreground">
-              UTF-8 BOM CSV · 完整 Key 明细
+              XLSX 工作簿 · 完整 Key 明细
             </span>
           </div>
         </div>
@@ -336,7 +336,7 @@ function DownloadLinkExample({ policy }: { policy: string | null }) {
     <div className="flex items-center gap-2 border-t pt-3 text-xs">
       <FileSpreadsheetIcon aria-hidden="true" className="size-4 text-muted-foreground" />
       <span className="font-medium text-primary underline underline-offset-4">
-        下载 CSV 完整明细（{policy}）
+        下载 XLSX 完整明细（{policy}）
       </span>
     </div>
   );
@@ -359,7 +359,7 @@ function getAttachmentName(report: ReportDetail) {
   const endDates = report.windows
     .map((window) => toInclusiveEndDate(window.endDateExclusive))
     .sort();
-  return `sub2api-report-${endDates.at(-1) ?? report.generatedAt.slice(0, 10)}.csv`;
+  return `sub2api-report-${endDates.at(-1) ?? report.generatedAt.slice(0, 10)}.xlsx`;
 }
 
 function statusLabel(report: ReportDetail) {

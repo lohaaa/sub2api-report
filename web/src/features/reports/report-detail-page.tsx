@@ -27,7 +27,7 @@ import { FormError } from "@/features/auth/form-error";
 import { ReportDeliveryPanel } from "@/features/reports/report-delivery-panel";
 import {
   ApiError,
-  downloadReportCsv,
+  downloadReportXlsx,
   getReport,
   getReportWindowMetrics,
   type ReportKeyUsage,
@@ -66,7 +66,7 @@ export function ReportDetailPage() {
     setDownloadError(null);
     setIsDownloading(true);
     try {
-      const file = await downloadReportCsv(id);
+      const file = await downloadReportXlsx(id);
       const url = URL.createObjectURL(file.blob);
       const anchor = document.createElement("a");
       anchor.href = url;
@@ -75,7 +75,7 @@ export function ReportDetailPage() {
       window.setTimeout(() => URL.revokeObjectURL(url), 0);
     } catch (error) {
       setDownloadError(
-        error instanceof ApiError ? error.message : "CSV 下载失败。",
+        error instanceof ApiError ? error.message : "XLSX 下载失败。",
       );
     } finally {
       setIsDownloading(false);
@@ -167,7 +167,7 @@ export function ReportDetailPage() {
           ) : (
             <DownloadIcon data-icon="inline-start" />
           )}
-          下载 CSV
+          下载 XLSX
         </Button>
       </div>
 

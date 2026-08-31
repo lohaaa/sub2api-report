@@ -157,7 +157,7 @@ App 数据卷布局固定为：
 ├─ reports/
 │  └─ YYYY/MM/<run-id>/
 │     ├─ snapshot.json
-│     └─ report.csv
+│     └─ report.xlsx
 ├─ backups/
 │  ├─ scheduled/
 │  ├─ manual/
@@ -372,7 +372,7 @@ sudo docker compose ps
 - 不记录 Cookie、Authorization、Admin API Key；
 - 不记录 webhook URL 和 secret；
 - 不记录 SMTP 密码；
-- 不记录报告正文、真实人员清单和 CSV 内容；
+- 不记录报告正文、真实人员清单和 XLSX 内容；
 - URL 只保留 scheme、host 和安全路径摘要；
 - 错误响应正文经过 allowlist 后才记录。
 

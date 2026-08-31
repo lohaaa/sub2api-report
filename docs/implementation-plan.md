@@ -36,23 +36,23 @@
 | M1 应用骨架 | 0.1.0 | 已完成 | .NET 模块、React SPA、SQLite、配置、健康检查和质量门已落地 |
 | M2 初始化和认证 | 0.2.0 | 已完成 | 单管理员初始化、Cookie、CSRF、step-up 和主机恢复码已落地 |
 | M3 Sub2API 同步 | 0.3.0 / 0.6.0 | 已完成 | 用户与 API Key 直接统计模型已落地，人员归属模型已移除 |
-| M4 报告引擎 | 0.4.0 / 0.6.0 | 已完成 | 动态完整自然日窗口、schema v4 快照、CSV 和报告页面已落地 |
+| M4 报告引擎 | 0.4.0 / 0.6.0 | 已完成 | 动态完整自然日窗口、schema v4 快照、多工作表 XLSX 和报告页面已落地 |
 | M5 投递渠道 | 0.5.0 | 已完成 | 邮件、钉钉、飞书、限时下载和失败补发已落地 |
 | M6 计划任务 | 0.7.0 | 已完成 | Quartz 持久化计划、窗口冻结、规范化执行记录、重试和恢复已落地 |
 | M7 Docker 和签名 bundle | 0.8.0 内部里程碑 | 已完成 | Candidate workflow 在 linux/amd64 上通过签名、Critical 扫描、SBOM、安装、故障回滚、成功更新和 non-root Socket 权限验收 |
 | M8 在线升级 | 0.9.0 内部里程碑 | 已完成 | 固定仓库验签、严格下载、Docker App-only 事务、维护模式、SQLite 备份、恢复、App API、step-up 和更新页面已实现 |
-| M9 稳定版加固 | `v1.0.0` - `v1.0.6` | 已完成 | Updater 安全验收和 Release workflow 全部通过；v1.0.6 以双 digest 模型兼容 Docker 29 containerd image store |
+| M9 稳定版加固 | `v1.0.0` - `v1.0.7` | 已完成 | Updater 安全验收和 Release workflow 全部通过；v1.0.7 将报告导出迁移为多工作表 XLSX 工作簿，并增加公式注入与精度防护 |
 
 当前自动质量门最近一次通过：
 
-- .NET 格式检查和 Release 构建通过，`269` 个测试通过；
+- .NET 格式检查和 Release 构建通过，`282` 个测试通过；
 - 前端 typecheck、lint、build 通过，`20` 个测试通过；
 - ShellCheck、Actionlint、Critical 镜像扫描、SBOM、changelog、签名、安装和回滚候选测试通过。
 
 正式发布已完成：
 
 - 仓库首个 Tag 和公开 Release 为 `v1.0.0`；
-- `v1.0.6` 为 Latest，Release workflow 完成 276 个 .NET 测试、20 个前端测试、schema v2 bundle、Docker 安装、Critical 扫描、SBOM、签名和 attestation 验收；
+- `v1.0.7` 为 Latest，报告导出由 UTF-8 BOM CSV 迁移为多工作表 XLSX 工作簿（邮件附件与限时下载随之统一下发 XLSX），Release workflow 继续 Critical 扫描、SBOM、签名和 attestation 验收；上一版本 `v1.0.6` 以双 digest 模型兼容 Docker 29 containerd image store；
 - `v1.0.6` Docker bundle 为 278,251,937 bytes，checksum 为 `0ff3aed500ee7092eaf7b14d5a8966f0cfaceed753b9d30c20acb2afc1d79aa1`。
 
 ## 4. 已完成业务基线（M1-M6）
@@ -64,9 +64,9 @@
 - 单管理员安全初始化、登录、密码修改、step-up 和恢复码；
 - Sub2API 连接、Secret 加密、用户与 API Key 自动同步；
 - 滚动 7/30 日、上一自然周/月和手工自定义自然日窗口；
-- schema v4 不可变快照、历史读取兼容和 UTF-8 BOM CSV；
+- schema v4 不可变快照、历史读取兼容和多工作表 XLSX 导出；
 - 邮件、钉钉和飞书组合投递、逐渠道状态和失败补发；
-- 限时 CSV 下载授权；
+- 限时 XLSX 下载授权；
 - Quartz 持久化月报计划、窗口冻结、幂等、任务级重试和重启恢复；
 - 报告、计划、渠道、Key 和系统设置页面。
 

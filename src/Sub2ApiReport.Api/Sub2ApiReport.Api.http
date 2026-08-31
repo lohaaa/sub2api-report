@@ -228,8 +228,8 @@ X-CSRF-TOKEN: {{authenticatedAntiforgery.response.body.$.token}}
 ### List delivery runs and per-channel states
 GET {{baseUrl}}/api/v1/reports/{{generateReport.response.body.$.reportId}}/deliveries
 
-### Download CSV through an anonymous limited grant
-GET {{baseUrl}}/api/v1/report-downloads/csv?token={{reportDownloadToken}}
+### Download XLSX through an anonymous limited grant
+GET {{baseUrl}}/api/v1/report-downloads/xlsx?token={{reportDownloadToken}}
 
 ### Revoke one report download grant
 POST {{baseUrl}}/api/v1/reports/{{generateReport.response.body.$.reportId}}/download-grants/{{reportDownloadGrantId}}/revoke
@@ -242,8 +242,8 @@ X-CSRF-TOKEN: {{authenticatedAntiforgery.response.body.$.token}}
 ### Read the generated canonical report snapshot
 GET {{baseUrl}}/api/v1/reports/{{generateReport.response.body.$.reportId}}
 
-### Download the generated UTF-8 BOM CSV
-GET {{baseUrl}}/api/v1/reports/{{generateReport.response.body.$.reportId}}/csv
+### Download the generated XLSX workbook
+GET {{baseUrl}}/api/v1/reports/{{generateReport.response.body.$.reportId}}/xlsx
 
 ### Read the persistent monthly schedule
 # @name reportSchedule

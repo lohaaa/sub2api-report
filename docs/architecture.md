@@ -141,7 +141,7 @@ Updater 不引用业务 Infrastructure，不读取业务实体，也不能调用
 | Setup | 初始化状态、一次性初始化码、首个管理员创建 |
 | Identity | 登录、登出、修改密码、会话和安全审计 |
 | Sub2Api | 连接配置、连通性检查、用户/Key 同步、用量查询 |
-| Reports | 日期窗口、自动刷新、采集、聚合、快照、CSV/HTML 渲染 |
+| Reports | 日期窗口、自动刷新、采集、聚合、快照、XLSX/HTML 渲染 |
 | Scheduling | 月报计划、Quartz Trigger、手工运行、补跑 |
 | Notifications | 邮件、钉钉、飞书配置、测试和投递 |
 | Updates | 版本检查、升级授权、状态查询、历史记录 |
@@ -157,8 +157,8 @@ Controller/Endpoint 只负责协议转换、认证授权和输入校验。统计
 - EF Core 10 + SQLite provider。
 - Quartz.NET，使用 SQLite 持久化 JobStore。
 - `IHttpClientFactory` + Microsoft HTTP resilience handlers。
-- MailKit/MimeKit 发送 SMTP HTML 邮件和 CSV 附件。
-- CsvHelper 生成 UTF-8 BOM CSV。
+- MailKit/MimeKit 发送 SMTP HTML 邮件和多工作表 XLSX 附件。
+- ClosedXML 生成多工作表 XLSX 工作簿（无合并单元格、图片或宏）。
 - Serilog 输出结构化 JSON 日志到 stdout。
 - OpenAPI 生成契约；TypeScript client 在构建阶段生成。
 
@@ -175,7 +175,7 @@ manual dry-run or scheduled run
   -> aggregate Key -> Sub2API user -> totals
   -> mark failed ranges without hiding partial results
   -> freeze canonical report snapshot
-  -> render UTF-8 BOM CSV from the stored snapshot
+  -> render a multi-sheet XLSX workbook (ClosedXML) from the stored snapshot
 ```
 
 采集并发默认 4，可在 SQLite 中配置为 1 到 10，每次报告开始时固定该配置快照。单次请求超时 15 秒；网络错误和 `5xx` 最多尝试 3 次，`429` 尊重并限制 `Retry-After`，业务 `4xx` 直接失败。M6 在同一个报告引擎外增加 Quartz 触发、运行状态和渠道投递，不改变 canonical snapshot。
@@ -264,7 +264,7 @@ Pending -> Sending -> Succeeded
 | `ReportRuns` | `Id`, `SnapshotId`, `Trigger`, `Status`, `IdempotencyKey`, `WindowSpecsJson`, `ResolvedWindowsJson`, `RetryOfRunId`, stage timestamps | 规范化任务执行；入队时冻结窗口规格与边界，重试沿用同一快照 |
 | `DeliveryRecords` | `RunId`, `ChannelId`, `PayloadHash`, `Status`, `Attempts` | M5 手工投递逐渠道状态；M6 计划投递复用同一状态机 |
 | `DeliveryParts` | `DeliveryId`, `PartIndex`, `PayloadHash`, `Status`, `Attempts` | M5 分片消息逐片状态，补发只重试失败分片 |
-| `ReportDownloadGrants` | `DeliveryId`, `ReportSnapshotId`, token hash/ciphertext, expiry/revocation/download fields | 钉钉/飞书限时 CSV 下载授权；策略按投递冻结 |
+| `ReportDownloadGrants` | `DeliveryId`, `ReportSnapshotId`, token hash/ciphertext, expiry/revocation/download fields | 钉钉/飞书限时 XLSX 下载授权；策略按投递冻结 |
 | `UpdateRecords` | `FromVersion`, `ToVersion`, `Status`, timestamps | 升级历史 |
 | `AuditEvents` | `Actor`, `Action`, `Target`, `Result`, `MetadataJson` | 不保存密钥和密码 |
 
@@ -376,7 +376,7 @@ POST /api/v1/channels/{id}/test
 
 GET  /api/v1/reports
 GET  /api/v1/reports/{id}
-GET  /api/v1/reports/{id}/csv
+GET  /api/v1/reports/{id}/xlsx
 POST /api/v1/reports/dry-run
 
 GET/POST/PUT/DELETE /api/v1/channels
@@ -386,7 +386,7 @@ GET  /api/v1/reports/{id}/deliveries
 POST /api/v1/reports/{id}/deliveries
 POST /api/v1/reports/{id}/deliveries/{runId}/retry
 POST /api/v1/reports/{id}/download-grants/{grantId}/revoke
-GET  /api/v1/report-downloads/csv?token=...
+GET  /api/v1/report-downloads/xlsx?token=...
 
 GET  /api/v1/system/version
 GET  /api/v1/system/settings
@@ -509,7 +509,7 @@ MVP 不强制引入 Prometheus；保留 OpenTelemetry 接入点。
 - canonical snapshot schema v1-v3 到动态窗口内存模型的兼容映射；
 - 一人多 Key 聚合；
 - Key 轮换有效期；
-- 费用精度和 CSV 格式；
+- 费用精度和 XLSX 文本化存储格式（超 15 位整数与特殊前缀文本）；
 - 渠道签名；
 - 幂等键和状态机；
 - Release 版本比较和升级策略。
@@ -566,7 +566,7 @@ MVP 不包含：
 1. 建立 monorepo、后端分层、React SPA 和统一构建。
 2. 实现 Migrator、SQLite、Identity 和日志初始化码。
 3. 实现 Sub2API 连接、用户与 Key 自动同步。
-4. 实现报表聚合（用户 → Key）、快照、CSV 和手工 dry-run。
+4. 实现报表聚合（用户 → Key）、快照、多工作表 XLSX 和手工 dry-run。
 5. 实现邮箱、钉钉、飞书及组合发送。
 6. 接入 Quartz 月报计划、幂等和补发。
 7. 完成 self-contained systemd、Docker Compose、离线制品、备份和 GitHub Release CI。

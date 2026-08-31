@@ -14,7 +14,7 @@ internal sealed class FeishuReportSender(IHttpClientFactory httpClientFactory, T
     : WebhookReportSender(httpClientFactory, timeProvider)
 {
     private const int PostByteBudget = 12_000;
-    private const string DownloadLinkPrefix = "下载 CSV 完整明细（";
+    private const string DownloadLinkPrefix = "下载 XLSX 完整明细（";
     private const string WebhookHost = "open.feishu.cn";
     private static readonly JsonSerializerOptions SerializerOptions = new();
 

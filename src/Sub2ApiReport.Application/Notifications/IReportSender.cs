@@ -67,9 +67,9 @@ public sealed record OutboundPart(
     int Count,
     string Subject,
     string Body,
-    string? CsvContent,
+    byte[]? AttachmentContent,
     string PayloadHash,
-    string? CsvFileName = null);
+    string? AttachmentFileName = null);
 
 /// <summary>Result of one channel send attempt with sanitized error information.</summary>
 public sealed record ChannelSendOutcome(bool Succeeded, string? ErrorCode = null, string? ErrorMessage = null)

@@ -49,8 +49,8 @@ internal static class ReportMessageRenderer
         AppendDingTalkUsers(lines, report);
         lines.Add("---");
         lines.Add(reportDownloadUrl is null
-            ? "完整 Key 明细请在 Sub2API Report 中下载 CSV。"
-            : $"[下载 CSV 完整明细（{reportDownloadPolicy ?? "限时授权"}）]({reportDownloadUrl})");
+            ? "完整 Key 明细请在 Sub2API Report 中下载 XLSX 工作簿。"
+            : $"[下载 XLSX 完整明细（{reportDownloadPolicy ?? "限时授权"}）]({reportDownloadUrl})");
         lines.Add(BuildFooter(report));
         return lines;
     }
@@ -86,8 +86,8 @@ internal static class ReportMessageRenderer
 
         AppendFeishuUsers(lines, report);
         lines.Add(reportDownloadUrl is null
-            ? "完整 Key 明细请在 Sub2API Report 中下载 CSV。"
-            : $"下载 CSV 完整明细（{reportDownloadPolicy ?? "限时授权"}）：{reportDownloadUrl}");
+            ? "完整 Key 明细请在 Sub2API Report 中下载 XLSX 工作簿。"
+            : $"下载 XLSX 完整明细（{reportDownloadPolicy ?? "限时授权"}）：{reportDownloadUrl}");
         lines.Add(BuildFooter(report));
         return lines;
     }
@@ -134,7 +134,7 @@ internal static class ReportMessageRenderer
         builder.Append("<div style=\"margin-top:28px;padding-top:20px;border-top:1px solid #e4e4e7;")
             .Append("color:#71717a;font-size:12px;line-height:1.7;\">")
             .Append("<p style=\"margin:0 0 6px;\"><strong style=\"color:#3f3f46;\">附件</strong>：")
-            .Append("CSV 文件包含全部 Key、窗口和费用明细，可直接使用 Excel 打开。</p><p style=\"margin:0;\">")
+            .Append("XLSX 工作簿包含全部 Key、窗口和费用明细，可直接使用 Excel 或 WPS 打开。</p><p style=\"margin:0;\">")
             .Append("报告编号 ").Append(report.ReportId.ToString("D"))
             .Append("<br>生成时间 ")
             .Append(report.GeneratedAt.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture))

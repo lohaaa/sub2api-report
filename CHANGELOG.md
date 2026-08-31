@@ -8,6 +8,17 @@
 
 ## [Unreleased]
 
+## [1.0.7] - 2026-08-31
+
+### Changed
+
+- 报告导出由 UTF-8 BOM CSV 改为 ClosedXML 生成的多工作表 XLSX 工作簿：包含“报告概览”、“Key 明细”、“用户汇总”、“数据说明”工作表，任一区间采集失败时额外输出“采集异常”工作表；每个工作表使用正式 Excel Table 与筛选、冻结表头（明细表同时冻结关键标识列）、固定列宽、日期/数值格式、打印设置和高对比配色，不含合并单元格、图片或宏。
+- 邮件投递改为附日期命名的 XLSX 工作簿；报告下载接口和钉钉/飞书限时下载链接统一下发 XLSX（`/api/v1/reports/{id}/xlsx`、`/api/v1/report-downloads/xlsx?token=...`）。
+
+### Security
+
+- XLSX 中所有不受信文本（包括以 `=`、`+`、`-`、`@` 开头的字符串）均显式保存为文本类型，防止公式注入；超过 15 位的整数与 ID 按文本保存以避免精度丢失。
+
 ## [1.0.6] - 2026-08-29
 
 ### Changed
@@ -97,7 +108,8 @@
 - App 容器不挂载 Docker Socket；Updater 通过 instance/container allowlist、固定 API 和 non-root Socket group 隔离高权限操作。
 - 增加公开安全政策，并将未修复漏洞引导至 GitHub Private Vulnerability Reporting。
 
-[Unreleased]: https://github.com/lohaaa/sub2api-report/compare/v1.0.6...HEAD
+[Unreleased]: https://github.com/lohaaa/sub2api-report/compare/v1.0.7...HEAD
+[1.0.7]: https://github.com/lohaaa/sub2api-report/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/lohaaa/sub2api-report/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/lohaaa/sub2api-report/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/lohaaa/sub2api-report/compare/v1.0.3...v1.0.4

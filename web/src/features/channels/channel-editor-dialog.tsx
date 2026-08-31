@@ -608,7 +608,7 @@ function EmailFields({
       <Alert>
         <AlertTitle>邮件说明</AlertTitle>
         <AlertDescription>
-          邮件正文为 HTML 汇总表，并附带 UTF-8 BOM 的 CSV 完整明细。
+          邮件正文为 HTML 汇总表，并附带 XLSX 完整明细工作簿。
         </AlertDescription>
       </Alert>
     </>
@@ -657,7 +657,7 @@ function WebhookFields({
       <Alert>
         <AlertTitle>{channelPresentations[channelType].contentLabel}</AlertTitle>
         <AlertDescription>
-          群机器人不直接发送 CSV 附件；配置外部访问地址后，正式报告会附带
+          群机器人不直接发送文件附件；配置外部访问地址后，正式报告会附带
           可撤销的限时下载链接。
         </AlertDescription>
       </Alert>

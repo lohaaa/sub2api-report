@@ -5,7 +5,7 @@ describe("channel presentation", () => {
   it("distinguishes attachments from revocable download links", () => {
     expect(channelPresentations.Email).toMatchObject({
       hasAttachment: true,
-      attachmentLabel: "含 CSV 附件",
+      attachmentLabel: "含 XLSX 附件",
     });
     expect(channelPresentations.DingTalk).toMatchObject({
       hasAttachment: false,
@@ -17,7 +17,7 @@ describe("channel presentation", () => {
       contentLabel: "富文本摘要",
       attachmentLabel: "无直接附件",
     });
-    expect(channelPresentations.DingTalk.capability).toContain("限时 CSV 下载链接");
-    expect(channelPresentations.Feishu.capability).toContain("限时 CSV 下载链接");
+    expect(channelPresentations.DingTalk.capability).toContain("限时 XLSX 下载链接");
+    expect(channelPresentations.Feishu.capability).toContain("限时 XLSX 下载链接");
   });
 });

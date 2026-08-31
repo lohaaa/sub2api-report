@@ -1,9 +1,9 @@
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Json;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using ClosedXML.Excel;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Sub2ApiReport.Api.Models;
@@ -45,7 +45,7 @@ public sealed class M4ReportFlowTests
     }
 
     [Fact]
-    public async Task DryRunAutoRefreshesPersistsCanonicalSnapshotAndExportsBomCsv()
+    public async Task DryRunAutoRefreshesPersistsCanonicalSnapshotAndExportsXlsxWorkbook()
     {
         var upstream = new StubSub2ApiClient
         {
@@ -114,15 +114,37 @@ public sealed class M4ReportFlowTests
             JsonSerializer.Serialize(report, JsonOptions),
             JsonSerializer.Serialize(persisted, JsonOptions));
 
-        using var csvResponse = await client.GetAsync($"/api/v1/reports/{report.ReportId:D}/csv");
-        Assert.Equal(HttpStatusCode.OK, csvResponse.StatusCode);
-        Assert.Equal("text/csv", csvResponse.Content.Headers.ContentType?.MediaType);
-        var csv = await csvResponse.Content.ReadAsByteArrayAsync();
-        Assert.True(csv.AsSpan().StartsWith(Encoding.UTF8.GetPreamble()));
-        var csvText = Encoding.UTF8.GetString(csv[Encoding.UTF8.GetPreamble().Length..]);
-        Assert.Contains("Sub2API 用户,Key 名称,Key ID,状态", csvText, StringComparison.Ordinal);
-        Assert.Contains("user@example.com,Rotated Key,101,active", csvText, StringComparison.Ordinal);
-        Assert.Contains("TOTAL,全部总计", csvText, StringComparison.Ordinal);
+        using var xlsxResponse = await client.GetAsync($"/api/v1/reports/{report.ReportId:D}/xlsx");
+        Assert.Equal(HttpStatusCode.OK, xlsxResponse.StatusCode);
+        Assert.Equal(
+            ReportXlsxAssert.XlsxMediaType,
+            xlsxResponse.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(
+            "sub2api-report-2026-08-25.xlsx",
+            xlsxResponse.Content.Headers.ContentDisposition?.FileName);
+        var xlsx = await xlsxResponse.Content.ReadAsByteArrayAsync();
+        ReportXlsxAssert.AssertZipXlsxBytes(xlsx);
+        using var workbook = ReportXlsxAssert.Open(xlsx);
+        ReportXlsxAssert.AssertSheetOrder(
+            workbook,
+            ReportXlsxAssert.OverviewSheetName,
+            ReportXlsxAssert.KeyDetailsSheetName,
+            ReportXlsxAssert.UserSummarySheetName,
+            ReportXlsxAssert.DataNotesSheetName);
+        ReportXlsxAssert.AssertOverviewTitle(workbook);
+        ReportXlsxAssert.AssertAllSheetsHaveTables(workbook);
+        var overview = workbook.Worksheet(ReportXlsxAssert.OverviewSheetName);
+        Assert.Equal("完整", overview.Cell(4, 2).GetString());
+        Assert.Equal("30", overview.Cell(16, 6).GetString());
+        Assert.Equal("5,250", overview.Cell(16, 7).GetFormattedString());
+        var keyDetails = workbook.Worksheet(ReportXlsxAssert.KeyDetailsSheetName);
+        Assert.Equal("user@example.com", keyDetails.Cell(5, 1).GetString());
+        Assert.Equal("Rotated Key", keyDetails.Cell(5, 2).GetString());
+        var keyIdCell = keyDetails.Cell(5, 3);
+        Assert.Equal(XLDataType.Text, keyIdCell.DataType);
+        Assert.Equal("101", keyIdCell.GetString());
+        Assert.Equal("7", keyDetails.Cell(5, 12).GetString());
+        Assert.Equal("30", keyDetails.Cell(6, 12).GetString());
 
         string originalCanonicalJson;
         await using (var scope = factory.Services.CreateAsyncScope())

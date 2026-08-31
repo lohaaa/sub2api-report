@@ -47,7 +47,7 @@ public sealed record DeliveryPartResponse(
     string? ErrorCode,
     DateTimeOffset? SentAt);
 
-/// <summary>Represents the revocable CSV download authorization included in an IM delivery.</summary>
+/// <summary>Represents the revocable XLSX download authorization included in an IM delivery.</summary>
 public sealed record ReportDownloadGrantResponse(
     Guid Id,
     DateTimeOffset? ExpiresAt,

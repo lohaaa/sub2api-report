@@ -538,10 +538,10 @@ function downloadGrantLabel(grant: ReportDownloadGrant) {
 
 function describeEmailPart(part: DeliveryPart | undefined) {
   if (!part || part.status === "Pending") {
-    return "邮件待发送，将包含 CSV 附件";
+    return "邮件待发送，将包含 XLSX 附件";
   }
   return part.status === "Succeeded"
-    ? "邮件 1 封已发送，包含 CSV 附件 1 个"
+    ? "邮件 1 封已发送，包含 XLSX 附件 1 个"
     : `邮件发送失败（${part.errorCode ?? "failed"}）`;
 }
 

@@ -1,8 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using ClosedXML.Excel;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -25,6 +25,7 @@ public sealed class M5ChannelDeliveryTests
     private const string SyntheticWebhookUrl =
         "https://oapi.dingtalk.com/robot/send?access_token=synthetic-access-token";
     private const string SyntheticSignSecret = "synthetic-sign-secret-1";
+    private const string ExpectedXlsxFileName = "sub2api-report-2026-08-25.xlsx";
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         Converters = { new JsonStringEnumConverter() },
@@ -239,7 +240,7 @@ public sealed class M5ChannelDeliveryTests
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
     [Fact]
-    public async Task DingTalkDeliveryCreatesLimitedRevocableCsvDownload()
+    public async Task DingTalkDeliveryCreatesLimitedRevocableXlsxDownload()
     {
         var dingTalkSender = new StubReportSender(NotificationChannelType.DingTalk);
         await using var factory = CreateFactory(dingTalkSender);
@@ -269,16 +270,22 @@ public sealed class M5ChannelDeliveryTests
         for (var index = 0; index < 2; index++)
         {
             using var download = await client.GetAsync(
-                $"/api/v1/report-downloads/csv?token={Uri.EscapeDataString(token)}");
+                $"/api/v1/report-downloads/xlsx?token={Uri.EscapeDataString(token)}");
             Assert.Equal(HttpStatusCode.OK, download.StatusCode);
             Assert.Contains("no-store", download.Headers.CacheControl?.ToString(), StringComparison.Ordinal);
             Assert.Equal("no-referrer", Assert.Single(download.Headers.GetValues("Referrer-Policy")));
+            Assert.Equal(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                download.Content.Headers.ContentType?.MediaType);
+            Assert.Equal(ExpectedXlsxFileName, download.Content.Headers.ContentDisposition?.FileName);
             var content = await download.Content.ReadAsByteArrayAsync();
-            Assert.True(content.AsSpan().StartsWith(Encoding.UTF8.GetPreamble()));
+            ReportXlsxAssert.AssertZipXlsxBytes(content);
+            using var workbook = ReportXlsxAssert.Open(content);
+            ReportXlsxAssert.AssertOverviewTitle(workbook);
         }
 
         using (var exhausted = await client.GetAsync(
-            $"/api/v1/report-downloads/csv?token={Uri.EscapeDataString(token)}"))
+            $"/api/v1/report-downloads/xlsx?token={Uri.EscapeDataString(token)}"))
         {
             Assert.Equal(HttpStatusCode.Gone, exhausted.StatusCode);
         }

@@ -6,7 +6,7 @@ namespace Sub2ApiReport.Application.Notifications;
 /// <summary>Computes deterministic payload hashes for delivery records.</summary>
 public static class DeliveryPayloadHash
 {
-    public static string Compute(string subject, string body, string? csvContent)
+    public static string Compute(string subject, string body, byte[]? attachmentContent)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(subject, nameof(subject));
         ArgumentNullException.ThrowIfNull(body, nameof(body));
@@ -16,7 +16,7 @@ public static class DeliveryPayloadHash
         AppendSeparator(incrementalHash);
         Append(incrementalHash, body);
         AppendSeparator(incrementalHash);
-        Append(incrementalHash, csvContent ?? string.Empty);
+        incrementalHash.AppendData(attachmentContent ?? []);
         return Convert.ToHexString(incrementalHash.GetHashAndReset()).ToLowerInvariant();
     }
 

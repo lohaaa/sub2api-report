@@ -3,7 +3,7 @@ using Sub2ApiReport.Application.Reports;
 
 namespace Sub2ApiReport.Infrastructure.Reports;
 
-internal static class ReportCsvFileName
+internal static class ReportXlsxFileName
 {
     public static string Create(ReportDocument report)
     {
@@ -13,6 +13,6 @@ internal static class ReportCsvFileName
             : report.Windows.Max(window => window.EndDateExclusive).AddDays(-1);
         return string.Create(
             CultureInfo.InvariantCulture,
-            $"sub2api-report-{reportDate:yyyy-MM-dd}.csv");
+            $"sub2api-report-{reportDate:yyyy-MM-dd}.xlsx");
     }
 }

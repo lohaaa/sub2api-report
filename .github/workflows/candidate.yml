@@ -261,8 +261,8 @@ jobs:
             "$failure_dir/compose.yaml"
           if sudo env \
             SUB2API_REPORT_INSTALL_DIR="$install_dir" \
-            SUB2API_REPORT_APP_HEALTH_TIMEOUT=60 \
-            SUB2API_REPORT_UPDATER_HEALTH_TIMEOUT=60 \
+            SUB2API_REPORT_APP_HEALTH_TIMEOUT=20 \
+            SUB2API_REPORT_UPDATER_HEALTH_TIMEOUT=20 \
             "$failure_dir/update.sh"; then
             echo "The injected readiness failure unexpectedly succeeded." >&2
             exit 1

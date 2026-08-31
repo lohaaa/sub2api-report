@@ -5,11 +5,25 @@ repository=lohaaa/sub2api-report
 install_dir=${SUB2API_REPORT_INSTALL_DIR:-/opt/sub2api-report}
 requested_version=${SUB2API_REPORT_VERSION:-latest}
 start_services=${SUB2API_REPORT_START:-true}
+requested_port=${SUB2API_REPORT_PORT:-}
+requested_bind_address=${SUB2API_REPORT_BIND_ADDRESS:-}
 if [[ $start_services != true && $start_services != false ]]; then
   echo "SUB2API_REPORT_START must be true or false." >&2
   exit 2
 fi
 
+if [[ -n $requested_port ]] \
+  && [[ ! $requested_port =~ ^[1-9][0-9]{0,4}$ || $requested_port -gt 65535 ]]; then
+  echo "SUB2API_REPORT_PORT must be an integer from 1 to 65535." >&2
+  exit 2
+fi
+if [[ -n $requested_bind_address ]] \
+  && [[ ! $requested_bind_address =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ \
+    && $requested_bind_address != localhost \
+    && ! $requested_bind_address =~ ^\[[0-9A-Fa-f:]+\]$ ]]; then
+  echo "SUB2API_REPORT_BIND_ADDRESS must be an IPv4 address, localhost, or bracketed IPv6 address." >&2
+  exit 2
+fi
 if [[ $(id -u) -eq 0 && -z ${SUDO_USER:-} ]]; then
   echo "Warning: running as root; downloads use root network settings." >&2
   echo "Prefer running this bootstrap from a regular sudo-capable user." >&2
@@ -145,19 +159,12 @@ printf 'Extracting Docker deployment bundle...\n'
 tar -xzf "$work_dir/$asset" -C "$bundle_dir"
 
 if [[ -f $install_dir/compose.yaml ]]; then
-  installed_version=$(run_as_root jq -r '.version // empty' \
-    "$install_dir/release-manifest.json" 2>/dev/null || true)
-  if [[ $installed_version == "$version" ]]; then
-    printf 'Sub2API Report v%s is already prepared.\n' "$version"
-    if [[ $start_services == true ]]; then
-      run_as_root docker compose --project-directory "$install_dir" \
-        -f "$install_dir/compose.yaml" up -d --no-build
-    fi
-    exit 0
-  fi
   echo "Updating the existing installation in $install_dir..."
   run_as_root env SUB2API_REPORT_INSTALL_DIR="$install_dir" \
-    SUB2API_REPORT_START="$start_services" bash "$bundle_dir/update.sh"
+    SUB2API_REPORT_START="$start_services" \
+    SUB2API_REPORT_PORT="$requested_port" \
+    SUB2API_REPORT_BIND_ADDRESS="$requested_bind_address" \
+    bash "$bundle_dir/update.sh"
 else
   echo "Preparing a new installation in $install_dir..."
   legacy_prepare=false
@@ -166,7 +173,10 @@ else
     legacy_prepare=true
   fi
   run_as_root env SUB2API_REPORT_INSTALL_DIR="$install_dir" \
-    SUB2API_REPORT_START="$start_services" bash "$bundle_dir/install.sh"
+    SUB2API_REPORT_START="$start_services" \
+    SUB2API_REPORT_PORT="$requested_port" \
+    SUB2API_REPORT_BIND_ADDRESS="$requested_bind_address" \
+    bash "$bundle_dir/install.sh"
   if [[ $legacy_prepare == true ]]; then
     run_as_root docker compose --project-directory "$install_dir" \
       -f "$install_dir/compose.yaml" down

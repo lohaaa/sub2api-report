@@ -20,7 +20,8 @@ public sealed record UpdateCheckResponse(
     string CurrentVersion,
     string? AvailableVersion,
     DateTimeOffset? PublishedAt,
-    bool ManualUpgradeRequired);
+    bool ManualUpgradeRequired,
+    string UpgradeMessage);
 
 public sealed record UpdatePlanStep(
     int Order,
@@ -32,4 +33,5 @@ public sealed record UpdatePlanResponse(
     string? TargetVersion,
     bool InstallationEnabled,
     bool ManualUpgradeRequired,
+    string UpgradeMessage,
     IReadOnlyList<UpdatePlanStep> Steps);

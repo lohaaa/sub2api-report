@@ -232,10 +232,12 @@ public sealed class UpdateFlowTests
             Task.FromResult(new UpdaterStatusResponse("0.9.0", true, "update_available", null, "1.0.0"));
 
         public Task<UpdateCheckResponse> CheckAsync(string currentVersion, CancellationToken cancellationToken) =>
-            Task.FromResult(new UpdateCheckResponse(true, currentVersion, "1.0.0", DateTimeOffset.UtcNow, false));
+            Task.FromResult(new UpdateCheckResponse(
+                true, currentVersion, "1.0.0", DateTimeOffset.UtcNow, false, "支持在线升级。"));
 
         public Task<UpdatePlanResponse> GetPlanAsync(CancellationToken cancellationToken) =>
-            Task.FromResult(new UpdatePlanResponse("0.9.0", "1.0.0", true, false, []));
+            Task.FromResult(new UpdatePlanResponse(
+                "0.9.0", "1.0.0", true, false, "支持在线升级。", []));
 
         public Task<InstallAcceptedResponse> InstallAsync(
             string currentVersion,

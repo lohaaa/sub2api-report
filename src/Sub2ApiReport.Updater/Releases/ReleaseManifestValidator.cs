@@ -33,10 +33,6 @@ public static class ReleaseManifestValidator
             errors.Add("manifest version 必须是不带预发布标识的 SemVer。");
         }
 
-        if (!SemanticVersion.TryParse(manifest.MinimumUpdaterVersion, out _))
-        {
-            errors.Add("manifest minimumUpdaterVersion 不是有效的 SemVer。");
-        }
 
         if (!string.Equals(manifest.Architecture, UpdateContractConstants.Architecture, StringComparison.Ordinal))
         {
@@ -62,12 +58,66 @@ public static class ReleaseManifestValidator
             errors.Add("manifest publishedAt 无效。");
         }
 
+        ValidateCompatibility(manifest, version, errors);
         ValidateAppArtifact(manifest, version, maxDownloadBytes, errors);
         ValidateUpdaterArtifact(manifest, version, maxDownloadBytes, errors);
         ValidateDatabaseSection(manifest, errors);
         ValidateReleaseNotes(manifest, version, maxMetadataBytes, errors);
 
         return errors;
+    }
+
+    private static void ValidateCompatibility(
+        ReleaseManifest manifest,
+        SemanticVersion? targetVersion,
+        List<string> errors)
+    {
+        if (!SemanticVersion.TryParse(manifest.MinimumUpdaterVersion, out var minimumUpdaterVersion)
+            || minimumUpdaterVersion is null
+            || minimumUpdaterVersion.HasPrerelease)
+        {
+            errors.Add("manifest minimumUpdaterVersion 不是有效的稳定 SemVer。");
+        }
+        else if (targetVersion is not null && minimumUpdaterVersion.CompareTo(targetVersion) > 0)
+        {
+            errors.Add("manifest minimumUpdaterVersion 不能高于目标版本。");
+        }
+
+        if (string.IsNullOrWhiteSpace(manifest.UpgradeMessage) || manifest.UpgradeMessage.Length > 300)
+        {
+            errors.Add("manifest upgradeMessage 长度必须为 1–300。");
+        }
+
+        var sources = manifest.OnlineUpgradeFrom;
+        if (sources is null)
+        {
+            errors.Add("manifest onlineUpgradeFrom 不能为空。");
+            return;
+        }
+
+        if (manifest.ManualUpgradeRequired == manifest.OnlineInstallSupported
+            || (manifest.OnlineInstallSupported && sources.Count == 0)
+            || (manifest.ManualUpgradeRequired && sources.Count != 0))
+        {
+            errors.Add("manifest 在线安装策略与 onlineUpgradeFrom 不一致。");
+        }
+
+        if (sources.Count != sources.Distinct(StringComparer.Ordinal).Count())
+        {
+            errors.Add("manifest onlineUpgradeFrom 不能包含重复版本。");
+        }
+
+        foreach (var source in sources)
+        {
+            if (!SemanticVersion.TryParse(source, out var sourceVersion)
+                || sourceVersion is null
+                || sourceVersion.HasPrerelease
+                || (targetVersion is not null && sourceVersion.CompareTo(targetVersion) >= 0))
+            {
+                errors.Add("manifest onlineUpgradeFrom 只能包含低于目标版本的稳定 SemVer。");
+                break;
+            }
+        }
     }
 
     private static void ValidateAppArtifact(

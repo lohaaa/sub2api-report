@@ -107,6 +107,23 @@ public sealed class InstallTransactionTests : IDisposable
     }
 
     [Fact]
+    public async Task MaintenanceBlockFailsPreflightBeforeArchiveDownload()
+    {
+        _maintenance.MaintenanceAvailable = false;
+        _maintenance.MaintenanceBlockReason = "存在正在执行或排队的报告任务。";
+        var (transaction, operation) = await CreateTransactionAndOperationAsync();
+
+        var result = await transaction.ExecuteAsync(operation, CancellationToken.None);
+
+        Assert.Equal(InstallOperationStates.Failed, result.State);
+        Assert.Contains("存在正在执行或排队的报告任务", result.LastError, StringComparison.Ordinal);
+        Assert.Null(result.ArchiveFilePath);
+        Assert.False(_docker.LoadedArchive);
+        Assert.Equal(0, _maintenance.EnterCount);
+        Assert.Equal(0, _backup.CreateCount);
+    }
+
+    [Fact]
     public async Task DownloadFailureBeforeBackupMarksFailedWithoutMaintenance()
     {
         var (transaction, operation) = await CreateTransactionAndOperationAsync(

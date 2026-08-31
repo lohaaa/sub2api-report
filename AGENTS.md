@@ -33,6 +33,20 @@ Sub2API Codex 用量，并定时发送报告。
 替代官方维护流程。EF migration 只能由 `dotnet ef migrations add/remove` 创建或删除，
 禁止手工编辑 migration 和 model snapshot。
 
+## 升级兼容
+
+- `deploy/release-compatibility.json` 是 Release 升级策略的唯一权威文件。修改 Updater、
+  App 维护协议、UpdateContracts、容器标签/名称/挂载、Compose、migration 或发布脚本时
+  必须同步审查该文件及升级测试
+- 宿主机 `release-manifest.json` 只表示上次完整 bundle，不得用于推断在线升级后的实际
+  App 或 Updater 版本；运行时真值必须来自 App 握手和实际容器镜像标签
+- 只有 `onlineUpgradeFrom` 明确列出且由 Candidate 使用真实已发布源 bundle 验证过的
+  精确版本才允许 `onlineInstallSupported=true`；禁止用范围、最低版本或当前源码重建物
+  代替兼容证据
+- 兼容文件、manifest schema 或升级状态机变化时，必须同时更新 C#/Shell 校验、
+  Problem Details/页面指引、完整 bundle 回滚路径和 N-1 真实 Docker 验收；未通过前
+  禁止创建版本 Tag
+
 ## 公开仓库安全
 
 本仓库是公开仓库。禁止添加私人聊天记录、真实姓名、个人邮箱、组织标识、
@@ -77,7 +91,7 @@ Release notes 必须从该章节生成，禁止仅依赖自动提交摘要。
 
 ## 当前开发状态
 
-项目当前版本为 1.1.1：报告统计主体是 Sub2API 用户 → API Key（稳定标识
+项目当前版本为 1.1.2：报告统计主体是 Sub2API 用户 → API Key（稳定标识
 user_id + api_key_id，Key 名称仅保存快照），人员/Key 归属功能已移除。已实现安全初始化、
 用户与 Key 自动刷新、动态完整自然日窗口、schema v4 不可变快照、多工作表 XLSX 导出
 （报告概览、Key 明细、用户汇总、条件采集异常、数据说明）、邮件/钉钉/飞书投递（含

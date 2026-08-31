@@ -96,6 +96,8 @@ internal sealed class ReleaseManifestBuilder
     private string _minimumUpdaterVersion = "0.1.0";
     private bool _manualUpgradeRequired = true;
     private bool _onlineInstallSupported;
+    private string[] _onlineUpgradeFrom = [];
+    private string _upgradeMessage = "请使用完整 Release bundle。";
     private string _signatureAlgorithm = UpdateContractConstants.SignatureAlgorithm;
     private string _appArchiveUrl = TestReleases.AppArchiveUrl(TestReleases.DefaultVersion);
     private string _appArchiveSha256 = TestReleases.Hex('a');
@@ -127,6 +129,8 @@ internal sealed class ReleaseManifestBuilder
         _minimumUpdaterVersion,
         _manualUpgradeRequired,
         _onlineInstallSupported,
+        _onlineUpgradeFrom,
+        _upgradeMessage,
         _signatureAlgorithm,
         new ReleaseAppArtifact(
             _appArchiveUrl,
@@ -204,6 +208,27 @@ internal sealed class ReleaseManifestBuilder
     public ReleaseManifestBuilder WithOnlineInstallSupported(bool value)
     {
         _onlineInstallSupported = value;
+        if (value && _onlineUpgradeFrom.Length == 0)
+        {
+            _onlineUpgradeFrom = [TestReleases.CurrentAppVersion];
+        }
+        else if (!value)
+        {
+            _onlineUpgradeFrom = [];
+        }
+
+        return this;
+    }
+
+    public ReleaseManifestBuilder WithOnlineUpgradeFrom(params string[] versions)
+    {
+        _onlineUpgradeFrom = versions;
+        return this;
+    }
+
+    public ReleaseManifestBuilder WithUpgradeMessage(string value)
+    {
+        _upgradeMessage = value;
         return this;
     }
 

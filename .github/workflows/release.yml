@@ -35,6 +35,8 @@ jobs:
           fi
           project_version=$(sed -n 's:.*<VersionPrefix>\(.*\)</VersionPrefix>.*:\1:p' Directory.Build.props)
           test "$version" = "$project_version"
+          compatibility_version=$(jq -r '.releaseVersion' deploy/release-compatibility.json)
+          test "$version" = "$compatibility_version"
           deploy/extract-release-notes.sh CHANGELOG.md "$version" "$RUNNER_TEMP/release-notes.md"
           printf 'value=%s\n' "$version" >> "$GITHUB_OUTPUT"
 
@@ -182,6 +184,7 @@ jobs:
           subject-path: |
             release/*.tar.gz
             release/release-manifest.json
+            release/release-compatibility.json
             release/release-manifest.sig
             release/checksums.txt
             release/LICENSE

@@ -46,7 +46,9 @@ public sealed record AppUpdateHandshakeResponse(
     bool MaintenanceMode,
     string MaintenanceState,
     string? MaintenanceOperationId,
-    string? MigrationIdentity);
+    string? MigrationIdentity,
+    bool MaintenanceAvailable = true,
+    string? MaintenanceBlockReason = null);
 
 /// <summary>单个安装阶段的持久化历史记录。</summary>
 public sealed record InstallStageRecord(

@@ -84,13 +84,15 @@ export DOCKER_BOOTSTRAP_TEST_ROOT="$test_root"
 export PATH="$mock_bin:$PATH"
 export SUB2API_REPORT_INSTALL_DIR="$test_root/install"
 export SUB2API_REPORT_START=false
+export SUB2API_REPORT_PORT=18080
+export SUB2API_REPORT_BIND_ADDRESS=127.0.0.1
 bash "$repo_root/deploy/bootstrap.sh" > "$test_root/output.log"
 
 test "$(wc -l < "$test_root/curl.log")" -eq 3
 test "$(wc -l < "$test_root/sudo.log")" -eq 3
 grep -q '^docker info$' "$test_root/sudo.log"
 grep -q '^docker compose version$' "$test_root/sudo.log"
-grep -Eq "^env SUB2API_REPORT_INSTALL_DIR=$test_root/install SUB2API_REPORT_START=false bash /tmp/sub2api-report-bootstrap\\..*/bundle/install\\.sh$" \
+grep -Eq "^env SUB2API_REPORT_INSTALL_DIR=$test_root/install SUB2API_REPORT_START=false SUB2API_REPORT_PORT=18080 SUB2API_REPORT_BIND_ADDRESS=127.0.0.1 bash /tmp/sub2api-report-bootstrap\\..*/bundle/install\\.sh$" \
   "$test_root/sudo.log"
 grep -q '^Release resolved: v1.0.6$' "$test_root/output.log"
 grep -q '^Docker deployment bundle (attempt 1/8, resume supported)$' "$test_root/output.log"

@@ -17,6 +17,7 @@ deploy-bundle/
 ├─ release-lib.sh
 ├─ appctl
 ├─ upgrade-contract.json
+├─ release-compatibility.json
 ├─ CHANGELOG.md
 ├─ LICENSE
 ├─ RELEASE-NOTES.md
@@ -36,6 +37,18 @@ curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/b
 ```
 
 官方 bootstrap 以当前用户解析、下载并校验 Release bundle，显示进度且支持断点续传；仅在加载镜像和写入安装目录时调用 `sudo`。已有安装会调用新 bundle 的 `update.sh`。Docker Engine 和 Docker Compose v2 必须预先安装并运行。
+
+Bootstrap 参数：
+
+| 参数 | 新安装默认值 | 更新语义 |
+| --- | --- | --- |
+| `SUB2API_REPORT_VERSION` | `latest` | 选择目标正式版本；省略时跟随 GitHub Latest |
+| `SUB2API_REPORT_INSTALL_DIR` | `/opt/sub2api-report` | 指定现有安装目录或新安装目录 |
+| `SUB2API_REPORT_PORT` | `8081` | 显式传入时修改端口；省略时保留现有 `.env` |
+| `SUB2API_REPORT_BIND_ADDRESS` | `0.0.0.0` | 显式传入时修改监听地址；省略时保留现有 `.env` |
+| `SUB2API_REPORT_START` | `true` | `false` 表示安装/更新验证完成后保持 App 和 Updater 停止 |
+
+`INSTANCE_ID`、`DOCKER_GID` 和 updater token 属于安装闭环，由脚本生成并在更新时保留，不作为日常部署参数。Sub2API、渠道、计划、日志级别、保留策略等运行期业务配置必须在管理页面/SQLite 中修改。
 
 ### 1.2 Docker Compose 手动部署
 
@@ -59,12 +72,12 @@ sudo docker compose logs -f app
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/bootstrap.sh | \
-  SUB2API_REPORT_VERSION=1.0.4 bash
+  SUB2API_REPORT_VERSION=1.1.2 bash
 ```
 
 手工下载、checksum 和 attestation 校验方式见 README。生产主机不从公共 Registry 拉取镜像，部署用户不持有发布私钥；bundle 内只包含用于验签的公钥。
 
-安装主机需要 Docker Engine、Docker Compose v2、OpenSSL、jq、gzip 和 sha256sum。脚本默认安装到 `/opt/sub2api-report`；可通过 `SUB2API_REPORT_INSTALL_DIR` 显式覆盖。后续部署契约升级在新 bundle 目录执行 `sudo ./update.sh`，脚本保留现有 `.env`、内部 token、实例 ID 和数据卷，并在停止 App 后将数据库一致性副本写到安装目录的 `data-backups/`，与 Docker data volume 分离。重复安装同一版本或降级默认被拒绝。
+安装主机需要 Docker Engine、Docker Compose v2、OpenSSL、jq、gzip 和 sha256sum。后续完整更新再次执行同一条 bootstrap 命令；脚本从实际 App/Updater 容器读取当前版本和回滚 image ID，不依赖可能滞后的宿主机 manifest。目标二进制已安装但控制文件滞后时只同步 Compose、兼容文件和发布元数据，不重复创建数据库备份；降级默认拒绝。
 
 安装完成后通过以下命令读取一次性管理员初始化码：
 
@@ -363,57 +376,17 @@ sudo docker compose ps
 
 跨 deployment contract 的版本不支持页面升级，Release 页面提供新的 deploy bundle 和明确的主机命令。
 
-### 11.1 Updater-only 手工更新
+### 11.1 兼容模式与完整更新
 
-当 Release manifest 的 `minimumUpdaterVersion` 高于当前 Updater 时，页面安装必须在下载 App 归档前拒绝执行。Updater 不在线替换自身，因此需要先在主机把 Updater 升级到目标 bundle 所带版本，App 保持当前版本，再回页面执行 App 在线升级。
+Updater 只会为 `release-compatibility.json` 中 `onlineUpgradeFrom` 明确列出、且 Candidate 已用对应公开 bundle 验证过的源 App 版本开放页面安装。检查阶段还会验证最低 Updater、deployment contract 和 App 维护资格；不兼容时页面直接显示签名 `upgradeMessage`，不会下载 App 归档。
 
-该路径不适用于旧 App 自身拒绝维护的兼容故障。例如 v1.0.8 已有报告任务卡在非终态时，目标 App 尚未启动，单独更新 Updater 仍会被旧 App 拒绝；此类 Release 必须设置 `manualUpgradeRequired=true`、`onlineInstallSupported=false`，并使用目标完整 bundle 的 `update.sh`。
-
-以下命令只用 bundle 内随发布测试的 `release-lib.sh` 函数完成校验，不改动 App 容器、数据卷和
-`.env`（`verify_release_bundle` 校验 images/checksums.txt、manifest 签名、版本、架构与产物
-哈希；systemd 部署不走此流程，继续使用 server bootstrap）：
+页面提示需要主机升级时，不需要手工下载、解压或替换单个镜像，重新执行统一 bootstrap 命令：
 
 ```bash
-target_bundle=/absolute/path/to/sub2api-report-vX.Y.Z-linux-amd64.tar.gz
-install_dir=/opt/sub2api-report   # 改为实际安装目录
-bundle_dir=$(mktemp -d /tmp/sub2api-report-updater.XXXXXX)
-
-# 1) 解压目标 Release 完整 bundle，校验 bundle 签名与 checksums
-tar -xzf "$target_bundle" -C "$bundle_dir"
-target_version=$(jq -r '.version' "$bundle_dir/release-manifest.json")
-sudo bash -c "source '$bundle_dir/release-lib.sh' && verify_release_bundle '$bundle_dir'"
-
-# 2) 只加载 Updater 镜像归档，并按签名 manifest 校验 tag 与 config/target digest
-gzip -dc "$bundle_dir/images/sub2api-report-updater-linux-amd64.tar.gz" | sudo docker load
-sudo bash -c "source '$bundle_dir/release-lib.sh' && verify_image_archive_metadata \
-  '$bundle_dir/images/sub2api-report-updater-linux-amd64.tar.gz' \
-  \"$(jq -r '.updater.loadedTag' '$bundle_dir/release-manifest.json')\" \
-  \"$(jq -r '.updater.imageId' '$bundle_dir/release-manifest.json')\" \
-  \"$(jq -r '.updater.targetDigest' '$bundle_dir/release-manifest.json')\""
-
-# 3) 记录旧 Updater 镜像 ID（回退用），把新 Updater 标记为本地 bootstrap 标签
-old_updater_id=$(sudo docker image inspect sub2api-report-updater:bootstrap --format '{{.Id}}')
-sudo docker tag "sub2api-report-updater:$(jq -r '.version' "$bundle_dir/release-manifest.json")" \
-  sub2api-report-updater:bootstrap
-
-# 4) 只重建 Updater 容器（.env 的 instance id、token、Socket GID 均保留；App 保持版本不变）
-sudo docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml" up -d --no-deps updater
-sudo bash -c "source '$bundle_dir/release-lib.sh' && wait_for_service_health '$install_dir' updater 60"
-
-# 5) 确认 Updater 已切到目标版本且在线安装可用
-updater_status=$(sudo docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml" \
-  exec -T updater sh -c \
-  'token=$(cat /run/secrets/updater-token); curl --fail --silent -H "Authorization: Bearer $token" http://127.0.0.1:8081/internal/v1/status')
-test "$(jq -r '.version' <<<"$updater_status")" = "$target_version"
-test "$(jq -r '.installationEnabled' <<<"$updater_status")" = true
+curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/bootstrap.sh | bash
 ```
 
-确认 Updater 为目标版本后，按 [online-update.md](online-update.md) 从页面执行 App 在线升级。如需回退 Updater（App 未受影响，不涉及数据）：
-
-```bash
-sudo docker tag "$old_updater_id" sub2api-report-updater:bootstrap
-sudo docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml" up -d --no-deps updater
-```
+完整更新会从实际容器读取 App/Updater 版本和回滚 image ID，不依赖可能因历史 App-only 更新而滞后的宿主机发布文件。只有 Release notes 明确要求且旧 App 维护协议仍兼容时才使用 updater-only 专用流程；常规部署文档不把它作为用户操作入口。
 
 ## 12. 日志
 
@@ -456,6 +429,7 @@ sub2api-report-server-v1.2.0-linux-amd64.tar.gz
 sub2api-report-app-v1.2.0-linux-amd64.tar.gz
 sub2api-report-updater-v1.2.0-linux-amd64.tar.gz
 release-manifest.json
+release-compatibility.json
 release-manifest.sig
 checksums.txt
 CHANGELOG.md
@@ -465,7 +439,7 @@ sub2api-report-app-v1.2.0.spdx.json
 sub2api-report-updater-v1.2.0.spdx.json
 ```
 
-完整 bundle 包含生产 Compose、脚本、Apache-2.0 许可证、完整变更日志、当前版本说明和两个离线镜像归档。GitHub Release 页面正文与 `release-notes-vX.Y.Z.md` 都由根目录 `CHANGELOG.md` 的对应版本章节生成；版本章节缺失或为空时发布失败。普通在线升级只下载 App 镜像归档；Updater 或部署契约变化要求下载新的完整 bundle 并执行 `update.sh`。
+完整 bundle 包含生产 Compose、脚本、版本化兼容文件、Apache-2.0 许可证、完整变更日志、当前版本说明和两个离线镜像归档。GitHub Release 页面正文与 `release-notes-vX.Y.Z.md` 都由根目录 `CHANGELOG.md` 的对应版本章节生成；版本章节缺失或为空时发布失败。页面在线升级只下载 App 镜像归档，并且仅对兼容文件明确验证的源版本开放；其他情况统一执行 bootstrap 完整更新。
 
 生产 Compose 固定引用本地标签：
 
@@ -476,7 +450,7 @@ sub2api-report-updater:bootstrap
 
 两个服务都设置 `pull_policy: never`。这些本地标签只用于选择已校验并通过 `docker load` 导入的镜像；发布信任由 manifest 签名、归档 SHA-256、预期镜像 ID 和架构共同建立。GitHub Actions artifact 只用于 Job 间传递，最终安装文件必须进入无保留期依赖的 GitHub Release Assets。
 
-Release workflow 需要仓库 Actions secret `RELEASE_SIGNING_KEY_PEM`，内容为专用 RSA 私钥 PEM。私钥不能提交到仓库，也不能提供给 PR Job；工作流只在 Tag 发布 Job 的临时目录中使用它，并从同一密钥导出 bundle 内公钥。密钥轮换必须单独发布公告，现有安装默认拒绝未确认的公钥变化。Tag 版本必须与 `Directory.Build.props` 的 `VersionPrefix` 和 `CHANGELOG.md` 对应版本章节一致；该章节被提取为 Release 页面正文并以独立资产发布，其 SHA-256 和大小写入签名 manifest。工作流完成质量门和扫描后创建 draft Release，由维护者审核后发布。
+Release workflow 需要仓库 Actions secret `RELEASE_SIGNING_KEY_PEM`，内容为专用 RSA 私钥 PEM。私钥不能提交到仓库，也不能提供给 PR Job；工作流只在 Tag 发布 Job 的临时目录中使用它，并从同一密钥导出 bundle 内公钥。密钥轮换必须单独发布公告，现有安装默认拒绝未确认的公钥变化。Tag 版本必须与 `Directory.Build.props`、`release-compatibility.json` 和 `CHANGELOG.md` 对应版本章节一致；完整质量、签名验签、安装 smoke、Critical 扫描、SBOM 和 attestation 全部通过后才创建公开 Release。
 
 ## 14. 仓库隐私保护
 

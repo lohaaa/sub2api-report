@@ -58,36 +58,43 @@ sudo systemctl restart sub2api-report
 
 ## 方式二：Docker Compose 部署
 
-服务器需要提前安装 Docker Engine 和 Docker Compose v2。
+服务器需要提前安装 Docker Engine 和 Docker Compose v2。首次安装和以后更新到最新正式版都执行同一条命令：
 
-先下载并准备最新 Release、镜像和 Compose 文件：
+```bash
+curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/bootstrap.sh | bash
+```
+
+脚本会下载并校验签名完整 bundle，默认安装到 `/opt/sub2api-report`、监听 `0.0.0.0:8081` 并启动服务。更新时会保留现有端口、监听地址、实例 ID、内部 token 和数据卷；替换前备份 SQLite，验证失败时恢复旧镜像、配置和数据库。
+
+常用可选参数：
+
+| 参数 | 默认值 | 作用 |
+| --- | --- | --- |
+| `SUB2API_REPORT_VERSION` | `latest` | 固定安装指定正式版本，例如 `1.1.2` |
+| `SUB2API_REPORT_INSTALL_DIR` | `/opt/sub2api-report` | 安装 Compose、`.env` 和发布元数据的目录 |
+| `SUB2API_REPORT_PORT` | 新安装为 `8081` | 设置 Report 主机端口；更新时省略则保留现有端口 |
+| `SUB2API_REPORT_BIND_ADDRESS` | 新安装为 `0.0.0.0` | 设置监听地址；更新时省略则保留现有地址 |
+| `SUB2API_REPORT_START` | `true` | 设为 `false` 时完成安装/更新验证后保持容器停止 |
+
+例如仅允许本机访问并使用端口 `18080`：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/bootstrap.sh | \
-  SUB2API_REPORT_START=false bash
+  SUB2API_REPORT_PORT=18080 \
+  SUB2API_REPORT_BIND_ADDRESS=127.0.0.1 \
+  bash
 ```
 
-脚本以当前用户下载并校验 bundle，仅在加载镜像和写入安装目录时调用 `sudo`。
-
-Compose 的 Report 主机端口在 `/opt/sub2api-report/.env` 中通过 `APP_PORT=18080` 指定。
-
-然后启动容器：
+日常检查和停止：
 
 ```bash
 cd /opt/sub2api-report
-sudo docker compose up -d
 sudo docker compose ps
 sudo docker compose logs -f app
-```
-
-停止容器：
-
-```bash
-cd /opt/sub2api-report
 sudo docker compose down
 ```
 
-Docker Compose 部署支持管理页面 App-only 在线更新和失败自动回滚。再次执行 Docker bootstrap 命令也可以更新完整部署 bundle。
+管理页面只会为兼容文件明确验证过的源版本显示“安装更新”。页面提示“需要主机升级”时，重新执行上面的无参数 bootstrap 命令即可完成 App、Updater 和部署文件的完整更新。
 
 ## 首次初始化
 

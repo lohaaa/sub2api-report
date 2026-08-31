@@ -61,27 +61,15 @@ public sealed class InstallService(
         }
 
         var manifest = cached.Manifest;
-        if (!SemanticVersion.TryParse(manifest.MinimumUpdaterVersion, out var minimumUpdaterVersion)
-            || !SemanticVersion.TryParse(UpdaterVersion.GetCurrent(), out var currentUpdaterVersion)
-            || currentUpdaterVersion!.CompareTo(minimumUpdaterVersion) < 0)
+        var compatibility = ReleaseCompatibilityEvaluator.Evaluate(
+            manifest,
+            request.CurrentVersion,
+            UpdaterVersion.GetCurrent());
+        if (!compatibility.OnlineInstallAllowed)
         {
             return InstallSubmissionResult.Reject(
                 StatusCodes.Status409Conflict,
-                "当前 Updater 版本不满足目标版本要求，请执行手工完整 bundle 升级。");
-        }
-
-        if (manifest.ManualUpgradeRequired)
-        {
-            return InstallSubmissionResult.Reject(
-                StatusCodes.Status409Conflict,
-                "该版本要求手工完整 bundle 升级，不提供在线安装。");
-        }
-
-        if (!manifest.OnlineInstallSupported)
-        {
-            return InstallSubmissionResult.Reject(
-                StatusCodes.Status409Conflict,
-                "该版本不支持在线安装。");
+                compatibility.Message);
         }
 
         var targetVersionText = request.TargetVersion ?? manifest.Version;

@@ -50,6 +50,8 @@ internal sealed class MaintenanceCoordinator(
     {
         var version = await systemInfoService.GetVersionAsync(cancellationToken);
         var migrations = await dbContext.Database.GetAppliedMigrationsAsync(cancellationToken);
+        var activeReportExists = await dbContext.ReportRuns
+            .AnyAsync(run => ActiveStatuses.Contains(run.Status), cancellationToken);
         var snapshot = maintenanceState.Current;
         return new AppUpdateHandshakeResponse(
             version.Version,
@@ -57,7 +59,11 @@ internal sealed class MaintenanceCoordinator(
             snapshot.Active,
             snapshot.State,
             snapshot.OperationId,
-            migrations.LastOrDefault());
+            migrations.LastOrDefault(),
+            MaintenanceAvailable: !activeReportExists,
+            MaintenanceBlockReason: activeReportExists
+                ? "存在正在执行或排队的报告任务，暂时不能升级。"
+                : null);
     }
 
     public async Task EnterAsync(string operationId, CancellationToken cancellationToken)

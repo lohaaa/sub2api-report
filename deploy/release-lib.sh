@@ -21,6 +21,58 @@ require_release_host() {
   }
 }
 
+validate_release_compatibility_file() {
+  local compatibility_file=$1
+  local version=$2
+  local base_version source_version minimum_updater_version
+
+  base_version=${version%%-*}
+  jq -e --arg releaseVersion "$base_version" '
+    (keys | sort) == ([
+      "deploymentContractVersion",
+      "manifestSchemaVersion",
+      "manualUpgradeRequired",
+      "minimumUpdaterVersion",
+      "onlineInstallSupported",
+      "onlineUpgradeFrom",
+      "releaseVersion",
+      "schemaVersion",
+      "upgradeMessage"
+    ] | sort)
+    and .schemaVersion == 1
+    and .releaseVersion == $releaseVersion
+    and .manifestSchemaVersion == 3
+    and .deploymentContractVersion == 1
+    and (.minimumUpdaterVersion | type == "string" and test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))
+    and (.manualUpgradeRequired | type == "boolean")
+    and (.onlineInstallSupported | type == "boolean")
+    and (.onlineUpgradeFrom | type == "array")
+    and (all(.onlineUpgradeFrom[]; type == "string" and test("^[0-9]+\\.[0-9]+\\.[0-9]+$")))
+    and (.upgradeMessage | type == "string" and length > 0 and length <= 300)
+    and (
+      (.manualUpgradeRequired and (.onlineInstallSupported | not) and (.onlineUpgradeFrom | length == 0))
+      or
+      ((.manualUpgradeRequired | not) and .onlineInstallSupported and (.onlineUpgradeFrom | length > 0))
+    )
+  ' "$compatibility_file" >/dev/null || {
+    echo "$compatibility_file is invalid or does not match release $base_version." >&2
+    return 1
+  }
+
+  minimum_updater_version=$(jq -r '.minimumUpdaterVersion' "$compatibility_file")
+  [[ $(printf '%s\n%s\n' "$minimum_updater_version" "$base_version" | sort -V | tail -n 1) == "$base_version" ]] || {
+    echo "minimumUpdaterVersion cannot be newer than the target release." >&2
+    return 1
+  }
+  while IFS= read -r source_version; do
+    [[ $source_version != "$base_version" \
+      && $(printf '%s\n%s\n' "$source_version" "$base_version" | sort -V | tail -n 1) == "$base_version" ]] || {
+      echo "onlineUpgradeFrom must contain only older stable versions." >&2
+      return 1
+    }
+  done < <(jq -r '.onlineUpgradeFrom[]' "$compatibility_file")
+}
+
 verify_image_archive_metadata() {
   local archive=$1
   local expected_tag=$2
@@ -79,6 +131,7 @@ verify_release_bundle() {
     "$bundle_dir/compose.yaml" \
     "$bundle_dir/.env.example" \
     "$bundle_dir/upgrade-contract.json" \
+    "$bundle_dir/release-compatibility.json" \
     "$bundle_dir/CHANGELOG.md" \
     "$bundle_dir/LICENSE" \
     "$bundle_dir/RELEASE-NOTES.md" \
@@ -103,7 +156,7 @@ verify_release_bundle() {
     -signature "$bundle_dir/release-manifest.sig" \
     "$bundle_dir/release-manifest.json" >/dev/null
 
-  [[ $(jq -r '.schemaVersion' "$bundle_dir/release-manifest.json") == 2 \
+  [[ $(jq -r '.schemaVersion' "$bundle_dir/release-manifest.json") == 3 \
     && $(jq -r '.channel' "$bundle_dir/release-manifest.json") == stable ]] || {
     echo "Unsupported release manifest schema or channel." >&2
     return 1
@@ -111,6 +164,20 @@ verify_release_bundle() {
   manifest_version=$(jq -r '.version' "$bundle_dir/release-manifest.json")
   [[ $manifest_version =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]] || {
     echo "Release manifest version is invalid." >&2
+    return 1
+  }
+  validate_release_compatibility_file \
+    "$bundle_dir/release-compatibility.json" "$manifest_version" || return
+  jq -e --slurpfile policy "$bundle_dir/release-compatibility.json" '
+    .schemaVersion == $policy[0].manifestSchemaVersion
+    and .deploymentContractVersion == $policy[0].deploymentContractVersion
+    and .minimumUpdaterVersion == $policy[0].minimumUpdaterVersion
+    and .manualUpgradeRequired == $policy[0].manualUpgradeRequired
+    and .onlineInstallSupported == $policy[0].onlineInstallSupported
+    and .onlineUpgradeFrom == $policy[0].onlineUpgradeFrom
+    and .upgradeMessage == $policy[0].upgradeMessage
+  ' "$bundle_dir/release-manifest.json" >/dev/null || {
+    echo "Signed manifest does not match release-compatibility.json." >&2
     return 1
   }
   IFS= read -r release_heading < "$bundle_dir/RELEASE-NOTES.md"
@@ -241,25 +308,40 @@ activate_loaded_images() {
 
 write_instance_env() {
   local install_dir=$1
-  local instance_id docker_gid
+  local instance_id docker_gid app_port bind_address source_env
+
   [[ -S /var/run/docker.sock ]] || {
     echo "Docker Engine socket /var/run/docker.sock is required." >&2
     return 1
   }
-  instance_id=
+  source_env="$install_dir/.env.example"
   if [[ -f $install_dir/.env ]]; then
-    instance_id=$(sed -n 's/^INSTANCE_ID=//p' "$install_dir/.env" | head -n 1)
+    source_env="$install_dir/.env"
   fi
-  if [[ -z $instance_id ]]; then
-    instance_id=$(openssl rand -hex 16)
-  fi
+
+  instance_id=$(sed -n 's/^INSTANCE_ID=//p' "$source_env" | head -n 1)
+  [[ -n $instance_id ]] || instance_id=$(openssl rand -hex 16)
   docker_gid=$(stat -c '%g' /var/run/docker.sock)
-  if [[ -f $install_dir/.env ]]; then
-    grep -Ev '^(INSTANCE_ID|DOCKER_GID)=' "$install_dir/.env" > "$install_dir/.env.tmp"
-  else
-    grep -Ev '^(INSTANCE_ID|DOCKER_GID)=' "$install_dir/.env.example" > "$install_dir/.env.tmp"
-  fi
-  printf 'INSTANCE_ID=%s\nDOCKER_GID=%s\n' "$instance_id" "$docker_gid" >> "$install_dir/.env.tmp"
+  app_port=${SUB2API_REPORT_PORT:-$(sed -n 's/^APP_PORT=//p' "$source_env" | head -n 1)}
+  bind_address=${SUB2API_REPORT_BIND_ADDRESS:-$(sed -n 's/^BIND_ADDRESS=//p' "$source_env" | head -n 1)}
+  app_port=${app_port:-8081}
+  bind_address=${bind_address:-0.0.0.0}
+
+  [[ $app_port =~ ^[1-9][0-9]{0,4}$ && $app_port -le 65535 ]] || {
+    echo "SUB2API_REPORT_PORT must be an integer from 1 to 65535." >&2
+    return 1
+  }
+  [[ $bind_address =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ \
+    || $bind_address == localhost \
+    || $bind_address =~ ^\[[0-9A-Fa-f:]+\]$ ]] || {
+    echo "SUB2API_REPORT_BIND_ADDRESS must be an IPv4 address, localhost, or bracketed IPv6 address." >&2
+    return 1
+  }
+
+  grep -Ev '^(INSTANCE_ID|DOCKER_GID|APP_PORT|BIND_ADDRESS)=' "$source_env" \
+    > "$install_dir/.env.tmp"
+  printf 'APP_PORT=%s\nBIND_ADDRESS=%s\nINSTANCE_ID=%s\nDOCKER_GID=%s\n' \
+    "$app_port" "$bind_address" "$instance_id" "$docker_gid" >> "$install_dir/.env.tmp"
   chmod 0600 "$install_dir/.env.tmp"
   mv "$install_dir/.env.tmp" "$install_dir/.env"
 }
@@ -280,6 +362,7 @@ install_release_files() {
   install -m 0644 "$bundle_dir/compose.yaml" "$install_dir/compose.yaml"
   install -m 0644 "$bundle_dir/.env.example" "$install_dir/.env.example"
   install -m 0644 "$bundle_dir/upgrade-contract.json" "$install_dir/upgrade-contract.json"
+  install -m 0644 "$bundle_dir/release-compatibility.json" "$install_dir/release-compatibility.json"
   install -m 0644 "$bundle_dir/release-manifest.json" "$install_dir/release-manifest.json"
   install -m 0644 "$bundle_dir/release-manifest.sig" "$install_dir/release-manifest.sig"
   install -m 0644 "$bundle_dir/update-public-key.pem" "$install_dir/update-public-key.pem"
@@ -289,9 +372,8 @@ install_release_files() {
 resolve_service_image_id() {
   local install_dir=$1
   local service=$2
-  local expected_version=${3:-}
-  local container_id image_id image_version
-  local -a container_ids=() matching_image_ids=()
+  local container_id image_id metadata status health upgrade_operation selected_image_id
+  local -a container_ids=() image_ids=() original_image_ids=() healthy_image_ids=()
 
   mapfile -t container_ids < <(
     docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml" \
@@ -303,19 +385,28 @@ resolve_service_image_id() {
       echo "The $service container has an invalid image ID." >&2
       return 1
     }
-    if [[ -n $expected_version ]]; then
-      image_version=$(docker image inspect "$image_id" \
-        --format '{{index .Config.Labels "org.opencontainers.image.version"}}')
-      [[ $image_version == "$expected_version" ]] || continue
+    metadata=$(docker inspect --format \
+      '{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}|{{with index .Config.Labels "io.sub2api-report.upgrade-operation"}}{{.}}{{end}}' \
+      "$container_id")
+    IFS='|' read -r status health upgrade_operation <<<"$metadata"
+    image_ids+=("$image_id")
+    [[ -n $upgrade_operation ]] || original_image_ids+=("$image_id")
+    if [[ $status == running && $health == healthy ]]; then
+      healthy_image_ids+=("$image_id")
     fi
-    matching_image_ids+=("$image_id")
   done
 
-  [[ ${#matching_image_ids[@]} -eq 1 ]] || {
-    echo "Expected exactly one $service container matching the installed release in $install_dir." >&2
+  if [[ ${#image_ids[@]} -eq 1 ]]; then
+    selected_image_id=${image_ids[0]}
+  elif [[ ${#original_image_ids[@]} -eq 1 ]]; then
+    selected_image_id=${original_image_ids[0]}
+  elif [[ ${#healthy_image_ids[@]} -eq 1 ]]; then
+    selected_image_id=${healthy_image_ids[0]}
+  else
+    echo "Could not identify the previous $service container in $install_dir; remove stale candidate containers before retrying." >&2
     return 1
-  }
-  printf '%s\n' "${matching_image_ids[0]}"
+  fi
+  printf '%s\n' "$selected_image_id"
 }
 wait_for_service_health() {
   local install_dir=$1

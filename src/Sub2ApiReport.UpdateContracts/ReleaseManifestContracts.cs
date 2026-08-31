@@ -13,6 +13,8 @@ public sealed record ReleaseManifest(
     string MinimumUpdaterVersion,
     bool ManualUpgradeRequired,
     bool OnlineInstallSupported,
+    IReadOnlyList<string> OnlineUpgradeFrom,
+    string UpgradeMessage,
     string SignatureAlgorithm,
     ReleaseAppArtifact App,
     ReleaseUpdaterArtifact Updater,

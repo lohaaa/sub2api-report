@@ -107,6 +107,7 @@ public sealed class UpdaterEndpointTests : IDisposable
         Assert.Equal(TestReleases.CurrentAppVersion, check.CurrentVersion);
         Assert.Equal(version, check.AvailableVersion);
         Assert.True(check.ManualUpgradeRequired);
+        Assert.Equal("请使用完整 Release bundle。", check.UpgradeMessage);
         Assert.Equal(TestReleases.PublishedAt, check.PublishedAt);
 
         using var statusResponse = await client.GetAsync("/internal/v1/status");
@@ -124,6 +125,7 @@ public sealed class UpdaterEndpointTests : IDisposable
         Assert.Equal(version, plan.TargetVersion);
         Assert.False(plan.InstallationEnabled);
         Assert.True(plan.ManualUpgradeRequired);
+        Assert.Equal("请使用完整 Release bundle。", plan.UpgradeMessage);
         Assert.Equal(7, plan.Steps.Count);
     }
 

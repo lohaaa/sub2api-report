@@ -23,7 +23,8 @@ public sealed class UpdateStateStoreTests : IDisposable
             AvailablePublishedAt: TestReleases.PublishedAt,
             ManualUpgradeRequired: true,
             CurrentVersion: "0.7.0",
-            LastError: null);
+            LastError: null,
+            UpgradeMessage: "请使用完整 Release bundle。");
 
         await _store.SaveStatusAsync(snapshot, CancellationToken.None);
 
@@ -52,6 +53,21 @@ public sealed class UpdateStateStoreTests : IDisposable
         Assert.Equal(
             second,
             await _store.LoadStatusAsync(CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task LegacyStatusWithoutUpgradeMessageStillLoads()
+    {
+        var stateDirectory = Path.Combine(_temp.FullPath, "state");
+        Directory.CreateDirectory(stateDirectory);
+        await File.WriteAllTextAsync(
+            Path.Combine(stateDirectory, "status.json"),
+            """{"last_checked_at":null,"update_available":true,"available_version":"1.1.1","available_published_at":null,"manual_upgrade_required":true,"current_version":"1.1.0","last_error":null}""");
+
+        var snapshot = await _store.LoadStatusAsync(CancellationToken.None);
+
+        Assert.NotNull(snapshot);
+        Assert.Null(snapshot.UpgradeMessage);
     }
 
     [Fact]

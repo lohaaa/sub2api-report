@@ -287,6 +287,7 @@ describe("updates page terminal version refresh", () => {
           targetVersion: "1.1.0",
           installationEnabled: true,
           manualUpgradeRequired: false,
+          upgradeMessage: "支持在线升级。",
           steps: [],
         });
       }),
@@ -354,6 +355,7 @@ describe("updates page terminal version refresh", () => {
           targetVersion: "1.1.0",
           installationEnabled: true,
           manualUpgradeRequired: false,
+          upgradeMessage: "支持在线升级。",
           steps: [],
         });
       }),

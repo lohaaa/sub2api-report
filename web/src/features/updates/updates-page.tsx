@@ -257,7 +257,7 @@ export function UpdatesPage() {
         <Alert>
           <ShieldCheckIcon aria-hidden="true" />
           <AlertTitle>需要主机升级</AlertTitle>
-          <AlertDescription>该版本修改了 Updater 或部署契约，请下载完整 Release bundle 并执行 update.sh。</AlertDescription>
+          <AlertDescription>{planQuery.data?.upgradeMessage ?? "请使用完整 Release bundle 完成升级。"}</AlertDescription>
         </Alert>
       ) : null}
 

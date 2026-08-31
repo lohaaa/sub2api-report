@@ -41,18 +41,19 @@
 | M6 计划任务 | 0.7.0 | 已完成 | Quartz 持久化计划、窗口冻结、规范化执行记录、重试和恢复已落地 |
 | M7 Docker 和签名 bundle | 0.8.0 内部里程碑 | 已完成 | Candidate workflow 在 linux/amd64 上通过签名、Critical 扫描、SBOM、安装、故障回滚、成功更新和 non-root Socket 权限验收 |
 | M8 在线升级 | 0.9.0 内部里程碑 | 已完成 | 固定仓库验签、严格下载、Docker App-only 事务、维护模式、SQLite 备份、恢复、App API、step-up 和更新页面已实现 |
-| M9 稳定版加固 | `v1.0.0` - `v1.1.1` | 已完成 | Updater 安全验收和 Release workflow 全部通过；v1.1.1 修复维护错误诊断、镜像标签事务与主机回滚镜像识别，并将在线安装改为显式兼容选项；v1.1.0 增加短月策略并修复报告任务卡死 |
+| M9 稳定版加固 | `v1.0.0` - `v1.1.2` | 已完成 | v1.1.2 建立版本化升级兼容契约、真实上一版 Candidate、运行容器真值和幂等完整更新；v1.1.1 修复维护错误诊断与镜像标签事务；v1.1.0 增加短月策略并修复报告任务卡死 |
 
 当前自动质量门最近一次通过：
 
-- .NET 格式检查和 Release 构建通过，`342` 个测试通过；
+- .NET 格式检查和 Release 构建通过，`355` 个测试通过；
 - 前端 typecheck、lint、build 通过，`27` 个测试通过；
 - ShellCheck、Actionlint、Critical 镜像扫描、SBOM、changelog、签名、安装和回滚候选测试通过。
 
-正式发布已完成：
+稳定发布与当前候选：
 
 - 仓库首个 Tag 和公开 Release 为 `v1.0.0`；
-- `v1.1.1` 为 Latest：修复 v1.0.8 → v1.1.0 页面升级在旧 App 非终态任务阻断维护时只显示笼统错误的问题；维护调用保留受控 Problem Details，目标镜像标签延后到可回滚阶段，完整 bundle 回滚从实际运行容器读取旧 App/Updater image ID。Release 默认要求完整 bundle，页面 App-only 安装仅在明确完成旧 App/Updater 兼容验证后开启；
+- `v1.1.2` 当前候选：建立版本化升级兼容契约、下载前维护资格检查、实际容器版本/回滚基线、同版本幂等控制文件同步、真实上一 Release Candidate 和简化 Docker bootstrap 参数；通过 Candidate 前不创建 Tag；
+- `v1.1.1` 为当前 Latest：修复维护错误诊断与目标镜像标签过早切换，但完整更新仍错误地用宿主机 manifest 版本筛选实际 App；受影响部署等待 v1.1.2 完整 bundle；
 - `v1.1.0` 增加每月 1–31 日和短月策略，并修复报告任务快照后投递卡死；其 Release manifest 错误地允许 v1.0.8 Updater 直接页面安装，受影响部署应跳过该在线路径并使用 v1.1.1 完整 bundle；
 - `v1.0.8` 修复在线升级在 `replacing_app` 阶段因 `Binds` 与有效挂载目标重复导致候选 App 容器创建失败并回滚（官方 Compose 的 named volume + 只读 bind 即命中）；manifest `minimumUpdaterVersion` 在该版本提升到 1.0.8，v1.0.6/v1.0.7 安装先按 deployment.md §11.1 执行 updater-only 手工更新，Updater 到位后从页面把 App 在线升级到 1.0.8；Updater 内部安装 API 的容器替换路径目前由映射层与事务测试覆盖，candidate 真实 Docker smoke 仍只驱动 `update.sh` 部署契约路径，该项验收为已知缺口；
 - `v1.0.7` 报告导出由 UTF-8 BOM CSV 迁移为多工作表 XLSX 工作簿（邮件附件与限时下载随之统一下发 XLSX），Release workflow 继续 Critical 扫描、SBOM、签名和 attestation 验收；上一版本 `v1.0.6` 以双 digest 模型兼容 Docker 29 containerd image store；

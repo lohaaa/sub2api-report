@@ -1376,6 +1376,7 @@ describe("system updates", () => {
           targetVersion: "1.0.0",
           installationEnabled: true,
           manualUpgradeRequired: false,
+          upgradeMessage: "支持在线升级。",
           steps: [
             { order: 1, name: "preflight", description: "校验签名和部署契约。" },
             { order: 2, name: "backup", description: "备份 SQLite。" },
@@ -1415,6 +1416,7 @@ describe("system updates", () => {
           targetVersion: "1.0.0",
           installationEnabled: false,
           manualUpgradeRequired: true,
+          upgradeMessage: "请使用完整 Release bundle。",
           steps: [],
         }),
       ),

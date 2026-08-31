@@ -5,6 +5,7 @@ using Sub2ApiReport.Updater.Docker;
 using Sub2ApiReport.Updater.Maintenance;
 using Sub2ApiReport.Updater.Net;
 using Sub2ApiReport.Updater.Releases;
+using Sub2ApiReport.Updater.Services;
 using Sub2ApiReport.Updater.State;
 
 namespace Sub2ApiReport.Updater.Install;
@@ -67,17 +68,20 @@ public sealed class InstallTransactionService(
         {
             errors.Add("没有有效的已验签 Release 缓存，请先执行检查。");
         }
-        else if (cached.Manifest.ManualUpgradeRequired)
+        else
         {
-            errors.Add("该版本要求手工完整 bundle 升级。");
-        }
-        else if (!cached.Manifest.OnlineInstallSupported)
-        {
-            errors.Add("该版本不支持在线安装。");
-        }
-        else if (!string.Equals(cached.Manifest.Version, record.TargetVersion, StringComparison.Ordinal))
-        {
-            errors.Add("Release 缓存版本与操作目标版本不一致。");
+            var compatibility = ReleaseCompatibilityEvaluator.Evaluate(
+                cached.Manifest,
+                record.CurrentVersion,
+                UpdaterVersion.GetCurrent());
+            if (!compatibility.OnlineInstallAllowed)
+            {
+                errors.Add(compatibility.Message);
+            }
+            else if (!string.Equals(cached.Manifest.Version, record.TargetVersion, StringComparison.Ordinal))
+            {
+                errors.Add("Release 缓存版本与操作目标版本不一致。");
+            }
         }
 
         var dockerReachable = false;
@@ -115,6 +119,10 @@ public sealed class InstallTransactionService(
             else if (handshake.DeploymentContractVersion != UpdateContractConstants.DeploymentContractVersion)
             {
                 errors.Add("当前 App 部署契约版本不受支持。");
+            }
+            else if (!handshake.MaintenanceAvailable)
+            {
+                errors.Add(handshake.MaintenanceBlockReason ?? "当前 App 暂时不能进入维护模式。");
             }
             else
             {

@@ -981,6 +981,7 @@ export type UpdateCheck = {
   availableVersion: string | null;
   publishedAt: string | null;
   manualUpgradeRequired: boolean;
+  upgradeMessage: string;
 };
 
 export type UpdatePlanStep = {
@@ -994,6 +995,7 @@ export type UpdatePlan = {
   targetVersion: string | null;
   installationEnabled: boolean;
   manualUpgradeRequired: boolean;
+  upgradeMessage: string;
   steps: UpdatePlanStep[];
 };
 

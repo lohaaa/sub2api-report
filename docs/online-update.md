@@ -79,15 +79,17 @@ Updater 常驻并将操作状态持久化到 `/update-state`。它不在线替�
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 3,
   "version": "1.2.0",
   "channel": "stable",
   "publishedAt": "2026-08-26T08:00:00Z",
   "architecture": "linux/amd64",
   "deploymentContractVersion": 1,
-  "minimumUpdaterVersion": "1.0.0",
+  "minimumUpdaterVersion": "1.1.2",
   "manualUpgradeRequired": false,
   "onlineInstallSupported": true,
+  "onlineUpgradeFrom": ["1.1.2"],
+  "upgradeMessage": "支持从 v1.1.2 在线升级。",
   "signatureAlgorithm": "RSASSA-PKCS1-v1_5-SHA256",
   "app": {
     "archiveUrl": "https://github.com/example/sub2api-report/releases/download/v1.2.0/sub2api-report-app-v1.2.0-linux-amd64.tar.gz",
@@ -117,6 +119,9 @@ Updater 常驻并将操作状态持久化到 `/update-state`。它不在线替�
 }
 ```
 
+`deploy/release-compatibility.json` 是生成上述兼容字段的唯一权威文件。Release 构建会验证文件版本与目标版本一致，将其复制到 Release 与完整 bundle，并要求签名 manifest 的 `manifestSchemaVersion`、deployment contract、最低 Updater、升级模式、精确源版本列表和提示文案逐项一致。禁止通过 workflow 环境变量临时覆盖这些字段。
+
+`onlineUpgradeFrom` 只接受 Candidate 已使用真实公开 Release bundle 验证过的精确 App 版本。未列出的源版本、Updater 低于要求、deployment contract 不一致或手工升级版本，都必须在下载 App 镜像前返回完整 bundle 指引。
 Updater 从安装目录只读挂载的发布公钥建立本地信任锚并校验：
 
 - manifest schema；
@@ -159,9 +164,9 @@ GitHub API 和 Release 内容不能覆盖本地公钥、host allowlist、版本�
 
 手工 `update.sh` 保留 `.env`、token、instance ID、数据卷和运行数据。
 
-Release 构建默认使用 `manualUpgradeRequired=true`、`onlineInstallSupported=false`，并令 `minimumUpdaterVersion` 等于当前发布版本。只有经过旧 App 与旧 Updater 兼容测试的 App-only 版本，才允许在构建时显式开启在线安装并通过 `MINIMUM_UPDATER_VERSION` 复用较早 Updater。安装门禁必须在下载 App 归档前拒绝不兼容链路。
+Release 兼容模式由版本化兼容文件决定。默认策略仍应是完整 bundle；只有兼容文件明确开启在线安装、列出源版本且 Candidate 对每个源版本通过真实升级与回滚测试时，页面才显示安装按钮。
 
-仅 Updater 需要变化且旧 App 的维护协议仍兼容时，可以使用 [deployment.md](deployment.md) §11.1 的 updater-only 路径。若缺陷位于旧 App 的维护入口、候选 App 启动前便会阻断升级，则 updater-only 也无法修复，Release 必须要求完整 bundle `update.sh`：停止旧 App、离线备份数据库、替换并验证 App 与 Updater，失败时恢复旧部署。
+仅 Updater 需要变化且旧 App 的维护协议仍兼容时，可以使用 [deployment.md](deployment.md) §11.1 的 updater-only 路径。若缺陷位于旧 App 的维护入口、候选 App 启动前便会阻断升级，则 updater-only 也无法修复，兼容文件必须要求完整 bundle `update.sh`：停止旧 App、离线备份数据库、替换并验证 App 与 Updater，失败时恢复旧部署。
 
 ## 7. 升级状态机
 

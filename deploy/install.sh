@@ -16,7 +16,7 @@ fi
 
 # shellcheck source=deploy/release-lib.sh
 source "$bundle_dir/release-lib.sh"
-for command_name in docker gzip jq openssl sha256sum stat; do
+for command_name in docker gzip jq openssl sha256sum sort stat; do
   require_command "$command_name"
 done
 require_release_host

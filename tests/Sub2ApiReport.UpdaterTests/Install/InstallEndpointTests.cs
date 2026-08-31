@@ -56,8 +56,8 @@ public sealed class InstallEndpointTests : IDisposable
         using var rsa = key;
         var manifest = new ReleaseManifestBuilder()
             .WithVersion(version)
-            .WithOnlineInstallSupported(true)
             .WithManualUpgradeRequired(true)
+            .WithUpgradeMessage("该版本要求手工完整 bundle 升级。")
             .Build();
         var server = await CreateServerWithReleaseAsync(
             installationEnabled: true, key, publicPem, manifest);
@@ -74,15 +74,16 @@ public sealed class InstallEndpointTests : IDisposable
     }
 
     [Fact]
-    public async Task InstallRejectedWhenOnlineInstallNotSupported()
+    public async Task InstallRejectedWhenSourceVersionWasNotVerified()
     {
         var version = TestReleases.DefaultVersion;
         var (key, publicPem) = TestKeys.CreateSigningKey();
         using var rsa = key;
         var manifest = new ReleaseManifestBuilder()
             .WithVersion(version)
-            .WithOnlineInstallSupported(false)
             .WithManualUpgradeRequired(false)
+            .WithOnlineInstallSupported(true)
+            .WithOnlineUpgradeFrom("0.8.0")
             .Build();
         var server = await CreateServerWithReleaseAsync(
             installationEnabled: true, key, publicPem, manifest);
@@ -95,7 +96,7 @@ public sealed class InstallEndpointTests : IDisposable
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         var problem = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
-        Assert.Contains("不支持在线安装", problem.GetProperty("detail").GetString());
+        Assert.Contains("未验证", problem.GetProperty("detail").GetString());
     }
 
     [Fact]
@@ -106,7 +107,7 @@ public sealed class InstallEndpointTests : IDisposable
         using var rsa = key;
         var manifest = new ReleaseManifestBuilder()
             .WithVersion(version)
-            .WithMinimumUpdaterVersion("99.0.0")
+            .WithMinimumUpdaterVersion(version)
             .WithOnlineInstallSupported(true)
             .WithManualUpgradeRequired(false)
             .Build();
@@ -121,7 +122,7 @@ public sealed class InstallEndpointTests : IDisposable
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         var problem = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
-        Assert.Contains("Updater 版本", problem.GetProperty("detail").GetString());
+        Assert.Contains("Updater", problem.GetProperty("detail").GetString());
     }
 
     [Fact]

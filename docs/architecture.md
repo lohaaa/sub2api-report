@@ -243,6 +243,14 @@ Pending -> Sending -> Succeeded
 
 配置更新使用 revision 乐观并发并写审计；秘密字段加密存储。进行中的报告使用启动时快照，后续任务使用新 revision，避免同一运行中途改变统计和投递语义。
 
+### 5.7 升级兼容契约
+
+`deploy/release-compatibility.json` 是每个 Release 的唯一升级兼容策略，生成签名 manifest 中的 schema、deployment contract、最低 Updater、手工/在线模式、精确源 App 版本列表和用户提示。CI 禁止通过环境变量覆盖兼容结论。
+
+在线安装只允许 `onlineUpgradeFrom` 明确列出且由 Candidate 使用对应公开 Release bundle 验证过的精确源版本。Updater 在下载 App 归档前同时校验当前 App 版本、当前 Updater 版本、manifest schema、deployment contract 和 App 维护资格；任一条件不满足时只提供完整 bundle 路径。
+
+宿主机发布文件是上次完整 bundle 的历史记录，App-only 更新后可能落后，不属于运行时真值。App/Updater 当前版本和回滚 image ID 必须来自内部握手与实际容器镜像；完整更新必须支持历史 manifest 落后、`current` 标签污染和候选容器残留。Candidate 必须下载并验签真实上一正式版，禁止用当前源码重建“上一版”。
+
 ## 6. 数据设计
 
 ### 6.1 SQLite 配置

@@ -102,6 +102,7 @@ internal static class UpdaterEndpoints
             snapshot.AvailableVersion,
             options.InstallationEnabled,
             snapshot.ManualUpgradeRequired,
+            snapshot.UpgradeMessage ?? "请先检查更新兼容性。",
             steps));
     }
 

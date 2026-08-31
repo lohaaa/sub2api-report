@@ -11,26 +11,9 @@ output_dir=$2
 repo_root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 revision=${GITHUB_SHA:-$(git -C "$repo_root" rev-parse HEAD)}
 repository=${GITHUB_REPOSITORY:-example/sub2api-report}
-contract_version=1
-# Online App installation is opt-in after compatibility testing; releases default to the full bundle path.
-manual_upgrade_required=${MANUAL_UPGRADE_REQUIRED:-true}
-online_install_supported=${ONLINE_INSTALL_SUPPORTED:-false}
-# Reusing an older Updater is also an explicit compatibility decision, never a stale default.
-minimum_updater_version=${MINIMUM_UPDATER_VERSION:-$version}
-if [[ ! $minimum_updater_version =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]]; then
-  echo "MINIMUM_UPDATER_VERSION must be a valid SemVer." >&2
-  exit 2
-fi
-for boolean_value in "$manual_upgrade_required" "$online_install_supported"; do
-  [[ $boolean_value == true || $boolean_value == false ]] || {
-    echo "Release compatibility flags must be true or false." >&2
-    exit 2
-  }
-done
-if [[ $manual_upgrade_required == true && $online_install_supported == true ]]; then
-  echo "Manual-only releases cannot advertise online installation support." >&2
-  exit 2
-fi
+compatibility_file="$repo_root/deploy/release-compatibility.json"
+# shellcheck source=deploy/release-lib.sh
+source "$repo_root/deploy/release-lib.sh"
 
 if [[ ! $version =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]]; then
   echo "Invalid version: $version" >&2
@@ -41,12 +24,22 @@ if [[ -z ${RELEASE_SIGNING_KEY_FILE:-} || ! -f ${RELEASE_SIGNING_KEY_FILE:-} ]];
   exit 2
 fi
 
-for command_name in awk docker dotnet gzip install jq openssl sed sha256sum tar; do
+for command_name in awk docker dotnet gzip install jq openssl sed sha256sum sort tar; do
   command -v "$command_name" >/dev/null 2>&1 || {
     echo "$command_name is required." >&2
     exit 2
   }
 done
+
+validate_release_compatibility_file "$compatibility_file" "$version" || exit 2
+
+manifest_schema_version=$(jq -r '.manifestSchemaVersion' "$compatibility_file")
+contract_version=$(jq -r '.deploymentContractVersion' "$compatibility_file")
+minimum_updater_version=$(jq -r '.minimumUpdaterVersion' "$compatibility_file")
+manual_upgrade_required=$(jq -r '.manualUpgradeRequired' "$compatibility_file")
+online_install_supported=$(jq -r '.onlineInstallSupported' "$compatibility_file")
+online_upgrade_from=$(jq -c '.onlineUpgradeFrom' "$compatibility_file")
+upgrade_message=$(jq -r '.upgradeMessage' "$compatibility_file")
 
 docker buildx version >/dev/null 2>&1 || {
   echo "Docker Buildx is required." >&2
@@ -65,6 +58,7 @@ if [[ $release_notes_section != "$version" ]]; then
     "$output_dir/$release_notes_asset"
 fi
 install -m 0644 "$repo_root/CHANGELOG.md" "$output_dir/CHANGELOG.md"
+install -m 0644 "$compatibility_file" "$output_dir/release-compatibility.json"
 install -m 0644 "$repo_root/LICENSE" "$output_dir/LICENSE"
 work_dir=$(mktemp -d)
 trap 'rm -rf "$work_dir"' EXIT
@@ -211,6 +205,9 @@ published_at=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
 jq -n \
   --arg version "$version" \
   --arg minimumUpdaterVersion "$minimum_updater_version" \
+  --arg upgradeMessage "$upgrade_message" \
+  --argjson onlineUpgradeFrom "$online_upgrade_from" \
+  --argjson manifestSchemaVersion "$manifest_schema_version" \
   --arg publishedAt "$published_at" \
   --arg repository "$repository" \
   --arg appAsset "$app_asset" \
@@ -231,7 +228,7 @@ jq -n \
   --argjson onlineInstallSupported "$online_install_supported" \
   --argjson contractVersion "$contract_version" \
   '{
-    schemaVersion: 2,
+    schemaVersion: $manifestSchemaVersion,
     version: $version,
     channel: "stable",
     publishedAt: $publishedAt,
@@ -240,6 +237,8 @@ jq -n \
     minimumUpdaterVersion: $minimumUpdaterVersion,
     manualUpgradeRequired: $manualUpgradeRequired,
     onlineInstallSupported: $onlineInstallSupported,
+    onlineUpgradeFrom: $onlineUpgradeFrom,
+    upgradeMessage: $upgradeMessage,
     signatureAlgorithm: "RSASSA-PKCS1-v1_5-SHA256",
     app: {
       archiveUrl: ("https://github.com/" + $repository + "/releases/download/v" + $version + "/" + $appAsset),
@@ -281,6 +280,7 @@ mkdir -p "$bundle_dir/images"
 install -m 0644 "$repo_root/deploy/compose.yaml" "$bundle_dir/compose.yaml"
 install -m 0644 "$repo_root/deploy/.env.example" "$bundle_dir/.env.example"
 install -m 0644 "$repo_root/deploy/upgrade-contract.json" "$bundle_dir/upgrade-contract.json"
+install -m 0644 "$output_dir/release-compatibility.json" "$bundle_dir/release-compatibility.json"
 install -m 0644 "$output_dir/CHANGELOG.md" "$bundle_dir/CHANGELOG.md"
 install -m 0644 "$output_dir/LICENSE" "$bundle_dir/LICENSE"
 install -m 0644 "$output_dir/$release_notes_asset" "$bundle_dir/RELEASE-NOTES.md"
@@ -306,7 +306,7 @@ tar --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner \
 (
   cd "$output_dir"
   sha256sum "$app_asset" "$updater_asset" "$bundle_asset" "$server_asset" \
-    release-manifest.json release-manifest.sig update-public-key.pem \
+    release-manifest.json release-manifest.sig release-compatibility.json update-public-key.pem \
     CHANGELOG.md LICENSE "$release_notes_asset" > checksums.txt
 )
 

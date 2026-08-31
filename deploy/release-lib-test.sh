@@ -42,6 +42,24 @@ mapfile -t updater_digests < "$test_root/updater.digests"
 
 # shellcheck source=deploy/release-lib.sh
 source "$repo_root/deploy/release-lib.sh"
+validate_release_compatibility_file "$repo_root/deploy/release-compatibility.json" 1.1.2
+validate_release_compatibility_file "$repo_root/deploy/release-compatibility.json" 1.1.2-internal.1
+
+online_policy="$test_root/online-compatibility.json"
+jq '.manualUpgradeRequired = false
+  | .onlineInstallSupported = true
+  | .onlineUpgradeFrom = ["1.1.1"]
+  | .upgradeMessage = "支持从 v1.1.1 在线升级。"' \
+  "$repo_root/deploy/release-compatibility.json" > "$online_policy"
+validate_release_compatibility_file "$online_policy" 1.1.2
+
+invalid_policy="$test_root/invalid-compatibility.json"
+jq '.releaseVersion = "9.9.9"' "$online_policy" > "$invalid_policy"
+if validate_release_compatibility_file "$invalid_policy" 1.1.2 >/dev/null 2>&1; then
+  echo "Compatibility validation accepted a mismatched release version." >&2
+  exit 1
+fi
+
 verify_image_archive_metadata "$test_root/app.tar.gz" \
   sub2api-report-app:1.0.6 "${app_digests[0]}" "${app_digests[1]}"
 verify_image_archive_metadata "$test_root/updater.tar.gz" \
@@ -83,10 +101,19 @@ if [[ ${1:-} == inspect && ${2:-} == --format && ${3:-} == '{{.Image}}' ]]; then
   esac
   exit 0
 fi
-target_image_id="sha256:$(printf '%064d' 3)"
-if [[ ${1:-} == image && ${2:-} == inspect && ${3:-} == "$target_image_id" \
-  && ${*: -1} == *org.opencontainers.image.version* ]]; then
-  printf '1.1.1\n'
+if [[ ${1:-} == inspect && ${2:-} == --format && ${3:-} == *'.State.Status'* ]]; then
+  case ${4:-} in
+    app-container)
+      if [[ ${RESOLVE_ORIGINAL_MODE:-original} == upgraded ]]; then
+        printf 'running|healthy|previous-operation\n'
+      else
+        printf 'running|healthy|\n'
+      fi
+      ;;
+    updater-container) printf 'running|healthy|\n' ;;
+    target-app-container) printf 'created|none|target-operation\n' ;;
+    *) exit 1 ;;
+  esac
   exit 0
 fi
 role=app
@@ -121,11 +148,13 @@ export RELEASE_LIB_TEST_ROOT="$test_root"
 
 expected_app_container_image="sha256:$(printf '%064d' 1)"
 expected_updater_container_image="sha256:$(printf '%064d' 2)"
-[[ $(resolve_service_image_id /synthetic-install app 1.0.6) == "$expected_app_container_image" ]]
+[[ $(resolve_service_image_id /synthetic-install app) == "$expected_app_container_image" ]]
 [[ $(resolve_service_image_id /synthetic-install updater) == "$expected_updater_container_image" ]]
 [[ $(RESOLVE_CONTAINER_MODE=multiple \
-  resolve_service_image_id /synthetic-install app 1.0.6) == "$expected_app_container_image" ]]
-grep -F "old_app_id=\$(resolve_service_image_id \"\$install_dir\" app \"\$installed_version\")" \
+  resolve_service_image_id /synthetic-install app) == "$expected_app_container_image" ]]
+[[ $(RESOLVE_CONTAINER_MODE=multiple RESOLVE_ORIGINAL_MODE=upgraded \
+  resolve_service_image_id /synthetic-install app) == "$expected_app_container_image" ]]
+grep -F "old_app_id=\$(resolve_service_image_id \"\$install_dir\" app)" \
   "$repo_root/deploy/update.sh" >/dev/null
 grep -F "old_updater_id=\$(resolve_service_image_id \"\$install_dir\" updater)" \
   "$repo_root/deploy/update.sh" >/dev/null

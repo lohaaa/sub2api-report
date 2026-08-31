@@ -8,6 +8,27 @@
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-08-31
+
+### Added
+
+- 新增版本化 `deploy/release-compatibility.json` 作为 Release 升级策略唯一权威文件；manifest schema v3 签名携带最低 Updater、手工/在线模式、精确 `onlineUpgradeFrom` 源版本列表和升级提示。Shell、C#、bundle 验签、Updater 检查/安装门禁和前端统一消费同一策略；未列出的源 App、过旧 Updater 或不一致部署契约在下载 App 归档前转为完整 bundle 指引。
+- App 维护握手新增非破坏性维护资格与阻断原因；存在活动或遗留报告任务时，Updater 在归档下载前终止，真正进入维护时继续二次检查。
+
+### Changed
+
+- Candidate 不再从当前源码重复构建“上一版”，改为下载、checksum 校验、同信任公钥验签真实上一公开 Release bundle，目标候选只构建一次；真实 Docker 场景覆盖宿主机 v1.0.8 metadata 落后、实际 App 已更新、`current` 标签污染、失败回滚、成功更新和同版本幂等同步。
+- Docker README 统一首次安装与完整更新为同一条无参数 bootstrap 命令；新增版本、安装目录、端口、监听地址和启动行为参数表。`SUB2API_REPORT_PORT` 与 `SUB2API_REPORT_BIND_ADDRESS` 可直接传入，更新时省略会保留现有值。
+
+### Fixed
+
+- 完整 bundle 更新不再使用可能因历史 App-only 更新而滞后的宿主机 `release-manifest.json` 判断当前版本或选择回滚镜像；改为读取实际 App/Updater 容器、镜像版本和 upgrade-operation 标签。单容器、原始+候选双容器、历史成功在线升级容器都能确定正确基线。
+- 同版本完整更新改为幂等同步 Compose、兼容文件和签名发布元数据，不重复备份数据库；`.env` 纳入更新配置备份，端口/监听地址修改失败时可随部署一起回滚。
+
+### Upgrade
+
+- v1.1.2 的兼容契约要求同时更新 App 与 Updater，`manualUpgradeRequired=true`、`onlineInstallSupported=false`。v1.1.1 及更早 Docker 部署请再次执行 README 中的无参数 bootstrap 命令。
+
 ## [1.1.1] - 2026-08-31
 
 ### Changed
@@ -150,7 +171,8 @@
 - App 容器不挂载 Docker Socket；Updater 通过 instance/container allowlist、固定 API 和 non-root Socket group 隔离高权限操作。
 - 增加公开安全政策，并将未修复漏洞引导至 GitHub Private Vulnerability Reporting。
 
-[Unreleased]: https://github.com/lohaaa/sub2api-report/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/lohaaa/sub2api-report/compare/v1.1.2...HEAD
+[1.1.2]: https://github.com/lohaaa/sub2api-report/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/lohaaa/sub2api-report/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/lohaaa/sub2api-report/compare/v1.0.8...v1.1.0
 [1.0.8]: https://github.com/lohaaa/sub2api-report/compare/v1.0.7...v1.0.8

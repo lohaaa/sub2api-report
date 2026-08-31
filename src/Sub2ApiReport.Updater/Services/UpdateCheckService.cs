@@ -46,7 +46,8 @@ public sealed class UpdateCheckService(
                     AvailablePublishedAt: response.PublishedAt,
                     ManualUpgradeRequired: response.ManualUpgradeRequired,
                     CurrentVersion: request.CurrentVersion,
-                    LastError: null),
+                    LastError: null,
+                    UpgradeMessage: response.UpgradeMessage),
                 cancellationToken);
             return response;
         }
@@ -136,6 +137,10 @@ public sealed class UpdateCheckService(
 
         var updateAvailable = SemanticVersion.TryParse(manifest.Version, out var available)
             && available!.CompareTo(currentVersion) > 0;
+        var compatibility = ReleaseCompatibilityEvaluator.Evaluate(
+            manifest,
+            currentVersionText,
+            UpdaterVersion.GetCurrent());
 
         // 完整验签 manifest 与签名进入持久化缓存，安装事务只信任该缓存。
         await releaseCache.SaveAsync(manifest, manifestBytes, signatureBytes, cancellationToken);
@@ -145,7 +150,8 @@ public sealed class UpdateCheckService(
             CurrentVersion: currentVersionText,
             AvailableVersion: manifest.Version,
             PublishedAt: manifest.PublishedAt,
-            ManualUpgradeRequired: manifest.ManualUpgradeRequired);
+            ManualUpgradeRequired: updateAvailable && !compatibility.OnlineInstallAllowed,
+            UpgradeMessage: compatibility.Message);
     }
 
     private static GitHubReleaseAsset FindAsset(GitHubReleaseInfo release, string name)

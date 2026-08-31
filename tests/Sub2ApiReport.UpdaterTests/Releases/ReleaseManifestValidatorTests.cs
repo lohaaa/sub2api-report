@@ -61,6 +61,63 @@ public sealed class ReleaseManifestValidatorTests
             "minimumUpdaterVersion");
 
     [Fact]
+    public void RejectsMinimumUpdaterAboveTarget() =>
+        AssertRejected(
+            new ReleaseManifestBuilder().WithMinimumUpdaterVersion("1.3.0").Build(),
+            "不能高于目标版本");
+
+    [Fact]
+    public void RejectsContradictoryManualAndOnlinePolicy() =>
+        AssertRejected(
+            new ReleaseManifestBuilder()
+                .WithOnlineInstallSupported(true)
+                .WithManualUpgradeRequired(true)
+                .Build(),
+            "在线安装策略");
+
+    [Fact]
+    public void RejectsOnlinePolicyWithoutVerifiedSources() =>
+        AssertRejected(
+            new ReleaseManifestBuilder()
+                .WithManualUpgradeRequired(false)
+                .WithOnlineInstallSupported(true)
+                .WithOnlineUpgradeFrom()
+                .Build(),
+            "在线安装策略");
+
+    [Fact]
+    public void RejectsManualPolicyWithOnlineSources() =>
+        AssertRejected(
+            new ReleaseManifestBuilder().WithOnlineUpgradeFrom("1.1.0").Build(),
+            "在线安装策略");
+
+    [Fact]
+    public void RejectsDuplicateOnlineSources() =>
+        AssertRejected(
+            new ReleaseManifestBuilder()
+                .WithManualUpgradeRequired(false)
+                .WithOnlineInstallSupported(true)
+                .WithOnlineUpgradeFrom("1.1.0", "1.1.0")
+                .Build(),
+            "重复版本");
+
+    [Fact]
+    public void RejectsOnlineSourceAtTargetVersion() =>
+        AssertRejected(
+            new ReleaseManifestBuilder()
+                .WithManualUpgradeRequired(false)
+                .WithOnlineInstallSupported(true)
+                .WithOnlineUpgradeFrom(TestReleases.DefaultVersion)
+                .Build(),
+            "低于目标版本");
+
+    [Fact]
+    public void RejectsBlankUpgradeMessage() =>
+        AssertRejected(
+            new ReleaseManifestBuilder().WithUpgradeMessage(" ").Build(),
+            "upgradeMessage");
+
+    [Fact]
     public void RejectsMissingPublishedAt() =>
         AssertRejected(new ReleaseManifestBuilder().WithPublishedAt(default).Build(), "publishedAt");
 

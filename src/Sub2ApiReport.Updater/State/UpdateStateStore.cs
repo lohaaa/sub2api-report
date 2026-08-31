@@ -13,7 +13,8 @@ public sealed record UpdateStatusSnapshot(
     DateTimeOffset? AvailablePublishedAt,
     bool ManualUpgradeRequired,
     string? CurrentVersion,
-    string? LastError);
+    string? LastError,
+    string? UpgradeMessage = null);
 
 /// <summary>
 /// 升级状态与缓存存储。写入采用“临时文件 + flush-to-disk + 原子改名”，保证断电/中止后不残留半写状态。

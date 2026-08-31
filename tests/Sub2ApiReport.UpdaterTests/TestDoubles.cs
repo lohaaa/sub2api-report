@@ -187,6 +187,9 @@ internal sealed class FakeMaintenanceClient : IAppMaintenanceClient
     public string MaintenanceState => MaintenanceMode ? "maintenance" : "normal";
     public int DeploymentContractVersion { get; set; } = UpdateContractConstants.DeploymentContractVersion;
 
+    public bool MaintenanceAvailable { get; set; } = true;
+
+    public string? MaintenanceBlockReason { get; set; }
     public Exception? OnEnterMaintenance { get; set; }
 
     public Exception? OnCompleteMaintenance { get; set; }
@@ -202,7 +205,9 @@ internal sealed class FakeMaintenanceClient : IAppMaintenanceClient
             MaintenanceMode,
             MaintenanceState,
             OperationId,
-            "test-migration"));
+            "test-migration",
+            MaintenanceAvailable,
+            MaintenanceBlockReason));
 
     public Task EnterMaintenanceAsync(string operationId, CancellationToken cancellationToken)
     {

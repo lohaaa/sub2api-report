@@ -13,6 +13,11 @@ on:
         required: true
         default: 0.8.0-internal.1
         type: string
+      release_notes_section:
+        description: Changelog section used for candidate release notes
+        required: true
+        default: Unreleased
+        type: string
 
 permissions:
   contents: read
@@ -28,6 +33,7 @@ jobs:
     env:
       CANDIDATE_VERSION: ${{ inputs.version }}
       PREVIOUS_VERSION: ${{ inputs.previous_version }}
+      CANDIDATE_RELEASE_NOTES_SECTION: ${{ inputs.release_notes_section }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -81,7 +87,7 @@ jobs:
           chmod 0600 "$key_file"
           printf '%s\n' "$RELEASE_SIGNING_KEY_PEM" > "$key_file"
           RELEASE_SIGNING_KEY_FILE=$key_file \
-          RELEASE_NOTES_SECTION=Unreleased \
+          RELEASE_NOTES_SECTION="$CANDIDATE_RELEASE_NOTES_SECTION" \
             deploy/build-release-assets.sh "$PREVIOUS_VERSION" candidate-previous
 
       - name: Build signed candidate assets
@@ -95,7 +101,7 @@ jobs:
           chmod 0600 "$key_file"
           printf '%s\n' "$RELEASE_SIGNING_KEY_PEM" > "$key_file"
           RELEASE_SIGNING_KEY_FILE=$key_file \
-          RELEASE_NOTES_SECTION=Unreleased \
+          RELEASE_NOTES_SECTION="$CANDIDATE_RELEASE_NOTES_SECTION" \
             deploy/build-release-assets.sh "$CANDIDATE_VERSION" candidate
 
       - name: Generate App SBOM

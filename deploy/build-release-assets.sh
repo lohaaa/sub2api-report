@@ -60,8 +60,9 @@ release_notes_asset="release-notes-v${version}.md"
 release_notes_section=${RELEASE_NOTES_SECTION:-$version}
 "$repo_root/deploy/extract-release-notes.sh" \
   "$repo_root/CHANGELOG.md" "$release_notes_section" "$output_dir/$release_notes_asset"
-if [[ $release_notes_section == Unreleased ]]; then
-  sed -i "1s/^## \[Unreleased\]$/## [$version] - candidate/" "$output_dir/$release_notes_asset"
+if [[ $release_notes_section != "$version" ]]; then
+  sed -i -E "1s/^## \[[^]]+\]( - .*)?$/## [$version] - candidate/" \
+    "$output_dir/$release_notes_asset"
 fi
 install -m 0644 "$repo_root/CHANGELOG.md" "$output_dir/CHANGELOG.md"
 install -m 0644 "$repo_root/LICENSE" "$output_dir/LICENSE"

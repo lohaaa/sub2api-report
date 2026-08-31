@@ -27,6 +27,40 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  quality:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: Directory.Packages.props
+
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          version: 11.17.0
+          run_install: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24 # Node.js 24 LTS
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: dotnet restore Sub2ApiReport.slnx
+      - run: pnpm quality
+      - run: |
+          bash -n deploy/*.sh
+          shellcheck -x deploy/*.sh
+          deploy/documentation-test.sh
+          deploy/docker-bootstrap-test.sh
+          deploy/release-lib-test.sh
+          deploy/server-bootstrap-test.sh
+          deploy/server-install-test.sh
+
   candidate:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
@@ -59,28 +93,6 @@ jobs:
           global-json-file: global.json
           cache: true
           cache-dependency-path: Directory.Packages.props
-
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-        with:
-          version: 11.17.0
-          run_install: false
-
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24 # Node.js 24 LTS
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
-      - run: dotnet restore Sub2ApiReport.slnx
-      - run: pnpm quality
-      - run: |
-          bash -n deploy/*.sh
-          shellcheck -x deploy/*.sh
-          deploy/documentation-test.sh
-          deploy/docker-bootstrap-test.sh
-          deploy/release-lib-test.sh
-          deploy/server-bootstrap-test.sh
-          deploy/server-install-test.sh
 
       - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 

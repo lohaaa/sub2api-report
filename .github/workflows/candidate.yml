@@ -218,6 +218,10 @@ jobs:
           tar -xzf "candidate-previous/sub2api-report-v${PREVIOUS_VERSION}-linux-amd64.tar.gz" -C "$previous_dir"
           tar -xzf "candidate/sub2api-report-v${CANDIDATE_VERSION}-linux-amd64.tar.gz" -C "$target_dir"
           sed -i 's/^APP_PORT=.*/APP_PORT=18080/; s/^BIND_ADDRESS=.*/BIND_ADDRESS=127.0.0.1/' "$previous_dir/.env.example"
+          sed -i \
+            -e 's/interval: 15s/interval: 1s/g' \
+            -e 's/start_period: [0-9][0-9]*s/start_period: 0s/g' \
+            "$previous_dir/compose.yaml" "$target_dir/compose.yaml"
           cleanup() {
             sudo docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml" down --volumes >/dev/null 2>&1 || true
             sudo rm -rf "$smoke_root"
@@ -253,12 +257,7 @@ jobs:
           [[ $(sudo docker image inspect sub2api-report-app:current --format '{{.Id}}') != "$previous_app_image" ]]
 
           cp -a "$target_dir" "$failure_dir"
-          sed -i \
-            -e 's#health/live#health/never#' \
-            -e 's/interval: 15s/interval: 1s/g' \
-            -e 's/retries: 4/retries: 1/g' \
-            -e 's/start_period: [0-9][0-9]*s/start_period: 0s/g' \
-            "$failure_dir/compose.yaml"
+          sed -i 's#health/live#health/never#' "$failure_dir/compose.yaml"
           if sudo env \
             SUB2API_REPORT_INSTALL_DIR="$install_dir" \
             SUB2API_REPORT_APP_HEALTH_TIMEOUT=20 \

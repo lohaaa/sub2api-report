@@ -41,18 +41,19 @@
 | M6 计划任务 | 0.7.0 | 已完成 | Quartz 持久化计划、窗口冻结、规范化执行记录、重试和恢复已落地 |
 | M7 Docker 和签名 bundle | 0.8.0 内部里程碑 | 已完成 | Candidate workflow 在 linux/amd64 上通过签名、Critical 扫描、SBOM、安装、故障回滚、成功更新和 non-root Socket 权限验收 |
 | M8 在线升级 | 0.9.0 内部里程碑 | 已完成 | 固定仓库验签、严格下载、Docker App-only 事务、维护模式、SQLite 备份、恢复、App API、step-up 和更新页面已实现 |
-| M9 稳定版加固 | `v1.0.0` - `v1.0.8` | 已完成 | Updater 安全验收和 Release workflow 全部通过；v1.0.7 将报告导出迁移为多工作表 XLSX 工作簿并增加公式注入与精度防护；v1.0.8 修复在线升级候选 App 容器因 `Binds`/有效 `Mounts` 挂载目标重复创建失败并自动回滚的问题；1.0.8 后追加：月报计划支持 1–31 日与短月策略（`UseLastDay`/`SkipMonth`，primary+月末 fallback trigger）及终态版本刷新，CI 运行时切至 Node 24，全部 GitHub Actions 升级至官方 Node24 版本（继续 SHA pin） |
+| M9 稳定版加固 | `v1.0.0` - `v1.1.1` | 已完成 | Updater 安全验收和 Release workflow 全部通过；v1.1.1 修复维护错误诊断、镜像标签事务与主机回滚镜像识别，并将在线安装改为显式兼容选项；v1.1.0 增加短月策略并修复报告任务卡死 |
 
 当前自动质量门最近一次通过：
 
-- .NET 格式检查和 Release 构建通过，`340` 个测试通过；
+- .NET 格式检查和 Release 构建通过，`342` 个测试通过；
 - 前端 typecheck、lint、build 通过，`27` 个测试通过；
 - ShellCheck、Actionlint、Critical 镜像扫描、SBOM、changelog、签名、安装和回滚候选测试通过。
 
 正式发布已完成：
 
 - 仓库首个 Tag 和公开 Release 为 `v1.0.0`；
-- `v1.1.0` 为 Latest：月报计划支持每月 1–31 日并新增稳定短月策略（`UseLastDay`/`SkipMonth`；`UseLastDay` 且日期大于 28 时 Quartz primary + 月末 `L` 后备双 trigger 共用同一 durable job，跨触发器互斥执行），报告任务修复快照后投递因共享 `ChangeTracker` 残留导致的 EF 并发卡死并把启动恢复扩展到生成阶段非终态运行，升级进入终态后前端仅刷新一次版本状态，CI 切至 Node 24 且全部 GitHub Actions 升级到官方 Node24 版本（继续 SHA pin）；manifest `minimumUpdaterVersion` 保持 1.0.8（纯 App/前端/DB 功能，无需 updater-only 预升级），`targetMigration` 自动指向 `20260831054933_AddShortMonthStrategy`，在线迁移继续由升级前 SQLite 备份与失败自动回滚保护；
+- `v1.1.1` 为 Latest：修复 v1.0.8 → v1.1.0 页面升级在旧 App 非终态任务阻断维护时只显示笼统错误的问题；维护调用保留受控 Problem Details，目标镜像标签延后到可回滚阶段，完整 bundle 回滚从实际运行容器读取旧 App/Updater image ID。Release 默认要求完整 bundle，页面 App-only 安装仅在明确完成旧 App/Updater 兼容验证后开启；
+- `v1.1.0` 增加每月 1–31 日和短月策略，并修复报告任务快照后投递卡死；其 Release manifest 错误地允许 v1.0.8 Updater 直接页面安装，受影响部署应跳过该在线路径并使用 v1.1.1 完整 bundle；
 - `v1.0.8` 修复在线升级在 `replacing_app` 阶段因 `Binds` 与有效挂载目标重复导致候选 App 容器创建失败并回滚（官方 Compose 的 named volume + 只读 bind 即命中）；manifest `minimumUpdaterVersion` 在该版本提升到 1.0.8，v1.0.6/v1.0.7 安装先按 deployment.md §11.1 执行 updater-only 手工更新，Updater 到位后从页面把 App 在线升级到 1.0.8；Updater 内部安装 API 的容器替换路径目前由映射层与事务测试覆盖，candidate 真实 Docker smoke 仍只驱动 `update.sh` 部署契约路径，该项验收为已知缺口；
 - `v1.0.7` 报告导出由 UTF-8 BOM CSV 迁移为多工作表 XLSX 工作簿（邮件附件与限时下载随之统一下发 XLSX），Release workflow 继续 Critical 扫描、SBOM、签名和 attestation 验收；上一版本 `v1.0.6` 以双 digest 模型兼容 Docker 29 containerd image store；
 - `v1.0.6` Docker bundle 为 278,251,937 bytes，checksum 为 `0ff3aed500ee7092eaf7b14d5a8966f0cfaceed753b9d30c20acb2afc1d79aa1`。
@@ -221,7 +222,7 @@ M9 只保留稳定发布必需项：
 ## 11. 1.x 维护原则
 
 1. 后续重要变更先记录到 changelog 的 `Unreleased`。
-2. App-only 修复版本保持 deployment contract 1 和 `minimumUpdaterVersion=1.0.0`，允许页面在线升级。
-3. Updater、Compose、卷、端口或权限变化必须标记 `manualUpgradeRequired=true`，使用完整 bundle 和主机 `update.sh`。
+2. Release 默认 `manualUpgradeRequired=true`、`onlineInstallSupported=false`，使用完整 bundle 和主机 `update.sh`；页面 App-only 安装必须是显式兼容结论。
+3. 仅 App 变化且通过旧 App/Updater 兼容测试时，才可显式保留已验证的 `minimumUpdaterVersion` 并开启在线安装；仅 Updater 变化且旧 App 维护协议兼容时可先做 updater-only 更新。Compose、卷、端口、权限、deployment contract 或旧 App 维护入口不兼容时必须走完整 bundle。
 4. 每个 Release 继续执行完整质量、Critical 扫描、SBOM、签名、attestation 和安装 smoke test。
 5. 发布密钥轮换只能通过经过人工确认的完整 bundle 进行。

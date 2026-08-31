@@ -207,6 +207,12 @@ jobs:
             exec -T updater sh -c 'token=$(cat /run/secrets/updater-token); curl --fail --silent -H "Authorization: Bearer $token" http://127.0.0.1:8081/internal/v1/status')
           [[ $(jq -r '.installationEnabled' <<<"$updater_status") == true ]]
 
+          previous_app_container=$(sudo docker compose --project-directory "$install_dir" \
+            -f "$install_dir/compose.yaml" ps -q app)
+          previous_app_image=$(sudo docker inspect --format '{{.Image}}' "$previous_app_container")
+          sudo docker tag "sub2api-report-app:$CANDIDATE_VERSION" sub2api-report-app:current
+          [[ $(sudo docker image inspect sub2api-report-app:current --format '{{.Id}}') != "$previous_app_image" ]]
+
           cp -a "$target_dir" "$failure_dir"
           sed -i \
             -e 's#health/live#health/never#' \
@@ -223,6 +229,7 @@ jobs:
             exit 1
           fi
           [[ $(sudo jq -r '.version' "$install_dir/release-manifest.json") == "$PREVIOUS_VERSION" ]]
+          [[ $(sudo docker image inspect sub2api-report-app:current --format '{{.Id}}') == "$previous_app_image" ]]
           curl --fail --silent http://127.0.0.1:18080/health/ready >/dev/null
 
           sudo env SUB2API_REPORT_INSTALL_DIR="$install_dir" "$target_dir/update.sh"

@@ -363,23 +363,24 @@ sudo docker compose ps
 
 跨 deployment contract 的版本不支持页面升级，Release 页面提供新的 deploy bundle 和明确的主机命令。
 
-### 11.1 Updater-only 手工更新（v1.0.6/v1.0.7 必须先执行）
+### 11.1 Updater-only 手工更新
 
-v1.0.8 起的 Release manifest 要求 Updater 至少为 1.0.8：早期 Updater 在创建候选 App 容器时，
-会把同一挂载点同时通过 `Binds` 和有效 `Mounts` 下发而被 Docker Engine 以 duplicate mount
-point 拒绝（详见 CHANGELOG 1.0.8）。Updater 不在线自更新，因此 v1.0.6/v1.0.7 安装需要先在
-主机把 Updater 升级到 1.0.8，App 保持当前版本，再回页面执行 App 在线升级。
+当 Release manifest 的 `minimumUpdaterVersion` 高于当前 Updater 时，页面安装必须在下载 App 归档前拒绝执行。Updater 不在线替换自身，因此需要先在主机把 Updater 升级到目标 bundle 所带版本，App 保持当前版本，再回页面执行 App 在线升级。
+
+该路径不适用于旧 App 自身拒绝维护的兼容故障。例如 v1.0.8 已有报告任务卡在非终态时，目标 App 尚未启动，单独更新 Updater 仍会被旧 App 拒绝；此类 Release 必须设置 `manualUpgradeRequired=true`、`onlineInstallSupported=false`，并使用目标完整 bundle 的 `update.sh`。
 
 以下命令只用 bundle 内随发布测试的 `release-lib.sh` 函数完成校验，不改动 App 容器、数据卷和
 `.env`（`verify_release_bundle` 校验 images/checksums.txt、manifest 签名、版本、架构与产物
 哈希；systemd 部署不走此流程，继续使用 server bootstrap）：
 
 ```bash
+target_bundle=/absolute/path/to/sub2api-report-vX.Y.Z-linux-amd64.tar.gz
 install_dir=/opt/sub2api-report   # 改为实际安装目录
 bundle_dir=$(mktemp -d /tmp/sub2api-report-updater.XXXXXX)
 
-# 1) 从 v1.0.8 Release 下载完整 bundle 并解压，校验 bundle 签名与 checksums
-tar -xzf sub2api-report-v1.0.8-linux-amd64.tar.gz -C "$bundle_dir"
+# 1) 解压目标 Release 完整 bundle，校验 bundle 签名与 checksums
+tar -xzf "$target_bundle" -C "$bundle_dir"
+target_version=$(jq -r '.version' "$bundle_dir/release-manifest.json")
 sudo bash -c "source '$bundle_dir/release-lib.sh' && verify_release_bundle '$bundle_dir'"
 
 # 2) 只加载 Updater 镜像归档，并按签名 manifest 校验 tag 与 config/target digest
@@ -399,14 +400,15 @@ sudo docker tag "sub2api-report-updater:$(jq -r '.version' "$bundle_dir/release-
 sudo docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml" up -d --no-deps updater
 sudo bash -c "source '$bundle_dir/release-lib.sh' && wait_for_service_health '$install_dir' updater 60"
 
-# 5) 确认 Updater 版本为 1.0.8（或直接在更新页查看 Updater 版本）后再做下一步
-sudo docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml" exec -T updater sh -c \
-  'token=$(cat /run/secrets/updater-token); curl --fail --silent -H "Authorization: Bearer $token" http://127.0.0.1:8081/internal/v1/status' \
-  | jq -r '.version, .installationEnabled'
+# 5) 确认 Updater 已切到目标版本且在线安装可用
+updater_status=$(sudo docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml" \
+  exec -T updater sh -c \
+  'token=$(cat /run/secrets/updater-token); curl --fail --silent -H "Authorization: Bearer $token" http://127.0.0.1:8081/internal/v1/status')
+test "$(jq -r '.version' <<<"$updater_status")" = "$target_version"
+test "$(jq -r '.installationEnabled' <<<"$updater_status")" = true
 ```
 
-确认 Updater 为 1.0.8 后，按 [online-update.md](online-update.md) 从页面执行 App 在线升级，
-从当前版本直接升级到 v1.0.8。如需回退 Updater（App 未受影响，不涉及数据）：
+确认 Updater 为目标版本后，按 [online-update.md](online-update.md) 从页面执行 App 在线升级。如需回退 Updater（App 未受影响，不涉及数据）：
 
 ```bash
 sudo docker tag "$old_updater_id" sub2api-report-updater:bootstrap

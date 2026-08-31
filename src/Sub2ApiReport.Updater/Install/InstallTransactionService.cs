@@ -260,11 +260,6 @@ public sealed class InstallTransactionService(
             manifest.App.LoadedTag,
             manifest.Version,
             cancellationToken);
-        await dockerAppManager.TagImageAsync(
-            imageId,
-            UpdateContractConstants.AppCurrentImageRepository,
-            UpdateContractConstants.AppCurrentImageTagName,
-            cancellationToken);
         record = record with { LoadedImageId = imageId };
         await stateStore.SaveOperationAsync(record, cancellationToken);
         return await CompleteStageAsync(record, stages, cancellationToken);
@@ -339,6 +334,15 @@ public sealed class InstallTransactionService(
             OldContainerSnapshot = oldContainer,
         };
         await stateStore.SaveOperationAsync(record, cancellationToken);
+        var loadedImageId = record.LoadedImageId
+            ?? throw new UpdateOperationException(
+                StatusCodes.Status502BadGateway,
+                "操作记录缺少目标镜像 ID，无法替换 App。");
+        await dockerAppManager.TagImageAsync(
+            loadedImageId,
+            UpdateContractConstants.AppCurrentImageRepository,
+            UpdateContractConstants.AppCurrentImageTagName,
+            cancellationToken);
 
         await dockerAppManager.StopContainerAsync(
             oldContainer.ContainerId,
@@ -349,10 +353,7 @@ public sealed class InstallTransactionService(
 
         var candidateId = await dockerAppManager.CreateAppContainerAsync(
             oldContainer,
-            record.LoadedImageId
-                ?? throw new UpdateOperationException(
-                    StatusCodes.Status502BadGateway,
-                    "操作记录缺少目标镜像 ID，无法替换 App。"),
+            loadedImageId,
             record.OperationId,
             cancellationToken);
         record = record with { CandidateContainerId = candidateId };

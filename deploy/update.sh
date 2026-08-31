@@ -48,8 +48,8 @@ if [[ -f $install_dir/update-public-key.pem ]] \
   exit 1
 fi
 
-old_app_id=$(docker image inspect sub2api-report-app:current --format '{{.Id}}')
-old_updater_id=$(docker image inspect sub2api-report-updater:bootstrap --format '{{.Id}}')
+old_app_id=$(resolve_service_image_id "$install_dir" app "$installed_version")
+old_updater_id=$(resolve_service_image_id "$install_dir" updater)
 timestamp=$(date -u +'%Y%m%dT%H%M%SZ')
 config_backup="$install_dir/deploy-backups/$timestamp"
 data_backup="$install_dir/data-backups/$timestamp"

@@ -12,9 +12,11 @@ repo_root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 revision=${GITHUB_SHA:-$(git -C "$repo_root" rev-parse HEAD)}
 repository=${GITHUB_REPOSITORY:-example/sub2api-report}
 contract_version=1
-manual_upgrade_required=${MANUAL_UPGRADE_REQUIRED:-false}
-online_install_supported=${ONLINE_INSTALL_SUPPORTED:-true}
-minimum_updater_version=${MINIMUM_UPDATER_VERSION:-1.0.8}
+# Online App installation is opt-in after compatibility testing; releases default to the full bundle path.
+manual_upgrade_required=${MANUAL_UPGRADE_REQUIRED:-true}
+online_install_supported=${ONLINE_INSTALL_SUPPORTED:-false}
+# Reusing an older Updater is also an explicit compatibility decision, never a stale default.
+minimum_updater_version=${MINIMUM_UPDATER_VERSION:-$version}
 if [[ ! $minimum_updater_version =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]]; then
   echo "MINIMUM_UPDATER_VERSION must be a valid SemVer." >&2
   exit 2
@@ -25,6 +27,10 @@ for boolean_value in "$manual_upgrade_required" "$online_install_supported"; do
     exit 2
   }
 done
+if [[ $manual_upgrade_required == true && $online_install_supported == true ]]; then
+  echo "Manual-only releases cannot advertise online installation support." >&2
+  exit 2
+fi
 
 if [[ ! $version =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]]; then
   echo "Invalid version: $version" >&2

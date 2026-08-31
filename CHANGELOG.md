@@ -8,6 +8,21 @@
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-08-31
+
+### Changed
+
+- Release 构建默认使用 `manualUpgradeRequired=true`、`onlineInstallSupported=false`，并将 `minimumUpdaterVersion` 设为当前发布版本。只有经过旧 App 与旧 Updater 兼容测试的 App-only 版本，才允许显式开启在线安装并通过 `MINIMUM_UPDATER_VERSION` 复用旧 Updater，避免发布元数据静默放行不兼容链路。
+
+### Fixed
+
+- 修复在线升级维护失败时丢弃 App Problem Details 的问题，升级操作现在保留“存在活动报告任务”等受控原因；无效响应继续使用固定脱敏文案。
+- 修复目标镜像在维护和备份前过早占用 `sub2api-report-app:current` 标签的问题；标签切换延后到已记录旧容器且可回滚的替换阶段。完整 bundle 更新从实际 App/Updater 容器读取旧 image ID，并在候选 App 残留时按已安装版本筛选旧 App，不再把受污染标签或候选镜像当作回滚基线。
+
+### Upgrade
+
+- 从 v1.0.8 升级到包含本修复的版本时不提供页面 App-only 安装，必须使用目标完整 bundle 的 `update.sh`。脚本停止旧 App 后创建独立数据库备份，再更新 App 与 Updater，并在健康验证失败时恢复旧镜像、配置和数据库。
+
 ## [1.1.0] - 2026-08-31
 
 ### Added
@@ -135,7 +150,8 @@
 - App 容器不挂载 Docker Socket；Updater 通过 instance/container allowlist、固定 API 和 non-root Socket group 隔离高权限操作。
 - 增加公开安全政策，并将未修复漏洞引导至 GitHub Private Vulnerability Reporting。
 
-[Unreleased]: https://github.com/lohaaa/sub2api-report/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/lohaaa/sub2api-report/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/lohaaa/sub2api-report/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/lohaaa/sub2api-report/compare/v1.0.8...v1.1.0
 [1.0.8]: https://github.com/lohaaa/sub2api-report/compare/v1.0.7...v1.0.8
 [1.0.7]: https://github.com/lohaaa/sub2api-report/compare/v1.0.6...v1.0.7

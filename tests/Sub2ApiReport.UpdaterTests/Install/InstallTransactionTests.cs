@@ -2,7 +2,6 @@ using System.Security.Cryptography;
 using Microsoft.AspNetCore.Http;
 using Sub2ApiReport.UpdateContracts;
 using Sub2ApiReport.Updater;
-using Sub2ApiReport.Updater.Backup;
 using Sub2ApiReport.Updater.Docker;
 using Sub2ApiReport.Updater.Install;
 using Sub2ApiReport.Updater.Net;
@@ -68,9 +67,14 @@ public sealed class InstallTransactionTests : IDisposable
         Assert.Equal(1, _backup.CreateCount);
         Assert.Single(_health.Calls);
         Assert.Equal((operation.TargetVersion, true), _health.Calls[0]);
-        Assert.Contains(
-            (UpdateContractConstants.AppCurrentImageRepository, UpdateContractConstants.AppCurrentImageTagName),
-            _docker.TaggedImages.Select(tag => (tag.Repository, tag.Tag)));
+        Assert.Collection(
+            _docker.TaggedImages,
+            tag =>
+            {
+                Assert.Equal(result.LoadedImageId, tag.ImageId);
+                Assert.Equal(UpdateContractConstants.AppCurrentImageRepository, tag.Repository);
+                Assert.Equal(UpdateContractConstants.AppCurrentImageTagName, tag.Tag);
+            });
         Assert.Single(_docker.CreatedContainers);
         Assert.Equal(result.LoadedImageId, _docker.CreatedContainers[0].ImageId);
         Assert.Equal(result.OldContainerId, _docker.CreatedContainers[0].Contract.ContainerId);
@@ -159,6 +163,7 @@ public sealed class InstallTransactionTests : IDisposable
 
         Assert.Equal(InstallOperationStates.Failed, result.State);
         Assert.False(result.MaintenanceEntered);
+        Assert.Empty(_docker.TaggedImages);
     }
 
     [Fact]
@@ -173,6 +178,7 @@ public sealed class InstallTransactionTests : IDisposable
         Assert.Equal(1, _maintenance.EnterCount);
         Assert.Equal(1, _maintenance.CompleteCount);
         Assert.False(result.BackupCompleted);
+        Assert.Empty(_docker.TaggedImages);
     }
 
     [Fact]
@@ -185,9 +191,20 @@ public sealed class InstallTransactionTests : IDisposable
 
         Assert.Equal(InstallOperationStates.RolledBack, result.State);
         Assert.Equal(1, _backup.RestoreCount);
-        Assert.Contains(
-            (UpdateContractConstants.AppCurrentImageRepository, UpdateContractConstants.AppCurrentImageTagName),
-            _docker.TaggedImages.Select(tag => (tag.Repository, tag.Tag)));
+        Assert.Collection(
+            _docker.TaggedImages,
+            target =>
+            {
+                Assert.Equal(result.LoadedImageId, target.ImageId);
+                Assert.Equal(UpdateContractConstants.AppCurrentImageRepository, target.Repository);
+                Assert.Equal(UpdateContractConstants.AppCurrentImageTagName, target.Tag);
+            },
+            restored =>
+            {
+                Assert.Equal(result.OldImageId, restored.ImageId);
+                Assert.Equal(UpdateContractConstants.AppCurrentImageRepository, restored.Repository);
+                Assert.Equal(UpdateContractConstants.AppCurrentImageTagName, restored.Tag);
+            });
         Assert.Contains(_docker.StartedContainers, id => id == result.OldContainerId);
         Assert.Contains((result.CurrentVersion, false), _health.Calls);
         var persisted = await _stateStore.LoadOperationAsync(result.OperationId, CancellationToken.None);

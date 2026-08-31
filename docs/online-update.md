@@ -159,12 +159,9 @@ GitHub API 和 Release 内容不能覆盖本地公钥、host allowlist、版本�
 
 手工 `update.sh` 保留 `.env`、token、instance ID、数据卷和运行数据。
 
-v1.0.8 以上的 manifest 把 `minimumUpdaterVersion` 提升到 1.0.8：v1.0.6/v1.0.7 的 Updater 在
-创建候选 App 容器时会把同一挂载点同时通过 `Binds` 和有效 `Mounts` 下发而被 Docker Engine
-拒绝，安装门禁会拒绝这些 Updater 并提示手工更新。恢复路径见
-[deployment.md](deployment.md) §11.1：下载 v1.0.8 完整 bundle、用 `release-lib.sh` 校验签名与
-checksums、只加载并标记 Updater 镜像、`docker compose up -d --no-deps updater` 仅重建
-Updater 容器；App 保持当前版本（例如 1.0.6），Updater 到 1.0.8 后即可用页面继续在线升级。
+Release 构建默认使用 `manualUpgradeRequired=true`、`onlineInstallSupported=false`，并令 `minimumUpdaterVersion` 等于当前发布版本。只有经过旧 App 与旧 Updater 兼容测试的 App-only 版本，才允许在构建时显式开启在线安装并通过 `MINIMUM_UPDATER_VERSION` 复用较早 Updater。安装门禁必须在下载 App 归档前拒绝不兼容链路。
+
+仅 Updater 需要变化且旧 App 的维护协议仍兼容时，可以使用 [deployment.md](deployment.md) §11.1 的 updater-only 路径。若缺陷位于旧 App 的维护入口、候选 App 启动前便会阻断升级，则 updater-only 也无法修复，Release 必须要求完整 bundle `update.sh`：停止旧 App、离线备份数据库、替换并验证 App 与 Updater，失败时恢复旧部署。
 
 ## 7. 升级状态机
 

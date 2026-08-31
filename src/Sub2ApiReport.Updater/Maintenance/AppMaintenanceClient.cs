@@ -1,4 +1,3 @@
-using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Sub2ApiReport.UpdateContracts;
@@ -53,7 +52,7 @@ public sealed class AppMaintenanceClient(HttpClient httpClient, UpdaterTokenProv
             {
                 throw new UpdateOperationException(
                     StatusCodes.Status502BadGateway,
-                    "App 维护请求失败。");
+                    await ReadProblemDetailAsync(response, "App 维护请求失败。", cancellationToken));
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -66,6 +65,24 @@ public sealed class AppMaintenanceClient(HttpClient httpClient, UpdaterTokenProv
                 StatusCodes.Status502BadGateway,
                 "App 维护请求失败。",
                 exception);
+        }
+    }
+
+    private static async Task<string> ReadProblemDetailAsync(
+        HttpResponseMessage response,
+        string fallback,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var problem = await response.Content.ReadFromJsonAsync<Microsoft.AspNetCore.Mvc.ProblemDetails>(
+                SerializerOptions,
+                cancellationToken);
+            return string.IsNullOrWhiteSpace(problem?.Detail) ? fallback : problem.Detail;
+        }
+        catch (JsonException)
+        {
+            return fallback;
         }
     }
 

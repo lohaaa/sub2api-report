@@ -65,6 +65,30 @@ mkdir -p "$mock_bin"
 cat > "$mock_bin/docker" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+if [[ ${1:-} == compose ]]; then
+  service=${*: -1}
+  if [[ ${RESOLVE_CONTAINER_MODE:-single} == multiple && $service == app ]]; then
+    printf 'app-container\ntarget-app-container\n'
+  else
+    printf '%s-container\n' "$service"
+  fi
+  exit 0
+fi
+if [[ ${1:-} == inspect && ${2:-} == --format && ${3:-} == '{{.Image}}' ]]; then
+  case ${4:-} in
+    app-container) printf 'sha256:%064d\n' 1 ;;
+    updater-container) printf 'sha256:%064d\n' 2 ;;
+    target-app-container) printf 'sha256:%064d\n' 3 ;;
+    *) exit 1 ;;
+  esac
+  exit 0
+fi
+target_image_id="sha256:$(printf '%064d' 3)"
+if [[ ${1:-} == image && ${2:-} == inspect && ${3:-} == "$target_image_id" \
+  && ${*: -1} == *org.opencontainers.image.version* ]]; then
+  printf '1.1.1\n'
+  exit 0
+fi
 role=app
 [[ $* == *sub2api-report-updater* ]] && role=updater
 format=${*: -1}
@@ -94,6 +118,17 @@ EOF
 chmod 0755 "$mock_bin/docker"
 export PATH="$mock_bin:$PATH"
 export RELEASE_LIB_TEST_ROOT="$test_root"
+
+expected_app_container_image="sha256:$(printf '%064d' 1)"
+expected_updater_container_image="sha256:$(printf '%064d' 2)"
+[[ $(resolve_service_image_id /synthetic-install app 1.0.6) == "$expected_app_container_image" ]]
+[[ $(resolve_service_image_id /synthetic-install updater) == "$expected_updater_container_image" ]]
+[[ $(RESOLVE_CONTAINER_MODE=multiple \
+  resolve_service_image_id /synthetic-install app 1.0.6) == "$expected_app_container_image" ]]
+grep -F "old_app_id=\$(resolve_service_image_id \"\$install_dir\" app \"\$installed_version\")" \
+  "$repo_root/deploy/update.sh" >/dev/null
+grep -F "old_updater_id=\$(resolve_service_image_id \"\$install_dir\" updater)" \
+  "$repo_root/deploy/update.sh" >/dev/null
 
 DOCKER_ID_MODE=classic validate_loaded_images "$test_root"
 DOCKER_ID_MODE=containerd validate_loaded_images "$test_root"

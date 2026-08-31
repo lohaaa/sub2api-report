@@ -286,6 +286,37 @@ install_release_files() {
   install -m 0755 "$bundle_dir/appctl" "$install_dir/appctl"
 }
 
+resolve_service_image_id() {
+  local install_dir=$1
+  local service=$2
+  local expected_version=${3:-}
+  local container_id image_id image_version
+  local -a container_ids=() matching_image_ids=()
+
+  mapfile -t container_ids < <(
+    docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml" \
+      ps --all --quiet "$service"
+  )
+  for container_id in "${container_ids[@]}"; do
+    image_id=$(docker inspect --format '{{.Image}}' "$container_id")
+    [[ $image_id =~ ^sha256:[a-f0-9]{64}$ ]] || {
+      echo "The $service container has an invalid image ID." >&2
+      return 1
+    }
+    if [[ -n $expected_version ]]; then
+      image_version=$(docker image inspect "$image_id" \
+        --format '{{index .Config.Labels "org.opencontainers.image.version"}}')
+      [[ $image_version == "$expected_version" ]] || continue
+    fi
+    matching_image_ids+=("$image_id")
+  done
+
+  [[ ${#matching_image_ids[@]} -eq 1 ]] || {
+    echo "Expected exactly one $service container matching the installed release in $install_dir." >&2
+    return 1
+  }
+  printf '%s\n' "${matching_image_ids[0]}"
+}
 wait_for_service_health() {
   local install_dir=$1
   local service=$2

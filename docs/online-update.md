@@ -159,6 +159,13 @@ GitHub API 和 Release 内容不能覆盖本地公钥、host allowlist、版本�
 
 手工 `update.sh` 保留 `.env`、token、instance ID、数据卷和运行数据。
 
+v1.0.8 以上的 manifest 把 `minimumUpdaterVersion` 提升到 1.0.8：v1.0.6/v1.0.7 的 Updater 在
+创建候选 App 容器时会把同一挂载点同时通过 `Binds` 和有效 `Mounts` 下发而被 Docker Engine
+拒绝，安装门禁会拒绝这些 Updater 并提示手工更新。恢复路径见
+[deployment.md](deployment.md) §11.1：下载 v1.0.8 完整 bundle、用 `release-lib.sh` 校验签名与
+checksums、只加载并标记 Updater 镜像、`docker compose up -d --no-deps updater` 仅重建
+Updater 容器；App 保持当前版本（例如 1.0.6），Updater 到 1.0.8 后即可用页面继续在线升级。
+
 ## 7. 升级状态机
 
 ```text

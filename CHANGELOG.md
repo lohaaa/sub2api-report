@@ -8,6 +8,12 @@
 
 ## [Unreleased]
 
+## [1.0.8] - 2026-08-31
+
+### Fixed
+
+- 修复在线升级候选 App 容器创建失败：当部署同时声明宿主机 `Binds` 与有效挂载（官方 Compose 的 named volume 数据卷加只读 updater token bind）时，重建容器会携带重复挂载点并被 Docker Engine 以 duplicate mount point 拒绝，导致升级在 `replacing_app` 阶段失败并自动回滚。现在创建候选与回滚容器时保留 `Binds` 原字符串（含 `ro`/propagation 选项），仅重放未被 `Binds` 覆盖的有效挂载（named volume、仅通过 `--mount` 表达的 bind/tmpfs），快照冲突时拒绝发送创建请求；named volume 重放改用 volume 名称而非宿主机数据路径。新增映射测试覆盖官方 Compose 契约、`--mount` 挂载、短语法覆盖与持久化回滚快照。
+- v1.0.8 起 Release manifest 要求 Updater 至少为 1.0.8：v1.0.6/v1.0.7 的 Updater 含上述缺陷，页面在线向导会提示先在主机执行 updater-only 升级（见部署文档），Updater 升级后 App 保持旧版本即可继续页面在线升级；未受影响的 systemd 部署继续使用 server bootstrap。
 ## [1.0.7] - 2026-08-31
 
 ### Changed
@@ -108,7 +114,8 @@
 - App 容器不挂载 Docker Socket；Updater 通过 instance/container allowlist、固定 API 和 non-root Socket group 隔离高权限操作。
 - 增加公开安全政策，并将未修复漏洞引导至 GitHub Private Vulnerability Reporting。
 
-[Unreleased]: https://github.com/lohaaa/sub2api-report/compare/v1.0.7...HEAD
+[Unreleased]: https://github.com/lohaaa/sub2api-report/compare/v1.0.8...HEAD
+[1.0.8]: https://github.com/lohaaa/sub2api-report/compare/v1.0.7...v1.0.8
 [1.0.7]: https://github.com/lohaaa/sub2api-report/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/lohaaa/sub2api-report/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/lohaaa/sub2api-report/compare/v1.0.4...v1.0.5

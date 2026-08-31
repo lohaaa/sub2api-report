@@ -121,7 +121,7 @@ public static class AppContractMapper
             ExtraHosts = [.. snapshot.ExtraHosts],
             Tmpfs = new Dictionary<string, string>(snapshot.Tmpfs),
             Sysctls = new Dictionary<string, string>(snapshot.Sysctls),
-            Mounts = [.. snapshot.Mounts.Select(ToDockerMount)],
+            Mounts = BuildReplayedMounts(snapshot),
         };
         ApplyResources(hostConfig, snapshot.Resources);
 
@@ -273,13 +273,136 @@ public static class AppContractMapper
             .ToList();
     }
 
+    /// <summary>
+    /// 生成候选/回滚容器创建用的 HostConfig.Mounts：Binds 中已覆盖的挂载目标不再通过
+    /// Mounts 重复下发（Docker Engine 会因 duplicate mount point 拒绝创建，官方 Compose
+    /// 的 named volume + 只读 token bind 即命中该冲突）；named volume 和只通过 --mount
+    /// 表达的 bind/tmpfs 保持原契约重放。快照无法安全解析或最终目标重复时，抛出脱敏的
+    /// 安全错误，不发送创建请求。
+    /// </summary>
+    private static List<Mount> BuildReplayedMounts(AppContainerSnapshot snapshot)
+    {
+        var bindTargets = ParseBindTargets(snapshot.Binds);
+        var replayedMounts = new List<Mount>();
+        foreach (var mount in snapshot.Mounts)
+        {
+            if (string.IsNullOrWhiteSpace(mount.Target)
+                || !mount.Target.StartsWith('/'))
+            {
+                throw new UpdateOperationException(
+                    StatusCodes.Status409Conflict,
+                    "App 容器快照包含无效挂载点，拒绝生成容器创建请求。");
+            }
+
+            if (bindTargets.Contains(NormalizeMountTarget(mount.Target)))
+            {
+                // 该目标已由 Binds 原样保留（含读写标志与 propagation 选项），不再重复下发。
+                continue;
+            }
+
+            replayedMounts.Add(ToDockerMount(mount));
+        }
+
+        // 防御性校验：最终发送的 Binds + Mounts 挂载目标必须唯一，冲突时拒绝发请求。
+        var usedTargets = new HashSet<string>(bindTargets, StringComparer.Ordinal);
+        foreach (var mount in replayedMounts)
+        {
+            if (!usedTargets.Add(NormalizeMountTarget(mount.Target)))
+            {
+                throw new UpdateOperationException(
+                    StatusCodes.Status409Conflict,
+                    "App 容器快照中挂载点 " + mount.Target + " 重复声明，拒绝生成容器创建请求。");
+            }
+        }
+
+        return replayedMounts;
+    }
+
+    private static HashSet<string> ParseBindTargets(IReadOnlyList<string> binds)
+    {
+        var bindTargets = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var bind in binds)
+        {
+            if (string.IsNullOrWhiteSpace(bind))
+            {
+                continue;
+            }
+
+            if (!TryParseBindTarget(bind, out var target)
+                || !bindTargets.Add(NormalizeMountTarget(target)))
+            {
+                throw new UpdateOperationException(
+                    StatusCodes.Status409Conflict,
+                    "App 容器快照中的 Binds 声明无法安全解析或挂载点目标重复，拒绝生成容器创建请求。");
+            }
+        }
+
+        return bindTargets;
+    }
+
+    /// <summary>
+    /// 解析 Linux 短语法 <c>[SOURCE:]TARGET[:MODE1[:MODE2...]]</c>（bind 与 named volume）
+    /// 的挂载目标。目标必须是绝对路径；仅从末尾剥离只含选项字符的冒号分组，不把含非法
+    /// 选项字符的冒号路径误判为选项。返回 target 未归一化，比对前需经 NormalizeMountTarget。
+    /// </summary>
+    internal static bool TryParseBindTarget(string? bind, out string target)
+    {
+        target = string.Empty;
+        if (string.IsNullOrWhiteSpace(bind))
+        {
+            return false;
+        }
+
+        var parts = bind.Split(':');
+        var end = parts.Length;
+        while (end > 1 && IsBindModeComponent(parts[end - 1]))
+        {
+            end--;
+        }
+
+        if (end > 2)
+        {
+            // 既不是 [SOURCE:]TARGET 也不是 TARGET，无法安全定位目标。
+            return false;
+        }
+
+        var candidate = end == 2 ? parts[1] : parts[0];
+        if (!candidate.StartsWith('/'))
+        {
+            return false;
+        }
+
+        target = candidate;
+        return true;
+    }
+
+    private static bool IsBindModeComponent(string component) =>
+        component.Length > 0
+        && component[0] != '/'
+        && component.All(IsBindModeCharacter);
+
+    private static bool IsBindModeCharacter(char character) =>
+        char.IsAsciiLetterOrDigit(character)
+        || character is ',' or '=' or '.' or '_' or '-' or '+';
+
+    /// <summary>归一化挂载点目标用于比对：去除首尾空白和末尾斜杠，根路径保持 "/"。</summary>
+    internal static string NormalizeMountTarget(string target)
+    {
+        var normalized = target.Trim().TrimEnd('/');
+        return normalized.Length == 0 ? "/" : normalized;
+    }
+
     private static Mount ToDockerMount(AppMount mount) => new()
     {
         Type = mount.Type,
-        Source = mount.Source,
+        // named volume 的创建契约要求 volume 名称；inspect 顶层 Mounts 的 Source 是宿主机数据路径。
+        Source = IsVolumeMount(mount) ? mount.Name ?? mount.Source : mount.Source,
         Target = mount.Target,
         ReadOnly = mount.ReadOnly,
     };
+
+    private static bool IsVolumeMount(AppMount mount) =>
+        string.Equals(mount.Type, "volume", StringComparison.OrdinalIgnoreCase);
 
     private static void ApplyResources(HostConfig hostConfig, AppResourceLimits limits)
     {

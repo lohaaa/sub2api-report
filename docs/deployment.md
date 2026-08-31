@@ -363,6 +363,56 @@ sudo docker compose ps
 
 跨 deployment contract 的版本不支持页面升级，Release 页面提供新的 deploy bundle 和明确的主机命令。
 
+### 11.1 Updater-only 手工更新（v1.0.6/v1.0.7 必须先执行）
+
+v1.0.8 起的 Release manifest 要求 Updater 至少为 1.0.8：早期 Updater 在创建候选 App 容器时，
+会把同一挂载点同时通过 `Binds` 和有效 `Mounts` 下发而被 Docker Engine 以 duplicate mount
+point 拒绝（详见 CHANGELOG 1.0.8）。Updater 不在线自更新，因此 v1.0.6/v1.0.7 安装需要先在
+主机把 Updater 升级到 1.0.8，App 保持当前版本，再回页面执行 App 在线升级。
+
+以下命令只用 bundle 内随发布测试的 `release-lib.sh` 函数完成校验，不改动 App 容器、数据卷和
+`.env`（`verify_release_bundle` 校验 images/checksums.txt、manifest 签名、版本、架构与产物
+哈希；systemd 部署不走此流程，继续使用 server bootstrap）：
+
+```bash
+install_dir=/opt/sub2api-report   # 改为实际安装目录
+bundle_dir=$(mktemp -d /tmp/sub2api-report-updater.XXXXXX)
+
+# 1) 从 v1.0.8 Release 下载完整 bundle 并解压，校验 bundle 签名与 checksums
+tar -xzf sub2api-report-v1.0.8-linux-amd64.tar.gz -C "$bundle_dir"
+sudo bash -c "source '$bundle_dir/release-lib.sh' && verify_release_bundle '$bundle_dir'"
+
+# 2) 只加载 Updater 镜像归档，并按签名 manifest 校验 tag 与 config/target digest
+gzip -dc "$bundle_dir/images/sub2api-report-updater-linux-amd64.tar.gz" | sudo docker load
+sudo bash -c "source '$bundle_dir/release-lib.sh' && verify_image_archive_metadata \
+  '$bundle_dir/images/sub2api-report-updater-linux-amd64.tar.gz' \
+  \"$(jq -r '.updater.loadedTag' '$bundle_dir/release-manifest.json')\" \
+  \"$(jq -r '.updater.imageId' '$bundle_dir/release-manifest.json')\" \
+  \"$(jq -r '.updater.targetDigest' '$bundle_dir/release-manifest.json')\""
+
+# 3) 记录旧 Updater 镜像 ID（回退用），把新 Updater 标记为本地 bootstrap 标签
+old_updater_id=$(sudo docker image inspect sub2api-report-updater:bootstrap --format '{{.Id}}')
+sudo docker tag "sub2api-report-updater:$(jq -r '.version' "$bundle_dir/release-manifest.json")" \
+  sub2api-report-updater:bootstrap
+
+# 4) 只重建 Updater 容器（.env 的 instance id、token、Socket GID 均保留；App 保持版本不变）
+sudo docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml" up -d --no-deps updater
+sudo bash -c "source '$bundle_dir/release-lib.sh' && wait_for_service_health '$install_dir' updater 60"
+
+# 5) 确认 Updater 版本为 1.0.8（或直接在更新页查看 Updater 版本）后再做下一步
+sudo docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml" exec -T updater sh -c \
+  'token=$(cat /run/secrets/updater-token); curl --fail --silent -H "Authorization: Bearer $token" http://127.0.0.1:8081/internal/v1/status' \
+  | jq -r '.version, .installationEnabled'
+```
+
+确认 Updater 为 1.0.8 后，按 [online-update.md](online-update.md) 从页面执行 App 在线升级，
+从当前版本直接升级到 v1.0.8。如需回退 Updater（App 未受影响，不涉及数据）：
+
+```bash
+sudo docker tag "$old_updater_id" sub2api-report-updater:bootstrap
+sudo docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml" up -d --no-deps updater
+```
+
 ## 12. 日志
 
 默认只写 stdout/stderr，由 Docker logging driver 管理。应用不默认在 `/data` 写无限增长日志。

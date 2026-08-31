@@ -14,7 +14,7 @@ repository=${GITHUB_REPOSITORY:-example/sub2api-report}
 contract_version=1
 manual_upgrade_required=${MANUAL_UPGRADE_REQUIRED:-false}
 online_install_supported=${ONLINE_INSTALL_SUPPORTED:-true}
-minimum_updater_version=${MINIMUM_UPDATER_VERSION:-1.0.6}
+minimum_updater_version=${MINIMUM_UPDATER_VERSION:-1.0.8}
 if [[ ! $minimum_updater_version =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]]; then
   echo "MINIMUM_UPDATER_VERSION must be a valid SemVer." >&2
   exit 2

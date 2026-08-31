@@ -205,6 +205,9 @@ Queued -> Collecting -> Rendering -> Delivering -> Succeeded
 计划任务使用运行时全部已启用渠道。采集得到部分报告时保存不可变快照，但不自动发送；
 管理员可在报告详情页显式确认后手工投递。进程中断时，尚未开始的渠道可继续执行，处于
 `Sending` 的渠道标记为 `outcome_unknown`，只能由管理员确认后显式补发，禁止静默重发。
+生成快照与投递共享运行时作用域的 `ReportDbContext`，但两者之间是硬阶段边界：进入投递前
+清空 ChangeTracker 并按主键重读执行记录，失败收敛同样重读后落终态；跨阶段禁止携带任何
+待保存变更，避免共享变更跟踪器把并发状态冲刷进错误的 SaveChanges 批次。
 
 `Delivery` 状态：
 
@@ -219,6 +222,9 @@ Pending -> Sending -> Succeeded
 
 - 默认时区：`Asia/Shanghai`。
 - 默认发送时间：每月 1 日 09:00。
+- 计划日支持 1 到 31。当月没有该日期时，按 `ShortMonthStrategy` 执行：
+  - `UseLastDay`（默认）：在当月最后一天顺延执行；计划为 29、30、31 日时，调度器额外保存一个月末 (`L`) 后备 trigger，与指定日 primary trigger 共用同一 durable job；job 按 trigger key 与计划墙钟判定，仅执行一次，指定日恰为月末时由 primary 执行；
+  - `SkipMonth`：当月直接跳过，不执行也不顺延。
 - 报告不包含运行当天。
 - 默认窗口包含滚动 7 日、滚动 30 日、上一自然周和上一自然月；自然周默认周一开始；
 - 单份报告允许 1 到 8 个窗口；滚动窗口为 1 到 90 日，自定义区间最多 92 日且只允许手工报告；
@@ -259,7 +265,7 @@ Pending -> Sending -> Succeeded
 | `ExternalApiKeys` | `ExternalId`, `Sub2ApiUserId`, `NameSnapshot`, `Status`, `GroupId`, `RetiredAt` | Sub2API Key 本地缓存，稳定标识为 `user_id + api_key_id`；报告生成前自动刷新 |
 | `ReportGenerationRuns` | `Trigger`, `Status`, `Stage`, `ErrorCode`, `ErrorMessage` | 每次报告生成尝试，包含自动刷新失败信息 |
 | `ReportSnapshots` | `Id`, `SchemaVersion`, `CutoffDate`, `Status`, `CanonicalJson`, `WindowSummaryJson`, cost summaries | 不可变报告快照；schema v4 使用动态窗口集合，固定 7/30 费用只保留为列表兼容摘要 |
-| `ReportSchedules` | `DayOfMonth`, `LocalTime`, `Timezone`, `WindowSpecsJson`, `Enabled`, `Revision` | 单例月报计划；窗口规格动态存于 SQLite，更新后立即对账持久化 trigger |
+| `ReportSchedules` | `DayOfMonth`, `ShortMonthStrategy`, `LocalTime`, `Timezone`, `WindowSpecsJson`, `Enabled`, `Revision` | 单例月报计划；`DayOfMonth` 约束 1–31，`ShortMonthStrategy` 限制为 `UseLastDay`/`SkipMonth`；窗口规格动态存于 SQLite，更新后立即对账持久化 trigger（含 `UseLastDay` 且日期大于 28 时的月末后备 trigger） |
 | `NotificationChannels` | `Type`, `Name`, `Enabled`, `ConfigCiphertext` | M5 邮件、钉钉、飞书实例 |
 | `ReportRuns` | `Id`, `SnapshotId`, `Trigger`, `Status`, `IdempotencyKey`, `WindowSpecsJson`, `ResolvedWindowsJson`, `RetryOfRunId`, stage timestamps | 规范化任务执行；入队时冻结窗口规格与边界，重试沿用同一快照 |
 | `DeliveryRecords` | `RunId`, `ChannelId`, `PayloadHash`, `Status`, `Attempts` | M5 手工投递逐渠道状态；M6 计划投递复用同一状态机 |

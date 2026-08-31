@@ -54,7 +54,8 @@ public sealed class DeliveryRecord
         string channelName,
         string payloadHash,
         IReadOnlyList<DeliveryPart> parts,
-        Guid? id = null)
+        Guid? id = null,
+        Guid? runId = null)
     {
         if (channelId == Guid.Empty)
         {
@@ -76,6 +77,7 @@ public sealed class DeliveryRecord
         var record = new DeliveryRecord
         {
             Id = id ?? Guid.NewGuid(),
+            RunId = runId ?? Guid.Empty,
             ChannelId = channelId,
             ChannelType = channelType,
             ChannelName = channelName,

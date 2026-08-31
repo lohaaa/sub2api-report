@@ -133,7 +133,14 @@ internal sealed class DatabaseReportDeliveryService(
 
             for (var index = existingParts.Length; index < parts.Count; index++)
             {
-                delivery.Parts.Add(DeliveryPart.Create(index, parts.Count, parts[index].PayloadHash));
+                // 新分片同样带显式外键并经 DbSet.Add 追踪，避免依赖集合导航图解析出的错误状态。
+                var deliveryPart = DeliveryPart.Create(
+                    index,
+                    parts.Count,
+                    parts[index].PayloadHash,
+                    delivery.Id);
+                dbContext.DeliveryParts.Add(deliveryPart);
+                delivery.Parts.Add(deliveryPart);
             }
 
             delivery.ResetForRetry(aggregateHash);
@@ -205,9 +212,14 @@ internal sealed class DatabaseReportDeliveryService(
                     channel.Type,
                     channel.Name,
                     ComputeAggregateHash(parts),
-                    parts.Select(part => DeliveryPart.Create(part.Index, part.Count, part.PayloadHash)).ToArray(),
-                    deliveryId);
-                run.Deliveries.Add(delivery);
+                    parts.Select(part => DeliveryPart.Create(part.Index, part.Count, part.PayloadHash, deliveryId)).ToArray(),
+                    deliveryId,
+                    run.Id);
+                // 通过 DbSet.Add 与显式主外键把整个投递图记录为新增实体。禁止把新投递挂到
+                // 已跟踪（非 Added）run 的集合导航上：在 EF Core 10 的关系图中，这样解析出的
+                // DeliveryRecord/DeliveryPart 会被标记为 Modified，保存时执行 UPDATE 0 行并
+                // 抛出 DbUpdateConcurrencyException，导致任务永久停滞在快照阶段。
+                dbContext.DeliveryRecords.Add(delivery);
                 work.Add(new DeliveryWork(delivery, context, sender, parts));
             }
 

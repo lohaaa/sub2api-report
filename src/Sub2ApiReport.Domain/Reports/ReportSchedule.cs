@@ -4,6 +4,8 @@ public sealed class ReportSchedule
 {
     public const int SingletonId = 1;
     public const int DefaultDayOfMonth = 1;
+    public const int MaximumDayOfMonth = 31;
+    public const ShortMonthStrategy DefaultShortMonthStrategy = ShortMonthStrategy.UseLastDay;
     public const string DefaultLocalTime = "09:00";
     public const string DefaultTimezone = "Asia/Shanghai";
 
@@ -16,6 +18,8 @@ public sealed class ReportSchedule
     public bool Enabled { get; private set; }
 
     public int DayOfMonth { get; private set; } = DefaultDayOfMonth;
+
+    public ShortMonthStrategy ShortMonthStrategy { get; private set; } = DefaultShortMonthStrategy;
 
     public string LocalTime { get; private set; } = DefaultLocalTime;
 
@@ -33,16 +37,24 @@ public sealed class ReportSchedule
     public void Update(
         bool enabled,
         int dayOfMonth,
+        ShortMonthStrategy shortMonthStrategy,
         string localTime,
         string timezone,
         string? windowSpecsJson,
         DateTimeOffset updatedAt)
     {
-        if (dayOfMonth is < 1 or > 28)
+        if (dayOfMonth is < 1 or > MaximumDayOfMonth)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(dayOfMonth),
-                "The report day must be between 1 and 28.");
+                "The report day must be between 1 and 31.");
+        }
+
+        if (shortMonthStrategy is not (ShortMonthStrategy.UseLastDay or ShortMonthStrategy.SkipMonth))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(shortMonthStrategy),
+                "The short month strategy is not supported.");
         }
 
         var parsedTime = ParseLocalTime(localTime);
@@ -50,6 +62,7 @@ public sealed class ReportSchedule
 
         Enabled = enabled;
         DayOfMonth = dayOfMonth;
+        ShortMonthStrategy = shortMonthStrategy;
         LocalTime = parsedTime.ToString("HH:mm", global::System.Globalization.CultureInfo.InvariantCulture);
         Timezone = normalizedTimezone;
         WindowSpecsJson = windowSpecsJson;

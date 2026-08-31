@@ -13,6 +13,10 @@ internal sealed class ReportScheduleConfiguration : IEntityTypeConfiguration<Rep
         builder.Property(schedule => schedule.Id).ValueGeneratedNever();
         builder.Property(schedule => schedule.LocalTime).HasMaxLength(5).IsRequired();
         builder.Property(schedule => schedule.Timezone).HasMaxLength(100).IsRequired();
+        builder.Property(schedule => schedule.ShortMonthStrategy)
+            .HasConversion<string>()
+            .HasMaxLength(16)
+            .IsRequired();
         builder.Property(schedule => schedule.WindowSpecsJson);
         builder.Property(schedule => schedule.Revision).IsConcurrencyToken().IsRequired();
         builder.HasData(ReportSchedule.CreateDefault());
@@ -21,7 +25,10 @@ internal sealed class ReportScheduleConfiguration : IEntityTypeConfiguration<Rep
             "Id = 1"));
         builder.ToTable(table => table.HasCheckConstraint(
             "CK_ReportSchedules_DayOfMonth",
-            "DayOfMonth BETWEEN 1 AND 28"));
+            "DayOfMonth BETWEEN 1 AND 31"));
+        builder.ToTable(table => table.HasCheckConstraint(
+            "CK_ReportSchedules_ShortMonthStrategy",
+            "ShortMonthStrategy IN ('UseLastDay', 'SkipMonth')"));
         builder.ToTable(table => table.HasCheckConstraint(
             "CK_ReportSchedules_LocalTime",
             "length(LocalTime) = 5"));

@@ -29,7 +29,7 @@ jobs:
       CANDIDATE_VERSION: ${{ inputs.version }}
       PREVIOUS_VERSION: ${{ inputs.previous_version }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Validate candidate version
         shell: bash
@@ -40,20 +40,20 @@ jobs:
           [[ $CANDIDATE_VERSION != "$PREVIOUS_VERSION" ]]
           [[ $(printf '%s\n%s\n' "$PREVIOUS_VERSION" "$CANDIDATE_VERSION" | sort -V | tail -n 1) == "$CANDIDATE_VERSION" ]]
 
-      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
           cache: true
           cache-dependency-path: Directory.Packages.props
 
-      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
           version: 11.17.0
           run_install: false
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 22
+          node-version: 24 # Node.js 24 LTS
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
@@ -68,7 +68,7 @@ jobs:
           deploy/server-bootstrap-test.sh
           deploy/server-install-test.sh
 
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
       - name: Build previous signed candidate
         shell: bash
@@ -99,14 +99,14 @@ jobs:
             deploy/build-release-assets.sh "$CANDIDATE_VERSION" candidate
 
       - name: Generate App SBOM
-        uses: anchore/sbom-action@28d71544de8eaf1b958d335707167c5f783590ad # v0.22.2
+        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
         with:
           image: sub2api-report-app:${{ inputs.version }}
           format: spdx-json
           output-file: candidate/sub2api-report-app-${{ inputs.version }}.spdx.json
 
       - name: Generate Updater SBOM
-        uses: anchore/sbom-action@28d71544de8eaf1b958d335707167c5f783590ad # v0.22.2
+        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
         with:
           image: sub2api-report-updater:${{ inputs.version }}
           format: spdx-json
@@ -230,7 +230,7 @@ jobs:
           curl --fail --silent http://127.0.0.1:18080/health/ready >/dev/null
 
       - name: Upload candidate artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: sub2api-report-${{ inputs.version }}
           path: candidate/

@@ -40,6 +40,7 @@ internal sealed class DatabaseReportScheduleService(
         schedule.Update(
             command.Enabled,
             command.DayOfMonth,
+            command.ShortMonthStrategy ?? schedule.ShortMonthStrategy,
             command.LocalTime,
             command.Timezone,
             specsJson,
@@ -202,6 +203,7 @@ internal sealed class DatabaseReportScheduleService(
         schedule.Id,
         schedule.Enabled,
         schedule.DayOfMonth,
+        schedule.ShortMonthStrategy,
         schedule.LocalTime,
         schedule.Timezone,
         schedule.WindowSpecsJson,
@@ -218,6 +220,7 @@ internal sealed class DatabaseReportScheduleService(
         return new ReportScheduleDocument(
             schedule.Enabled,
             schedule.DayOfMonth,
+            schedule.ShortMonthStrategy,
             schedule.LocalTime,
             schedule.Timezone,
             specs,

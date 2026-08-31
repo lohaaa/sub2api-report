@@ -45,6 +45,7 @@ public sealed record ReportScheduleSnapshot(
     int Id,
     bool Enabled,
     int DayOfMonth,
+    ShortMonthStrategy ShortMonthStrategy,
     string LocalTime,
     string Timezone,
     string? WindowSpecsJson,
@@ -59,6 +60,7 @@ public sealed record ReportScheduleProjection(
 public sealed record ReportScheduleDocument(
     bool Enabled,
     int DayOfMonth,
+    ShortMonthStrategy ShortMonthStrategy,
     string LocalTime,
     string Timezone,
     IReadOnlyList<ReportWindowSpec> Windows,
@@ -71,6 +73,7 @@ public sealed record ReportScheduleDocument(
 public sealed record UpdateReportScheduleCommand(
     bool Enabled,
     int DayOfMonth,
+    ShortMonthStrategy? ShortMonthStrategy,
     string LocalTime,
     string Timezone,
     IReadOnlyList<ReportWindowSpec>? Windows,

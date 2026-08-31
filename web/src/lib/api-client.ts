@@ -642,9 +642,12 @@ export function getReportGenerationRuns(page: number, signal?: AbortSignal) {
   );
 }
 
+export type ShortMonthStrategy = "UseLastDay" | "SkipMonth";
+
 export type ReportSchedule = {
   enabled: boolean;
   dayOfMonth: number;
+  shortMonthStrategy: ShortMonthStrategy;
   localTime: string;
   timezone: string;
   windows: ReportWindowSpec[];
@@ -707,6 +710,7 @@ export function getReportSchedule(signal?: AbortSignal) {
 export function updateReportSchedule(input: {
   enabled: boolean;
   dayOfMonth: number;
+  shortMonthStrategy?: ShortMonthStrategy;
   localTime: string;
   timezone: string;
   windows: ReportWindowSpec[];

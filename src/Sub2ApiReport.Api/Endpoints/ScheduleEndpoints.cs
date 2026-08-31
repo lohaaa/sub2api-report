@@ -81,6 +81,7 @@ internal static class ScheduleEndpoints
                 new UpdateReportScheduleCommand(
                     request.Enabled,
                     request.DayOfMonth,
+                    request.ShortMonthStrategy,
                     request.LocalTime,
                     request.Timezone,
                     request.Windows?.Select(Map).ToArray(),
@@ -231,6 +232,7 @@ internal static class ScheduleEndpoints
     private static ReportScheduleResponse Map(ReportScheduleDocument schedule) => new(
         schedule.Enabled,
         schedule.DayOfMonth,
+        schedule.ShortMonthStrategy,
         schedule.LocalTime,
         schedule.Timezone,
         schedule.Windows.Select(window => new ReportWindowSpecResponse(

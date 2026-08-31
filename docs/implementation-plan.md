@@ -41,18 +41,19 @@
 | M6 计划任务 | 0.7.0 | 已完成 | Quartz 持久化计划、窗口冻结、规范化执行记录、重试和恢复已落地 |
 | M7 Docker 和签名 bundle | 0.8.0 内部里程碑 | 已完成 | Candidate workflow 在 linux/amd64 上通过签名、Critical 扫描、SBOM、安装、故障回滚、成功更新和 non-root Socket 权限验收 |
 | M8 在线升级 | 0.9.0 内部里程碑 | 已完成 | 固定仓库验签、严格下载、Docker App-only 事务、维护模式、SQLite 备份、恢复、App API、step-up 和更新页面已实现 |
-| M9 稳定版加固 | `v1.0.0` - `v1.0.8` | 已完成 | Updater 安全验收和 Release workflow 全部通过；v1.0.7 将报告导出迁移为多工作表 XLSX 工作簿并增加公式注入与精度防护；v1.0.8 修复在线升级候选 App 容器因 `Binds`/有效 `Mounts` 挂载目标重复创建失败并自动回滚的问题 |
+| M9 稳定版加固 | `v1.0.0` - `v1.0.8` | 已完成 | Updater 安全验收和 Release workflow 全部通过；v1.0.7 将报告导出迁移为多工作表 XLSX 工作簿并增加公式注入与精度防护；v1.0.8 修复在线升级候选 App 容器因 `Binds`/有效 `Mounts` 挂载目标重复创建失败并自动回滚的问题；1.0.8 后追加：月报计划支持 1–31 日与短月策略（`UseLastDay`/`SkipMonth`，primary+月末 fallback trigger）及终态版本刷新，CI 运行时切至 Node 24，全部 GitHub Actions 升级至官方 Node24 版本（继续 SHA pin） |
 
 当前自动质量门最近一次通过：
 
-- .NET 格式检查和 Release 构建通过，`302` 个测试通过；
-- 前端 typecheck、lint、build 通过，`20` 个测试通过；
+- .NET 格式检查和 Release 构建通过，`340` 个测试通过；
+- 前端 typecheck、lint、build 通过，`27` 个测试通过；
 - ShellCheck、Actionlint、Critical 镜像扫描、SBOM、changelog、签名、安装和回滚候选测试通过。
 
 正式发布已完成：
 
 - 仓库首个 Tag 和公开 Release 为 `v1.0.0`；
-- `v1.0.8` 为 Latest，修复在线升级在 `replacing_app` 阶段因 `Binds` 与有效挂载目标重复导致候选 App 容器创建失败并回滚（官方 Compose 的 named volume + 只读 bind 即命中）；manifest `minimumUpdaterVersion` 提升到 1.0.8，v1.0.6/v1.0.7 安装先按 deployment.md §11.1 执行 updater-only 手工更新，Updater 到位后从页面把 App 在线升级到 1.0.8；Updater 内部安装 API 的容器替换路径目前由映射层与事务测试覆盖，candidate 真实 Docker smoke 仍只驱动 `update.sh` 部署契约路径，该项验收为已知缺口；
+- `v1.1.0` 为 Latest：月报计划支持每月 1–31 日并新增稳定短月策略（`UseLastDay`/`SkipMonth`；`UseLastDay` 且日期大于 28 时 Quartz primary + 月末 `L` 后备双 trigger 共用同一 durable job，跨触发器互斥执行），报告任务修复快照后投递因共享 `ChangeTracker` 残留导致的 EF 并发卡死并把启动恢复扩展到生成阶段非终态运行，升级进入终态后前端仅刷新一次版本状态，CI 切至 Node 24 且全部 GitHub Actions 升级到官方 Node24 版本（继续 SHA pin）；manifest `minimumUpdaterVersion` 保持 1.0.8（纯 App/前端/DB 功能，无需 updater-only 预升级），`targetMigration` 自动指向 `20260831054933_AddShortMonthStrategy`，在线迁移继续由升级前 SQLite 备份与失败自动回滚保护；
+- `v1.0.8` 修复在线升级在 `replacing_app` 阶段因 `Binds` 与有效挂载目标重复导致候选 App 容器创建失败并回滚（官方 Compose 的 named volume + 只读 bind 即命中）；manifest `minimumUpdaterVersion` 在该版本提升到 1.0.8，v1.0.6/v1.0.7 安装先按 deployment.md §11.1 执行 updater-only 手工更新，Updater 到位后从页面把 App 在线升级到 1.0.8；Updater 内部安装 API 的容器替换路径目前由映射层与事务测试覆盖，candidate 真实 Docker smoke 仍只驱动 `update.sh` 部署契约路径，该项验收为已知缺口；
 - `v1.0.7` 报告导出由 UTF-8 BOM CSV 迁移为多工作表 XLSX 工作簿（邮件附件与限时下载随之统一下发 XLSX），Release workflow 继续 Critical 扫描、SBOM、签名和 attestation 验收；上一版本 `v1.0.6` 以双 digest 模型兼容 Docker 29 containerd image store；
 - `v1.0.6` Docker bundle 为 278,251,937 bytes，checksum 为 `0ff3aed500ee7092eaf7b14d5a8966f0cfaceed753b9d30c20acb2afc1d79aa1`。
 

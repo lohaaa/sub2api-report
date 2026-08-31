@@ -53,7 +53,7 @@ internal sealed class ScheduledReportJob(
         var schedule = await dbContext.ReportSchedules
             .AsNoTracking()
             .SingleAsync(item => item.Id == ReportSchedule.SingletonId, cancellationToken);
-        if (!schedule.Enabled)
+        if (!schedule.Enabled || !ShouldScheduledTriggerExecute(schedule, context))
         {
             return null;
         }
@@ -101,5 +101,27 @@ internal sealed class ScheduledReportJob(
 
             return concurrent;
         }
+    }
+
+    /// <summary>
+    /// Decides whether the fired schedule trigger should create a run. The primary trigger only
+    /// executes when Quartz fired the configured calendar day naturally, while the short-month
+    /// fallback (cron day `L`) only executes in months that have no configured day. This keeps
+    /// day 30/31 months running exactly once even though both triggers fire.
+    /// </summary>
+    internal static bool ShouldScheduledTriggerExecute(
+        ReportSchedule schedule,
+        IJobExecutionContext context)
+    {
+        var fireTime = context.ScheduledFireTimeUtc ?? context.FireTimeUtc;
+        var localDate = TimeZoneInfo
+            .ConvertTime(fireTime, TimeZoneInfo.FindSystemTimeZoneById(schedule.Timezone))
+            .Date;
+        if (context.Trigger.Key.Equals(QuartzReportScheduleCoordinator.ShortMonthFallbackTriggerKey))
+        {
+            return DateTime.DaysInMonth(localDate.Year, localDate.Month) < schedule.DayOfMonth;
+        }
+
+        return localDate.Day == schedule.DayOfMonth;
     }
 }

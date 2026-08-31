@@ -41,6 +41,7 @@ public sealed class DatabaseMigrationTests
         var schedule = await dbContext.ReportSchedules.SingleAsync(CancellationToken.None);
         Assert.False(schedule.Enabled);
         Assert.Equal(1, schedule.DayOfMonth);
+        Assert.Equal(ShortMonthStrategy.UseLastDay, schedule.ShortMonthStrategy);
         Assert.Equal("09:00", schedule.LocalTime);
         Assert.Equal("Asia/Shanghai", schedule.Timezone);
 
@@ -71,6 +72,68 @@ public sealed class DatabaseMigrationTests
         Assert.DoesNotContain("LastTestedAt", channelColumns.Keys);
         Assert.Equal("INTEGER", channelColumns["CreatedAtUnixMilliseconds"]);
         Assert.Equal("INTEGER", channelColumns["LastTestedAtUnixMilliseconds"]);
+    }
+
+    [Fact]
+    public async Task ShortMonthStrategyMigrationExtendsDayRangeAndSeedsDefaultStrategy()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync(CancellationToken.None);
+        var options = new DbContextOptionsBuilder<ReportDbContext>()
+            .UseSqlite(connection)
+            .Options;
+
+        await using var dbContext = new ReportDbContext(options);
+        var migrator = dbContext.GetService<IMigrator>();
+        await migrator.MigrateAsync(SchedulingMigration, CancellationToken.None);
+
+        // The pre-migration schema still restricts the configured day to 1..28.
+        await Assert.ThrowsAnyAsync<Exception>(() =>
+            dbContext.Database.ExecuteSqlInterpolatedAsync(
+                $"UPDATE ReportSchedules SET DayOfMonth = 31 WHERE Id = 1",
+                CancellationToken.None));
+        await dbContext.Database.ExecuteSqlInterpolatedAsync(
+            $"UPDATE ReportSchedules SET DayOfMonth = 21 WHERE Id = 1",
+            CancellationToken.None);
+
+        await MigrateWithUnixBackfillAsync(dbContext);
+
+        var seededStrategy = await dbContext.Database
+            .SqlQueryRaw<string>(
+                "SELECT ShortMonthStrategy AS Value FROM ReportSchedules WHERE Id = 1")
+            .SingleAsync(CancellationToken.None);
+        Assert.Equal("UseLastDay", seededStrategy);
+
+        // The migrated schema preserves the configured day and allows day 31.
+        dbContext.ChangeTracker.Clear();
+        var schedule = await dbContext.ReportSchedules
+            .AsNoTracking()
+            .SingleAsync(CancellationToken.None);
+        Assert.Equal(21, schedule.DayOfMonth);
+        Assert.Equal(ShortMonthStrategy.UseLastDay, schedule.ShortMonthStrategy);
+        await dbContext.Database.ExecuteSqlInterpolatedAsync(
+            $"UPDATE ReportSchedules SET DayOfMonth = 31 WHERE Id = 1",
+            CancellationToken.None);
+
+        // Out-of-range days and unknown strategies stay rejected by the new checks.
+        await Assert.ThrowsAnyAsync<Exception>(() =>
+            dbContext.Database.ExecuteSqlInterpolatedAsync(
+                $"UPDATE ReportSchedules SET DayOfMonth = 32 WHERE Id = 1",
+                CancellationToken.None));
+        await Assert.ThrowsAnyAsync<Exception>(() =>
+            dbContext.Database.ExecuteSqlInterpolatedAsync(
+                $"UPDATE ReportSchedules SET DayOfMonth = 0 WHERE Id = 1",
+                CancellationToken.None));
+        await Assert.ThrowsAnyAsync<Exception>(() =>
+            dbContext.Database.ExecuteSqlInterpolatedAsync(
+                $"UPDATE ReportSchedules SET ShortMonthStrategy = 'DeferMonth' WHERE Id = 1",
+                CancellationToken.None));
+        var tableSql = await dbContext.Database
+            .SqlQueryRaw<string>(
+                "SELECT sql AS Value FROM sqlite_master WHERE type = 'table' AND name = 'ReportSchedules'")
+            .SingleAsync(CancellationToken.None);
+        Assert.Contains("CK_ReportSchedules_DayOfMonth", tableSql, StringComparison.Ordinal);
+        Assert.Contains("CK_ReportSchedules_ShortMonthStrategy", tableSql, StringComparison.Ordinal);
     }
 
     [Fact]

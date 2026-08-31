@@ -42,7 +42,8 @@ public sealed class DeliveryPart
     public static DeliveryPart Create(
         int partIndex,
         int partCount,
-        string payloadHash)
+        string payloadHash,
+        Guid? deliveryId = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(partIndex, nameof(partIndex));
         ArgumentOutOfRangeException.ThrowIfLessThan(partCount, 1, nameof(partCount));
@@ -57,6 +58,7 @@ public sealed class DeliveryPart
         return new DeliveryPart
         {
             Id = Guid.NewGuid(),
+            DeliveryId = deliveryId ?? Guid.Empty,
             PartIndex = partIndex,
             PartCount = partCount,
             PayloadHash = payloadHash,

@@ -8,6 +8,27 @@
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-08-31
+
+### Added
+
+- 月报计划支持每月 1–31 日，并新增稳定的短月策略 `ShortMonthStrategy`：`UseLastDay`（默认，当月无该日期时在最后一天执行）与 `SkipMonth`（当月跳过）。Domain/Application/API/Infrastructure 全链路透传；API 请求中的策略字段为可选，旧前端省略时保留已存策略或使用默认值，不会返回 400。前端日期改为 Select（1–31），大于 28 日时提供"短月取月末"/"跳过该月"切换并说明示例行为，小于等于 28 日时隐藏控件但保留已存值。
+
+### Changed
+
+- Quartz 调度可靠执行短月策略：仅 `UseLastDay` 且日期大于 28 时额外创建一个月末 (`L`) 后备 trigger 与指定日 primary trigger 共用同一 durable job（FireAndProceed、时区、RequestRecovery 不变）；job 按 trigger key 与 `ScheduledFireTimeUtc` 判定执行，指定日恰为月末时仅 primary 执行一次。协调器 Apply 清理多余 trigger，投影 NextRunAt 取全部有效 trigger 最小值，同步验证包含数量/cron/时区/misfire/策略。
+- 前端计划页"立即运行"降低视觉层级（outline），成功提示改为"已保存"（移除 revision 技术文案），同步错误显示友好文案而非裸 code，启用渠道计数改为指向 `/channels` 的链接；保存按钮位于全部可编辑字段之后。
+- 升级操作进入终态后前端仅触发一次 `updates/status`、`updates/plan`、`system/version` 刷新（不中途 reload、不自动 reload）；`succeeded`/`rolled_back`/`failed` 后版本状态保持一致。
+- CI 构建运行时从 Node.js 22 切换到 Node.js 24（LTS，Active LTS，2026-10 起为唯一非 EOL LTS），Dockerfile 前端构建镜像同步为 `node:24-alpine`。
+
+### Fixed
+
+- 修复报告任务在快照持久化后永久无法进入投递的问题（线上事故：任务永久停留在 Rendering、快照非空但投递记录为空）。根因是共享 DbContext 的跨阶段变更跟踪残留：对已跟踪（非 Added）的执行记录用集合导航添加新投递图时，EF Core 会把新的 `DeliveryRecord`/`DeliveryPart` 解析为 Modified，保存时执行 UPDATE 命中 0 行并抛出 `DbUpdateConcurrencyException`，任务执行器的失败收敛与审计写入还会重复冲刷同一污染批次。现在生成快照成功进入投递前清理阶段边界的 ChangeTracker 并让投递按 runId 重新加载执行记录；新投递与重试新增分片改为显式主外键加 `DbSet.Add` 追踪；失败收敛改为清理后按主键重读、未终态才落 Failed，对并发提供一次有限刷新重试，仍失败仅告警并由启动恢复（Queued/Collecting/Rendering 收敛为 Failed 且可重试，Delivering 保留给 Quartz 恢复）。新增真实 SQLite 集成测试覆盖 RunNow 全流程（2 个启用渠道→快照→投递→Succeeded）、并发 Revision 写入共存、投递阶段异常后终态可重试且快照关联保留，以及跟踪模式回归（集合导航解析为 Modified 会复现冲突、显式外键 DbSet.Add 状态为 Added 且落库成功）。
+- 升级构建工具链：所有使用弃用 Node20 运行时的 GitHub Actions 升级到官方最新稳定主版本（Node24）：checkout v4→v7.0.1、setup-dotnet v4→v6.0.0、setup-node v4→v7.0.0、upload-artifact v4→v7.0.1、attest-build-provenance v2→v4.2.2、pnpm/action-setup v4→v6.0.10、docker/setup-buildx-action v3→v4.3.0、docker/build-push-action v6→v7.3.0、anchore/sbom-action v0.22.2→v0.24.2；全部继续 commit SHA pin。trivy-action v0.36.0 为 composite（不依赖 Node 运行时）保持不变。
+
+### Migration
+
+- 新增数据库迁移 `AddShortMonthStrategy`：`ReportSchedules` 增加 `ShortMonthStrategy` 列（默认 `UseLastDay`）、`DayOfMonth` check 改为 1–31、新增策略 check 约束；存量数据自动回填 `UseLastDay`。
 ## [1.0.8] - 2026-08-31
 
 ### Fixed
@@ -114,7 +135,8 @@
 - App 容器不挂载 Docker Socket；Updater 通过 instance/container allowlist、固定 API 和 non-root Socket group 隔离高权限操作。
 - 增加公开安全政策，并将未修复漏洞引导至 GitHub Private Vulnerability Reporting。
 
-[Unreleased]: https://github.com/lohaaa/sub2api-report/compare/v1.0.8...HEAD
+[Unreleased]: https://github.com/lohaaa/sub2api-report/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/lohaaa/sub2api-report/compare/v1.0.8...v1.1.0
 [1.0.8]: https://github.com/lohaaa/sub2api-report/compare/v1.0.7...v1.0.8
 [1.0.7]: https://github.com/lohaaa/sub2api-report/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/lohaaa/sub2api-report/compare/v1.0.5...v1.0.6

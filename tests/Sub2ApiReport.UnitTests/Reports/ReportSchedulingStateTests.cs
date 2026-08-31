@@ -13,14 +13,16 @@ public sealed class ReportSchedulingStateTests
 
         Assert.False(schedule.Enabled);
         Assert.Equal(1, schedule.DayOfMonth);
+        Assert.Equal(ShortMonthStrategy.UseLastDay, schedule.ShortMonthStrategy);
         Assert.Equal("09:00", schedule.LocalTime);
         Assert.Equal("Asia/Shanghai", schedule.Timezone);
         Assert.Equal(1, schedule.Revision);
 
-        schedule.Update(true, 18, "07:05", "UTC", null, Now);
+        schedule.Update(true, 18, ShortMonthStrategy.SkipMonth, "07:05", "UTC", null, Now);
 
         Assert.True(schedule.Enabled);
         Assert.Equal(18, schedule.DayOfMonth);
+        Assert.Equal(ShortMonthStrategy.SkipMonth, schedule.ShortMonthStrategy);
         Assert.Equal("07:05", schedule.LocalTime);
         Assert.Equal("UTC", schedule.Timezone);
         Assert.Equal(2, schedule.Revision);
@@ -29,13 +31,53 @@ public sealed class ReportSchedulingStateTests
 
     [Theory]
     [InlineData(0)]
-    [InlineData(29)]
-    public void ReportScheduleRejectsDaysThatCannotOccurEveryMonth(int dayOfMonth)
+    [InlineData(32)]
+    [InlineData(-1)]
+    public void ReportScheduleRejectsDaysOutsideTheCalendarRange(int dayOfMonth)
     {
         var schedule = ReportSchedule.CreateDefault();
 
         Assert.Throws<ArgumentOutOfRangeException>(() =>
-            schedule.Update(true, dayOfMonth, "09:00", "UTC", null, Now));
+            schedule.Update(true, dayOfMonth, ShortMonthStrategy.UseLastDay, "09:00", "UTC", null, Now));
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(28)]
+    [InlineData(29)]
+    [InlineData(30)]
+    [InlineData(31)]
+    public void ReportScheduleAcceptsEveryOccurringCalendarDay(int dayOfMonth)
+    {
+        var schedule = ReportSchedule.CreateDefault();
+
+        schedule.Update(true, dayOfMonth, ShortMonthStrategy.UseLastDay, "09:00", "UTC", null, Now);
+
+        Assert.Equal(dayOfMonth, schedule.DayOfMonth);
+        Assert.Equal(ShortMonthStrategy.UseLastDay, schedule.ShortMonthStrategy);
+    }
+
+    [Theory]
+    [InlineData(ShortMonthStrategy.UseLastDay)]
+    [InlineData(ShortMonthStrategy.SkipMonth)]
+    public void RoundDownTo28KeepsBothStrategiesEquivalentForAlwaysOccurringDays(
+        ShortMonthStrategy strategy)
+    {
+        var schedule = ReportSchedule.CreateDefault();
+
+        schedule.Update(true, 28, strategy, "09:00", "UTC", null, Now);
+
+        Assert.Equal(28, schedule.DayOfMonth);
+        Assert.Equal(strategy, schedule.ShortMonthStrategy);
+    }
+
+    [Fact]
+    public void ReportScheduleRejectsUnknownShortMonthStrategy()
+    {
+        var schedule = ReportSchedule.CreateDefault();
+
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            schedule.Update(true, 31, (ShortMonthStrategy)99, "09:00", "UTC", null, Now));
     }
 
     [Theory]
@@ -47,7 +89,7 @@ public sealed class ReportSchedulingStateTests
         var schedule = ReportSchedule.CreateDefault();
 
         Assert.Throws<ArgumentException>(() =>
-            schedule.Update(true, 1, localTime, "UTC", null, Now));
+            schedule.Update(true, 1, ShortMonthStrategy.UseLastDay, localTime, "UTC", null, Now));
     }
 
     [Fact]

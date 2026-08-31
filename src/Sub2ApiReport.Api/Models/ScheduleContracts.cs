@@ -10,9 +10,15 @@ public sealed record UpdateReportScheduleRequest
     /// <summary>Gets whether automatic monthly execution is enabled.</summary>
     public required bool Enabled { get; init; }
 
-    /// <summary>Gets the monthly day, limited to 1 through 28.</summary>
-    [Range(1, 28)]
+    /// <summary>Gets the monthly day, limited to 1 through 31.</summary>
+    [Range(1, 31)]
     public required int DayOfMonth { get; init; }
+
+    /// <summary>
+    /// Gets the behavior in months shorter than the configured day; null keeps the stored
+    /// strategy (or the default) so older clients that omit the field remain compatible.
+    /// </summary>
+    public ShortMonthStrategy? ShortMonthStrategy { get; init; }
 
     /// <summary>Gets the wall-clock execution time in HH:mm format.</summary>
     [Required, RegularExpression("^(?:[01]\\d|2[0-3]):[0-5]\\d$")]
@@ -50,6 +56,7 @@ public sealed record ReportWindowSpecResponse(
 public sealed record ReportScheduleResponse(
     bool Enabled,
     int DayOfMonth,
+    ShortMonthStrategy ShortMonthStrategy,
     string LocalTime,
     string Timezone,
     IReadOnlyList<ReportWindowSpecResponse> Windows,

@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Logging;
 using Quartz;
+using Quartz.Impl.Matchers;
 using Sub2ApiReport.Application.Scheduling;
+using Sub2ApiReport.Domain.Reports;
 
 namespace Sub2ApiReport.Infrastructure.Scheduling;
 
@@ -10,6 +12,10 @@ internal sealed class QuartzReportScheduleCoordinator(
 {
     internal static readonly JobKey ReportJobKey = new("monthly-report", "reports");
     internal static readonly TriggerKey ScheduleTriggerKey = new("monthly-report-schedule", "reports");
+    internal static readonly TriggerKey ShortMonthFallbackTriggerKey = new(
+        "monthly-report-short-month",
+        "reports");
+    internal const string TriggerGroup = "reports";
     internal const string RunIdKey = "reportRunId";
 
     public async Task<ReportScheduleProjection> ApplyAsync(
@@ -20,24 +26,23 @@ internal sealed class QuartzReportScheduleCoordinator(
         {
             var scheduler = await schedulerFactory.GetScheduler(cancellationToken);
             await EnsureJobAsync(scheduler, cancellationToken);
-            if (!schedule.Enabled)
+            var desiredTriggers = BuildDesiredTriggers(schedule);
+            var managedKeys = (await scheduler.GetTriggerKeys(
+                GroupMatcher<TriggerKey>.GroupEquals(TriggerGroup),
+                cancellationToken)).ToList();
+            foreach (var staleKey in managedKeys.Where(key =>
+                desiredTriggers.All(trigger => !trigger.Key.Equals(key))))
             {
-                _ = await scheduler.UnscheduleJob(ScheduleTriggerKey, cancellationToken);
-                return new ReportScheduleProjection(null, true, null);
+                _ = await scheduler.UnscheduleJob(staleKey, cancellationToken);
             }
 
-            var trigger = BuildScheduleTrigger(schedule);
-            DateTimeOffset? nextRunAt;
-            if (await scheduler.CheckExists(ScheduleTriggerKey, cancellationToken))
+            DateTimeOffset? nextRunAt = null;
+            foreach (var trigger in desiredTriggers)
             {
-                nextRunAt = await scheduler.RescheduleJob(
-                    ScheduleTriggerKey,
-                    trigger,
-                    cancellationToken);
-            }
-            else
-            {
-                nextRunAt = await scheduler.ScheduleJob(trigger, cancellationToken);
+                var triggerNextRunAt = await scheduler.CheckExists(trigger.Key, cancellationToken)
+                    ? await scheduler.RescheduleJob(trigger.Key, trigger, cancellationToken)
+                    : await scheduler.ScheduleJob(trigger, cancellationToken);
+                nextRunAt = Min(nextRunAt, triggerNextRunAt);
             }
 
             return new ReportScheduleProjection(nextRunAt, true, null);
@@ -56,20 +61,53 @@ internal sealed class QuartzReportScheduleCoordinator(
         try
         {
             var scheduler = await schedulerFactory.GetScheduler(cancellationToken);
-            var trigger = await scheduler.GetTrigger(ScheduleTriggerKey, cancellationToken);
+            var managedTriggers = await scheduler.GetTriggersOfJob(ReportJobKey, cancellationToken);
             if (!schedule.Enabled)
             {
-                return trigger is null
+                return managedTriggers.Count == 0
                     ? new ReportScheduleProjection(null, true, null)
                     : new ReportScheduleProjection(
-                        trigger.GetNextFireTimeUtc(),
+                        MinNextFireTime(managedTriggers),
                         false,
                         "disabled_trigger_present");
             }
 
-            return trigger is null
-                ? new ReportScheduleProjection(null, false, "trigger_missing")
-                : new ReportScheduleProjection(trigger.GetNextFireTimeUtc(), true, null);
+            var desired = BuildDesiredTriggers(schedule).ToList();
+            var desiredKeys = desired.Select(trigger => trigger.Key).ToList();
+            var activeTriggers = managedTriggers
+                .Where(trigger => desiredKeys.Any(desiredKey => desiredKey.Equals(trigger.Key)))
+                .ToList();
+            var unexpectedTriggers = managedTriggers
+                .Where(trigger => desiredKeys.All(desiredKey => !desiredKey.Equals(trigger.Key)))
+                .ToList();
+            if (activeTriggers.Count != desired.Count || unexpectedTriggers.Count > 0)
+            {
+                return new ReportScheduleProjection(
+                    MinNextFireTime(activeTriggers),
+                    false,
+                    "trigger_set_mismatch");
+            }
+
+            foreach (var (expected, actual) in desired
+                .Select(expectedTrigger => (expectedTrigger, actual: activeTriggers.Single(trigger =>
+                    expectedTrigger.Key.Equals(trigger.Key)))))
+            {
+                if (actual is not ICronTrigger cronTrigger
+                    || !string.Equals(
+                        cronTrigger.CronExpressionString,
+                        ((ICronTrigger)expected).CronExpressionString,
+                        StringComparison.Ordinal)
+                    || !Equals(cronTrigger.TimeZone, ((ICronTrigger)expected).TimeZone)
+                    || actual.MisfireInstruction != expected.MisfireInstruction)
+                {
+                    return new ReportScheduleProjection(
+                        MinNextFireTime(activeTriggers),
+                        false,
+                        "trigger_mismatch");
+                }
+            }
+
+            return new ReportScheduleProjection(MinNextFireTime(activeTriggers), true, null);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -97,19 +135,58 @@ internal sealed class QuartzReportScheduleCoordinator(
         await scheduler.ScheduleJob(trigger, cancellationToken);
     }
 
-    private static ITrigger BuildScheduleTrigger(ReportScheduleSnapshot schedule)
+    internal static IReadOnlyList<ITrigger> BuildDesiredTriggers(
+        ReportScheduleSnapshot schedule)
     {
-        var localTime = Domain.Reports.ReportSchedule.ParseLocalTime(schedule.LocalTime);
-        var cron = FormattableString.Invariant(
-            $"0 {localTime.Minute} {localTime.Hour} {schedule.DayOfMonth} * ?");
+        if (!schedule.Enabled)
+        {
+            return [];
+        }
+
+        var localTime = ReportSchedule.ParseLocalTime(schedule.LocalTime);
         var timezone = TimeZoneInfo.FindSystemTimeZoneById(schedule.Timezone);
-        return TriggerBuilder.Create()
-            .WithIdentity(ScheduleTriggerKey)
+        var primaryCron = FormattableString.Invariant(
+            $"0 {localTime.Minute} {localTime.Hour} {schedule.DayOfMonth} * ?");
+        var primary = BuildCronTrigger(ScheduleTriggerKey, primaryCron, timezone);
+        if (schedule.DayOfMonth <= 28 || schedule.ShortMonthStrategy == ShortMonthStrategy.SkipMonth)
+        {
+            return [primary];
+        }
+
+        var fallbackCron = FormattableString.Invariant(
+            $"0 {localTime.Minute} {localTime.Hour} L * ?");
+        return [primary, BuildCronTrigger(ShortMonthFallbackTriggerKey, fallbackCron, timezone)];
+    }
+
+    private static ITrigger BuildCronTrigger(
+        TriggerKey key,
+        string cron,
+        TimeZoneInfo timezone) => TriggerBuilder.Create()
+            .WithIdentity(key)
             .ForJob(ReportJobKey)
             .WithCronSchedule(cron, builder => builder
                 .InTimeZone(timezone)
                 .WithMisfireHandlingInstructionFireAndProceed())
             .Build();
+
+    private static DateTimeOffset? Min(DateTimeOffset? left, DateTimeOffset? right) => (left, right) switch
+    {
+        (null, null) => null,
+        (null, _) => right,
+        (_, null) => left,
+        (_, _) => left < right ? left : right,
+    };
+
+    private static DateTimeOffset? MinNextFireTime(
+        IReadOnlyCollection<ITrigger> triggers)
+    {
+        DateTimeOffset? nextRunAt = null;
+        foreach (var trigger in triggers)
+        {
+            nextRunAt = Min(nextRunAt, trigger.GetNextFireTimeUtc());
+        }
+
+        return nextRunAt;
     }
 
     private static async Task EnsureJobAsync(

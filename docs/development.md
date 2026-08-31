@@ -3,7 +3,7 @@
 ## 前置条件
 
 - .NET SDK 10（具体版本由 `global.json` 控制，只需大版本为 10）；
-- Node.js 22；
+- Node.js 24（LTS）；
 - pnpm 11.17.0。
 
 Docker 仅用于验证容器部署，本地前后端开发不依赖 Docker。

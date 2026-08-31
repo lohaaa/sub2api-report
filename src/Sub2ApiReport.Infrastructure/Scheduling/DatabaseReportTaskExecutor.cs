@@ -38,24 +38,30 @@ internal sealed class DatabaseReportTaskExecutor(
             await deliveryService.DeliverTaskAsync(
                 new DeliverReportTaskCommand(run.Id, true),
                 cancellationToken);
-            await WriteAuditAsync(run, cancellationToken);
+            await WriteAuditAsync(run.Id, cancellationToken);
             return;
         }
 
         if (recovering && run.Status is ReportRunStatus.Collecting or ReportRunStatus.Rendering
             or ReportRunStatus.Running)
         {
-            run.Fail("interrupted", "任务在应用重启前未完成。", timeProvider.GetUtcNow());
-            await dbContext.SaveChangesAsync(CancellationToken.None);
-            await WriteAuditAsync(run, CancellationToken.None);
+            await FailIfActiveAsync(
+                run.Id,
+                "interrupted",
+                "任务在应用重启前未完成。",
+                CancellationToken.None);
+            await WriteAuditAsync(run.Id, CancellationToken.None);
             return;
         }
 
         if (run.Status != ReportRunStatus.Queued)
         {
-            run.Fail("invalid_state", null, timeProvider.GetUtcNow());
-            await dbContext.SaveChangesAsync(CancellationToken.None);
-            await WriteAuditAsync(run, CancellationToken.None);
+            await FailIfActiveAsync(
+                run.Id,
+                "invalid_state",
+                null,
+                CancellationToken.None);
+            await WriteAuditAsync(run.Id, CancellationToken.None);
             return;
         }
 
@@ -78,6 +84,10 @@ internal sealed class DatabaseReportTaskExecutor(
             }
             else
             {
+                // 生成阶段的所有变更已在服务内部提交。阶段边界清理共享 ChangeTracker，
+                // 让投递阶段按 runId 重新加载当前状态，避免快照阶段（同步/渲染/关联快照）
+                // 期间的跟踪残留混入投递的 SaveChanges 批次。
+                dbContext.ChangeTracker.Clear();
                 await deliveryService.DeliverTaskAsync(
                     new DeliverReportTaskCommand(run.Id, false),
                     cancellationToken);
@@ -85,20 +95,20 @@ internal sealed class DatabaseReportTaskExecutor(
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            await FailIfActiveAsync(run, "cancelled", "任务已取消。", CancellationToken.None);
+            await FailIfActiveAsync(run.Id, "cancelled", "任务已取消。", CancellationToken.None);
             throw;
         }
         catch (Exception exception)
         {
             ReportTaskLog.Failed(logger, exception, run.Id);
             await FailIfActiveAsync(
-                run,
+                run.Id,
                 DescribeErrorCode(exception),
                 DescribeErrorMessage(exception),
                 CancellationToken.None);
         }
 
-        await WriteAuditAsync(run, CancellationToken.None);
+        await WriteAuditAsync(run.Id, CancellationToken.None);
     }
 
     private async Task<ReportDocument> ResolveReportAsync(
@@ -159,27 +169,67 @@ internal sealed class DatabaseReportTaskExecutor(
     }
 
     private async Task FailIfActiveAsync(
-        ReportRun run,
+        Guid runId,
         string errorCode,
         string? errorMessage,
         CancellationToken cancellationToken)
     {
-        if (!run.IsTerminal)
+        for (var attempt = 0; ; attempt++)
         {
-            run.Fail(errorCode, errorMessage, timeProvider.GetUtcNow());
-            await dbContext.SaveChangesAsync(cancellationToken);
+            try
+            {
+                // 失败收敛必须完全脱离原跟踪实体：先清空 ChangeTracker，再按主键重新加载。
+                // 任何残留的 Modified 实体（含真实并发冲突）都会让终态写入反复失败。
+                dbContext.ChangeTracker.Clear();
+                var run = await dbContext.ReportRuns
+                    .SingleOrDefaultAsync(item => item.Id == runId, cancellationToken);
+                if (run is null || run.IsTerminal)
+                {
+                    return;
+                }
+
+                run.Fail(errorCode, errorMessage, timeProvider.GetUtcNow());
+                await dbContext.SaveChangesAsync(CancellationToken.None);
+                return;
+            }
+            catch (DbUpdateConcurrencyException conflictException) when (attempt < 1)
+            {
+                // 对真实竞争做一次有限重试：重新加载后仍活跃才落终态。
+                ReportTaskLog.FailureStateRetrying(logger, conflictException, runId);
+            }
+            catch (Exception saveException)
+            {
+                // 保存终态失败时绝不能再次拋出：这里被调用时原本已有一份真实异常，
+                // 二次异常会掩护原始错误并让 Quartz 日志只剩保存错误。
+                // 终态未写入的运行由启动恢复（ReportScheduleBootstrapService）收敛。
+                ReportTaskLog.FailedToPersist(logger, saveException, runId);
+                return;
+            }
         }
     }
 
-    private Task WriteAuditAsync(ReportRun run, CancellationToken cancellationToken) =>
-        auditWriter.WriteAsync(
+    private async Task WriteAuditAsync(Guid runId, CancellationToken cancellationToken)
+    {
+        // 失败收敛可能清理过 ChangeTracker；这里按主键重读最新状态，避免冲刷任何跨阶段残留。
+        var run = await dbContext.ReportRuns
+            .AsNoTracking()
+            .Where(item => item.Id == runId)
+            .Select(item => new { item.Trigger, item.Status, item.Attempt })
+            .SingleOrDefaultAsync(cancellationToken);
+        if (run is null)
+        {
+            return;
+        }
+
+        await auditWriter.WriteAsync(
             "system",
             "report.schedule.execute",
-            run.Id.ToString("D"),
+            runId.ToString("D"),
             run.Status.ToString(),
             null,
             $"{{\"trigger\":\"{run.Trigger}\",\"attempt\":{run.Attempt}}}",
             cancellationToken);
+    }
 
     private static ReportTrigger MapTrigger(ReportRunTrigger trigger) => trigger switch
     {
@@ -223,4 +273,16 @@ internal static partial class ReportTaskLog
         Level = LogLevel.Error,
         Message = "Report task {ReportRunId} failed")]
     public static partial void Failed(ILogger logger, Exception exception, Guid reportRunId);
+
+    [LoggerMessage(
+        EventId = 41,
+        Level = LogLevel.Warning,
+        Message = "Could not persist failure state for report task {ReportRunId}")]
+    public static partial void FailedToPersist(ILogger logger, Exception exception, Guid reportRunId);
+
+    [LoggerMessage(
+        EventId = 42,
+        Level = LogLevel.Information,
+        Message = "Retrying failure persistence for report task {ReportRunId} after concurrency conflict")]
+    public static partial void FailureStateRetrying(ILogger logger, Exception exception, Guid reportRunId);
 }

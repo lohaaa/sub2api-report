@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Sub2ApiReport.Api.Models;
 using Sub2ApiReport.Application.Security;
+using Sub2ApiReport.Domain.Notifications;
 using Sub2ApiReport.Domain.Reports;
 using Sub2ApiReport.Infrastructure.Persistence;
 
@@ -19,6 +20,77 @@ public sealed class M6SchedulingTests
     {
         Converters = { new JsonStringEnumConverter() },
     };
+
+    [Fact]
+    public async Task ScheduleUpdateWithoutShortMonthStrategyKeepsStoredStrategy()
+    {
+        await using var factory = new ApiWebApplicationFactory();
+        await InitializeAsync(factory);
+        using var client = CreateClient(factory);
+        await LoginAsync(client);
+
+        var original = Assert.IsType<ReportScheduleResponse>(
+            await client.GetFromJsonAsync<ReportScheduleResponse>("/api/v1/schedule", JsonOptions));
+        Assert.Equal(ShortMonthStrategy.UseLastDay, original.ShortMonthStrategy);
+
+        // Older SPA payloads omit the strategy field; saving must not be rejected.
+        using var legacyResponse = await SendJsonAsync(
+            client,
+            HttpMethod.Put,
+            "/api/v1/schedule",
+            new
+            {
+                enabled = true,
+                dayOfMonth = 12,
+                localTime = "10:30",
+                timezone = "UTC",
+                revision = original.Revision,
+            });
+        Assert.Equal(HttpStatusCode.OK, legacyResponse.StatusCode);
+        var legacy = Assert.IsType<ReportScheduleResponse>(
+            await legacyResponse.Content.ReadFromJsonAsync<ReportScheduleResponse>(JsonOptions));
+        Assert.Equal(ShortMonthStrategy.UseLastDay, legacy.ShortMonthStrategy);
+        Assert.True(legacy.Synchronized);
+        Assert.NotNull(legacy.NextRunAt);
+
+        // A newer client switches the strategy on a day beyond the short months.
+        using var strategyResponse = await SendJsonAsync(
+            client,
+            HttpMethod.Put,
+            "/api/v1/schedule",
+            new
+            {
+                enabled = true,
+                dayOfMonth = 31,
+                shortMonthStrategy = "SkipMonth",
+                localTime = "08:00",
+                timezone = "UTC",
+                revision = legacy.Revision,
+            });
+        Assert.Equal(HttpStatusCode.OK, strategyResponse.StatusCode);
+        var withStrategy = Assert.IsType<ReportScheduleResponse>(
+            await strategyResponse.Content.ReadFromJsonAsync<ReportScheduleResponse>(JsonOptions));
+        Assert.Equal(ShortMonthStrategy.SkipMonth, withStrategy.ShortMonthStrategy);
+        Assert.Equal(31, withStrategy.DayOfMonth);
+
+        // A follow-up legacy save keeps the previously stored strategy.
+        using var secondLegacyResponse = await SendJsonAsync(
+            client,
+            HttpMethod.Put,
+            "/api/v1/schedule",
+            new
+            {
+                enabled = false,
+                dayOfMonth = 3,
+                localTime = "10:30",
+                timezone = "UTC",
+                revision = withStrategy.Revision,
+            });
+        Assert.Equal(HttpStatusCode.OK, secondLegacyResponse.StatusCode);
+        var keptStrategy = Assert.IsType<ReportScheduleResponse>(
+            await secondLegacyResponse.Content.ReadFromJsonAsync<ReportScheduleResponse>(JsonOptions));
+        Assert.Equal(ShortMonthStrategy.SkipMonth, keptStrategy.ShortMonthStrategy);
+    }
 
     [Fact]
     public async Task ScheduleUpdateSynchronizesPersistentTriggerAndRejectsStaleRevision()
@@ -169,6 +241,153 @@ public sealed class M6SchedulingTests
     }
 
     [Fact]
+    public async Task StartupFailsTaskRunsInterruptedDuringGeneration()
+    {
+        var databasePath = Path.Combine(
+            Path.GetTempPath(),
+            $"sub2api-report-m6-task-recovery-{Guid.NewGuid():N}.db");
+        try
+        {
+            var renderingRunId = Guid.Empty;
+            var queuedRunId = Guid.Empty;
+            var deliveringRunId = Guid.Empty;
+            await using (var firstFactory = new ApiWebApplicationFactory(
+                databasePath,
+                deleteDatabaseOnDispose: false))
+            {
+                await using var scope = firstFactory.Services.CreateAsyncScope();
+                var dbContext = scope.ServiceProvider.GetRequiredService<ReportDbContext>();
+                var now = DateTimeOffset.UtcNow;
+
+                // 与用户事故一致的残留态：快照已持久化（ReportSnapshotId 非空），
+                // 但任务从未离开“生成快照”阶段。
+                var renderingRun = ReportRun.QueueManualScheduled(
+                    ReportSchedule.SingletonId,
+                    1,
+                    new DateOnly(2026, 8, 30),
+                    "UTC",
+                    null,
+                    null,
+                    now);
+                renderingRun.BeginCollecting(now);
+                renderingRun.BeginRendering(now);
+                var snapshot = ReportSnapshot.Create(
+                    Guid.NewGuid(),
+                    ReportStatus.Complete,
+                    ReportTrigger.ManualScheduled,
+                    new DateOnly(2026, 8, 30),
+                    "UTC",
+                    1,
+                    now,
+                    1,
+                    1,
+                    0,
+                    0m,
+                    0m,
+                    null,
+                    "{\"schemaVersion\":1}");
+                dbContext.ReportSnapshots.Add(snapshot);
+                renderingRun.AttachSnapshot(snapshot.Id);
+                dbContext.ReportRuns.Add(renderingRun);
+
+                var queuedRun = ReportRun.QueueManualScheduled(
+                    ReportSchedule.SingletonId,
+                    1,
+                    new DateOnly(2026, 8, 30),
+                    "UTC",
+                    null,
+                    null,
+                    now);
+                dbContext.ReportRuns.Add(queuedRun);
+
+                // Delivering 交由 Quartz 恢复路径，启动收敛必须保留它。
+                var deliveringRun = ReportRun.QueueManualScheduled(
+                    ReportSchedule.SingletonId,
+                    1,
+                    new DateOnly(2026, 8, 30),
+                    "UTC",
+                    null,
+                    null,
+                    now);
+                deliveringRun.BeginCollecting(now);
+                deliveringRun.BeginRendering(now);
+                deliveringRun.AttachSnapshot(snapshot.Id);
+
+                var channel = NotificationChannel.Create(
+                    NotificationChannelType.Email,
+                    "邮件渠道",
+                    true,
+                    new ChannelSettings.Email(
+                        "smtp.example.com",
+                        587,
+                        SmtpSecurityMode.StartTls,
+                        null,
+                        "reports@example.com",
+                        "Sub2API Report",
+                        ["to@example.com"],
+                        []),
+                    new ChannelSecretCiphertexts(
+                        SmtpPasswordCiphertext: "encrypted-password",
+                        SmtpPasswordSuffix: "ord1"),
+                    now);
+                dbContext.NotificationChannels.Add(channel);
+
+                var delivery = DeliveryRecord.Create(
+                    channel.Id,
+                    NotificationChannelType.Email,
+                    channel.Name,
+                    "payload-hash",
+                    [DeliveryPart.Create(0, 1, "part-hash")]);
+                delivery.MarkSending();
+                deliveringRun.Deliveries.Add(delivery);
+                deliveringRun.BeginDelivering(now);
+                dbContext.ReportRuns.Add(deliveringRun);
+
+                await dbContext.SaveChangesAsync();
+                renderingRunId = renderingRun.Id;
+                queuedRunId = queuedRun.Id;
+                deliveringRunId = deliveringRun.Id;
+            }
+
+            await using var secondFactory = new ApiWebApplicationFactory(
+                databasePath,
+                deleteDatabaseOnDispose: false);
+            await using var recoveryScope = secondFactory.Services.CreateAsyncScope();
+            var recoveredDbContext = recoveryScope.ServiceProvider.GetRequiredService<ReportDbContext>();
+
+            var recoveredRendering = await recoveredDbContext.ReportRuns
+                .AsNoTracking()
+                .SingleAsync(item => item.Id == renderingRunId);
+            Assert.Equal(ReportRunStatus.Failed, recoveredRendering.Status);
+            Assert.Equal("interrupted", recoveredRendering.ErrorCode);
+            Assert.Equal("任务在应用重启前未完成。", recoveredRendering.ErrorMessage);
+            Assert.NotNull(recoveredRendering.CompletedAt);
+            Assert.True(recoveredRendering.IsTaskRetryable);
+
+            var recoveredQueued = await recoveredDbContext.ReportRuns
+                .AsNoTracking()
+                .SingleAsync(item => item.Id == queuedRunId);
+            Assert.Equal(ReportRunStatus.Failed, recoveredQueued.Status);
+            Assert.Equal("interrupted", recoveredQueued.ErrorCode);
+
+            var recoveredDelivering = await recoveredDbContext.ReportRuns
+                .Include(item => item.Deliveries)
+                .SingleAsync(item => item.Id == deliveringRunId);
+            Assert.Equal(ReportRunStatus.Delivering, recoveredDelivering.Status);
+            Assert.NotEqual("interrupted", recoveredDelivering.ErrorCode);
+            Assert.All(recoveredDelivering.Deliveries, delivery =>
+                Assert.Equal(DeliveryStatus.Sending, delivery.Status));
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            File.Delete(databasePath);
+            File.Delete($"{databasePath}-shm");
+            File.Delete($"{databasePath}-wal");
+        }
+    }
+
+    [Fact]
     public async Task ScheduledIdempotencyKeyIsEnforcedBySqlite()
     {
         await using var factory = new ApiWebApplicationFactory();
@@ -205,7 +424,9 @@ public sealed class M6SchedulingTests
         HttpClient client,
         Guid runId)
     {
-        for (var attempt = 0; attempt < 100; attempt++)
+        // Poll with a generous deadline (300 x 100 ms) so slow CI never turns into a flaky
+        // timeout; genuine failures still exit with the timeout exception below.
+        for (var attempt = 0; attempt < 300; attempt++)
         {
             var page = Assert.IsType<ReportTaskRunPageResponse>(
                 await client.GetFromJsonAsync<ReportTaskRunPageResponse>(

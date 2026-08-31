@@ -8,7 +8,7 @@ import {
   PlayIcon,
   RotateCcwIcon,
 } from "lucide-react";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { z } from "zod";
@@ -16,6 +16,15 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Dialog,
   DialogContent,
@@ -64,15 +73,38 @@ import {
   type ReportTaskStatus,
   type ReportTaskTrigger,
   type ReportWindowSpec,
+  type ShortMonthStrategy,
 } from "@/lib/api-client";
+
+const shortMonthStrategies = ["UseLastDay", "SkipMonth"] as const;
 
 const scheduleSchema = z.object({
   enabled: z.boolean(),
-  dayOfMonth: z.number().int().min(1, "日期不能小于 1").max(28, "日期不能大于 28"),
+  dayOfMonth: z.number().int().min(1, "日期不能小于 1").max(31, "日期不能大于 31"),
+  shortMonthStrategy: z.enum(shortMonthStrategies),
   localTime: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/, "请输入有效时间"),
   timezone: z.string().trim().min(1, "请输入 IANA 时区").max(100),
 });
 type ScheduleValues = z.infer<typeof scheduleSchema>;
+
+const scheduleDayOptions = Array.from({ length: 31 }, (_, index) => index + 1);
+
+const shortMonthStrategyLabels: Record<ShortMonthStrategy, string> = {
+  UseLastDay: "短月取月末",
+  SkipMonth: "跳过该月",
+};
+
+const synchronizationErrorMessages: Record<string, string> = {
+  scheduler_unavailable: "调度器暂不可用，请稍后重试。",
+  trigger_missing: "持久化计划触发器缺失，请重新保存计划。",
+  trigger_set_mismatch: "持久化计划触发器与配置不一致，请重新保存计划。",
+  trigger_mismatch: "持久化计划触发器定义与配置不一致，请重新保存计划。",
+  disabled_trigger_present: "计划已停用，但仍存在未清理的触发器，请重新保存计划。",
+};
+
+function synchronizationErrorText(code: string | null) {
+  return (code && synchronizationErrorMessages[code]) || "计划暂未能应用到调度器，请重新保存或稍后查看。";
+}
 
 const builtinWindowOptions = [
   { key: reportWindowKeys.rollingSevenDays, label: "滚动 7 天" },
@@ -128,6 +160,7 @@ export function SchedulePage() {
     defaultValues: {
       enabled: false,
       dayOfMonth: 1,
+      shortMonthStrategy: "UseLastDay",
       localTime: "09:00",
       timezone: "Asia/Shanghai",
     },
@@ -137,6 +170,7 @@ export function SchedulePage() {
       form.reset({
         enabled: scheduleQuery.data.enabled,
         dayOfMonth: scheduleQuery.data.dayOfMonth,
+        shortMonthStrategy: scheduleQuery.data.shortMonthStrategy,
         localTime: scheduleQuery.data.localTime,
         timezone: scheduleQuery.data.timezone,
       });
@@ -155,6 +189,7 @@ export function SchedulePage() {
       form.reset({
         enabled: schedule.enabled,
         dayOfMonth: schedule.dayOfMonth,
+        shortMonthStrategy: schedule.shortMonthStrategy,
         localTime: schedule.localTime,
         timezone: schedule.timezone,
       });
@@ -173,6 +208,8 @@ export function SchedulePage() {
       await invalidateExecutionData();
     },
   });
+
+  const watchedDayOfMonth = useWatch({ control: form.control, name: "dayOfMonth" });
 
   function toggleWindowSpec(key: string, checked: boolean) {
     setWindowError(null);
@@ -223,6 +260,7 @@ export function SchedulePage() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <PageHeader title="计划任务" description="月报计划、执行阶段和失败重试" />
         <Button
+          variant="outline"
           disabled={runMutation.isPending}
           onClick={() => runMutation.mutate()}
         >
@@ -239,7 +277,7 @@ export function SchedulePage() {
           <AlertCircleIcon aria-hidden="true" />
           <AlertTitle>计划尚未应用</AlertTitle>
           <AlertDescription>
-            持久化 trigger 状态异常：{scheduleQuery.data.synchronizationErrorCode ?? "unknown"}
+            {synchronizationErrorText(scheduleQuery.data.synchronizationErrorCode)}
           </AlertDescription>
         </Alert>
       ) : null}
@@ -254,8 +292,14 @@ export function SchedulePage() {
                 : "当前没有待运行的自动任务"}
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline">{enabledChannels} 个启用渠道</Badge>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              to="/channels"
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+              aria-label={`查看 ${enabledChannels} 个启用发送渠道`}
+            >
+              {enabledChannels} 个启用渠道
+            </Link>
             <Badge variant={scheduleQuery.data?.enabled ? "secondary" : "outline"}>
               {scheduleQuery.data?.enabled ? "已启用" : "已停用"}
             </Badge>
@@ -282,19 +326,37 @@ export function SchedulePage() {
             })}
           >
             <FieldGroup className="sm:grid sm:grid-cols-3">
-              <Field data-invalid={Boolean(form.formState.errors.dayOfMonth)}>
-                <FieldLabel htmlFor="schedule-day">每月日期</FieldLabel>
-                <Input
-                  id="schedule-day"
-                  type="number"
-                  inputMode="numeric"
-                  min={1}
-                  max={28}
-                  aria-invalid={Boolean(form.formState.errors.dayOfMonth)}
-                  {...form.register("dayOfMonth", { valueAsNumber: true })}
-                />
-                <FieldError errors={[form.formState.errors.dayOfMonth]} />
-              </Field>
+              <Controller
+                control={form.control}
+                name="dayOfMonth"
+                render={({ field }) => (
+                  <Field data-invalid={Boolean(form.formState.errors.dayOfMonth)}>
+                    <FieldLabel htmlFor="schedule-day">每月日期</FieldLabel>
+                    <Select
+                      value={String(field.value)}
+                      onValueChange={(value) => field.onChange(Number(value))}
+                    >
+                      <SelectTrigger
+                        id="schedule-day"
+                        className="w-full"
+                        aria-invalid={Boolean(form.formState.errors.dayOfMonth)}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          {scheduleDayOptions.map((day) => (
+                            <SelectItem key={day} value={String(day)}>
+                              {`每月 ${day} 日`}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                    <FieldError errors={[form.formState.errors.dayOfMonth]} />
+                  </Field>
+                )}
+              />
               <Field data-invalid={Boolean(form.formState.errors.localTime)}>
                 <FieldLabel htmlFor="schedule-time">运行时间</FieldLabel>
                 <Input
@@ -315,6 +377,48 @@ export function SchedulePage() {
                 />
                 <FieldError errors={[form.formState.errors.timezone]} />
               </Field>
+              <Controller
+                control={form.control}
+                name="shortMonthStrategy"
+                render={({ field }) => (
+                  <Field
+                    orientation="horizontal"
+                    className="sm:col-span-3"
+                    hidden={watchedDayOfMonth <= 28}
+                  >
+                    <FieldContent>
+                      <FieldLabel htmlFor="schedule-short-month-strategy">
+                        短月执行策略
+                      </FieldLabel>
+                      <FieldDescription>
+                        月内没有所选日期时：例如设为 31 日，2 月会在 2 月最后一天运行或当月不运行。
+                      </FieldDescription>
+                    </FieldContent>
+                    <ToggleGroup
+                      value={[field.value]}
+                      onValueChange={(groupValue) => {
+                        const selected = (groupValue as readonly string[]).at(0);
+                        if (selected) {
+                          field.onChange(selected);
+                        }
+                      }}
+                      aria-label="短月执行策略"
+                      variant="outline"
+                    >
+                      {shortMonthStrategies.map((strategy) => (
+                        <ToggleGroupItem
+                          key={strategy}
+                          id={`schedule-short-month-strategy-${strategy}`}
+                          value={strategy}
+                          aria-pressed={field.value === strategy}
+                        >
+                          {shortMonthStrategyLabels[strategy]}
+                        </ToggleGroupItem>
+                      ))}
+                    </ToggleGroup>
+                  </Field>
+                )}
+              />
               <Controller
                 control={form.control}
                 name="enabled"
@@ -371,9 +475,13 @@ export function SchedulePage() {
                 保存计划
               </Button>
               {saveMutation.isSuccess ? (
-                <span className="flex items-center gap-1 text-sm text-muted-foreground">
+                <span
+                  role="status"
+                  aria-live="polite"
+                  className="flex items-center gap-1 text-sm text-muted-foreground"
+                >
                   <CheckCircle2Icon aria-hidden="true" />
-                  revision {saveMutation.data.revision}
+                  已保存
                 </span>
               ) : null}
             </div>

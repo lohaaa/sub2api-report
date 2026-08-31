@@ -6,7 +6,7 @@ import {
   RefreshCwIcon,
   ShieldCheckIcon,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PageHeader } from "@/components/layout/page-header";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -95,6 +95,7 @@ export function UpdatesPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [password, setPassword] = useState("");
   const [submittedOperationId, setSubmittedOperationId] = useState<string | null>(null);
+  const previousOperationStateRef = useRef<string | null>(null);
 
   const statusQuery = useQuery({
     queryKey: ["updates", "status"],
@@ -142,6 +143,25 @@ export function UpdatesPage() {
   });
 
   const operation = operationQuery.data;
+
+  // Refresh version and plan data exactly once when a running installation reaches a terminal
+  // state. Never reload during the operation, never reload automatically, and guard against
+  // re-runs from repeated polls or remounts (state only transitions once per operation).
+  const operationState = operation?.state ?? null;
+  useEffect(() => {
+    const previousState = previousOperationStateRef.current;
+    previousOperationStateRef.current = operationState;
+    if (!operationState || !previousState) {
+      return;
+    }
+    if (!activeStates.has(previousState) || activeStates.has(operationState)) {
+      return;
+    }
+    void queryClient.invalidateQueries({ queryKey: ["updates", "status"] });
+    void queryClient.invalidateQueries({ queryKey: ["updates", "plan"] });
+    void queryClient.invalidateQueries({ queryKey: ["system", "version"] });
+  }, [operationState, queryClient]);
+
   const progress = useMemo(() => operationProgress(operation), [operation]);
   const error = checkMutation.error ?? installMutation.error ?? statusQuery.error ?? operationQuery.error;
   const errorMessage = error instanceof ApiError ? error.message : error ? "无法读取更新状态。" : null;

@@ -29,6 +29,7 @@ internal sealed class ReportScheduleBootstrapService(
                     schedule.Id,
                     schedule.Enabled,
                     schedule.DayOfMonth,
+                    schedule.ShortMonthStrategy,
                     schedule.LocalTime,
                     schedule.Timezone,
                     schedule.WindowSpecsJson,
@@ -106,12 +107,29 @@ internal sealed class ReportScheduleBootstrapService(
             run.Fail("interrupted", "手工投递在应用重启前未完成。", now);
         }
 
-        if (generationRuns.Count > 0 || manualRuns.Count > 0)
+        // 任务运行卡在生成阶段（排队/采集/渲染快照）时同样需要收敛。Quartz 恢复触发器
+        // 只在进程被硬杀（QRTZ_FIRED_TRIGGERS 残留）时才存在；优雅停机后触发行已被清理，
+        // 若执行器写入终态失败，这里不兜底就会让执行记录永远停留在非终态且无法重试。
+        // Delivering 状态保留给 Quartz 恢复路径处理（可能需要重发未知结果的渠道），
+        // 避免与恢复过程中的实际投递竞争同一批发送记录。
+        var interruptedTaskRuns = await dbContext.ReportRuns
+            .Where(run => run.Trigger != ReportRunTrigger.ManualDelivery
+                && (run.Status == ReportRunStatus.Queued
+                    || run.Status == ReportRunStatus.Collecting
+                    || run.Status == ReportRunStatus.Rendering))
+            .ToListAsync(cancellationToken);
+        foreach (var run in interruptedTaskRuns)
+        {
+            run.Fail("interrupted", "任务在应用重启前未完成。", now);
+        }
+
+        if (generationRuns.Count > 0 || manualRuns.Count > 0 || interruptedTaskRuns.Count > 0)
         {
             await dbContext.SaveChangesAsync(CancellationToken.None);
             ScheduleBootstrapLog.Recovered(
                 logger,
                 generationRuns.Count,
+                interruptedTaskRuns.Count,
                 manualRuns.Count);
         }
     }
@@ -134,9 +152,10 @@ internal static partial class ScheduleBootstrapLog
     [LoggerMessage(
         EventId = 55,
         Level = LogLevel.Warning,
-        Message = "Recovered {GenerationRunCount} interrupted report generations and {ManualRunCount} manual deliveries")]
+        Message = "Recovered {GenerationRunCount} interrupted report generations, {TaskRunCount} interrupted task runs and {ManualRunCount} manual deliveries")]
     public static partial void Recovered(
         ILogger logger,
         int generationRunCount,
+        int taskRunCount,
         int manualRunCount);
 }

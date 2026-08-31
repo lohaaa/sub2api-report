@@ -245,6 +245,8 @@ Updater 请求 App 进入 `PreparingMaintenance`：
 - health 和内部升级端点继续可用；
 - 前端展示升级进度并停止提交表单。
 
+升级操作进入任一终态（`succeeded`、`failed`、`rolled_back`、`failed_needs_operator`）时，前端只触发一次 `updates/status`、`updates/plan` 和 `system/version` 数据刷新：安装过程中不主动 reload，也不自动整页刷新。终态为 `succeeded` 后，页面显示的新 currentVersion 来自 `system/version`，可用版本与安装按钮随刷新后的 status 隐藏；`rolled_back`/`failed` 同样刷新以保持当前版本与可用版本一致。
+
 备份失败则退出维护准备，当前 App 保持运行。
 
 ## 11. 替换和验证 App

@@ -50,6 +50,7 @@ function useAuthenticatedHandlers() {
       HttpResponse.json({
         enabled: false,
         dayOfMonth: 1,
+        shortMonthStrategy: "UseLastDay",
         localTime: "09:00",
         timezone: "Asia/Shanghai",
         windows: defaultScheduleWindows,
@@ -834,7 +835,7 @@ describe("application authentication gate", () => {
     expect(
       await screen.findByRole("heading", { level: 1, name: "计划任务" }),
     ).toBeInTheDocument();
-    expect(await screen.findByLabelText("每月日期")).toHaveValue(1);
+    expect(await screen.findByRole("combobox", { name: "每月日期" })).toBeInTheDocument();
     expect(screen.getByRole("switch", { name: "启用自动月报" })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: "滚动 7 天" })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: "上一自然月" })).toBeChecked();
@@ -843,11 +844,10 @@ describe("application authentication gate", () => {
     ).toBeInTheDocument();
     expect(await screen.findByText("任务在重启后保留了未知发送结果。")).toBeInTheDocument();
 
-    const dayInput = screen.getByLabelText("每月日期");
-    await userEvent.clear(dayInput);
-    await userEvent.type(dayInput, "2");
+    await userEvent.click(screen.getByRole("combobox", { name: "每月日期" }));
+    await userEvent.click(await screen.findByRole("option", { name: "每月 2 日" }));
     await userEvent.click(screen.getByRole("button", { name: "保存计划" }));
-    expect(await screen.findByText("revision 2")).toBeInTheDocument();
+    expect(await screen.findByText("已保存")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "重试" }));
     expect(await screen.findByRole("dialog")).toBeInTheDocument();

@@ -42,8 +42,11 @@ mapfile -t updater_digests < "$test_root/updater.digests"
 
 # shellcheck source=deploy/release-lib.sh
 source "$repo_root/deploy/release-lib.sh"
-validate_release_compatibility_file "$repo_root/deploy/release-compatibility.json" 1.1.2
-validate_release_compatibility_file "$repo_root/deploy/release-compatibility.json" 1.1.2-internal.1
+release_version=$(jq -r '.releaseVersion' "$repo_root/deploy/release-compatibility.json")
+validate_release_compatibility_file \
+  "$repo_root/deploy/release-compatibility.json" "$release_version"
+validate_release_compatibility_file \
+  "$repo_root/deploy/release-compatibility.json" "$release_version-internal.1"
 
 online_policy="$test_root/online-compatibility.json"
 jq '.manualUpgradeRequired = false
@@ -51,11 +54,11 @@ jq '.manualUpgradeRequired = false
   | .onlineUpgradeFrom = ["1.1.1"]
   | .upgradeMessage = "支持从 v1.1.1 在线升级。"' \
   "$repo_root/deploy/release-compatibility.json" > "$online_policy"
-validate_release_compatibility_file "$online_policy" 1.1.2
+validate_release_compatibility_file "$online_policy" "$release_version"
 
 invalid_policy="$test_root/invalid-compatibility.json"
 jq '.releaseVersion = "9.9.9"' "$online_policy" > "$invalid_policy"
-if validate_release_compatibility_file "$invalid_policy" 1.1.2 >/dev/null 2>&1; then
+if validate_release_compatibility_file "$invalid_policy" "$release_version" >/dev/null 2>&1; then
   echo "Compatibility validation accepted a mismatched release version." >&2
   exit 1
 fi

@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "releaseVersion": "1.1.2",
+  "releaseVersion": "1.1.3",
   "manifestSchemaVersion": 3,
   "deploymentContractVersion": 1,
   "minimumUpdaterVersion": "1.1.2",
   "manualUpgradeRequired": true,
   "onlineInstallSupported": false,
   "onlineUpgradeFrom": [],
-  "upgradeMessage": "此版本修复升级兼容契约，必须使用完整 Release bundle 同时更新 App 与 Updater。"
+  "upgradeMessage": "此版本修复自动月报触发，必须使用完整 Release bundle 更新。"
 }

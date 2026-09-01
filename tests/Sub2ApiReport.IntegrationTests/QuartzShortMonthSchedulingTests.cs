@@ -46,6 +46,31 @@ public sealed class QuartzShortMonthSchedulingTests
         new TestJobExecutionContext(triggerKey, scheduledFireTimeUtc));
 
     [Fact]
+    public void ScheduledTriggerWithoutRunIdIsTreatedAsAutomatic()
+    {
+        Assert.Null(ScheduledReportJob.GetConfiguredRunId(new JobDataMap()));
+    }
+
+    [Fact]
+    public void ImmediateTriggerUsesConfiguredRunId()
+    {
+        var expected = Guid.NewGuid();
+        var data = new JobDataMap();
+        data[QuartzReportScheduleCoordinator.RunIdKey] = expected.ToString("D");
+
+        Assert.Equal(expected, ScheduledReportJob.GetConfiguredRunId(data));
+    }
+
+    [Fact]
+    public void InvalidConfiguredRunIdIsRejected()
+    {
+        var data = new JobDataMap();
+        data[QuartzReportScheduleCoordinator.RunIdKey] = "not-a-guid";
+
+        Assert.Throws<JobExecutionException>(() => ScheduledReportJob.GetConfiguredRunId(data));
+    }
+
+    [Fact]
     public void DisabledScheduleProducesNoTriggers()
     {
         var triggers = QuartzReportScheduleCoordinator.BuildDesiredTriggers(

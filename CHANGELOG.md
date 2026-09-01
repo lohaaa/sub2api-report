@@ -8,6 +8,16 @@
 
 ## [Unreleased]
 
+## [1.1.3] - 2026-09-01
+
+### Fixed
+
+- 修复自动月报在 cron 触发时因 trigger 不包含手工任务专用的 `reportRunId`，被 `JobDataMap.GetString` 抛出的 `KeyNotFoundException` 中断且不创建执行记录的问题。`ScheduledReportJob` 现在明确区分自动 trigger、手工/重试 trigger 和 recovery：自动 trigger 创建幂等计划执行记录；手工 trigger 复用已持久化 run；非法或不存在的手工 runId 明确失败，不再错误降级为自动任务。
+
+### Upgrade
+
+- v1.1.3 保持 manifest schema v3 和 deployment contract v1，但自动月报修复需要更新 App；兼容文件继续要求使用完整 bundle。Docker 部署再次执行 README 中的无参数 bootstrap 命令。
+
 ## [1.1.2] - 2026-08-31
 
 ### Added
@@ -171,7 +181,8 @@
 - App 容器不挂载 Docker Socket；Updater 通过 instance/container allowlist、固定 API 和 non-root Socket group 隔离高权限操作。
 - 增加公开安全政策，并将未修复漏洞引导至 GitHub Private Vulnerability Reporting。
 
-[Unreleased]: https://github.com/lohaaa/sub2api-report/compare/v1.1.2...HEAD
+[Unreleased]: https://github.com/lohaaa/sub2api-report/compare/v1.1.3...HEAD
+[1.1.3]: https://github.com/lohaaa/sub2api-report/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/lohaaa/sub2api-report/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/lohaaa/sub2api-report/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/lohaaa/sub2api-report/compare/v1.0.8...v1.1.0

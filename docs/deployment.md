@@ -72,7 +72,7 @@ sudo docker compose logs -f app
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/bootstrap.sh | \
-  SUB2API_REPORT_VERSION=1.1.2 bash
+  SUB2API_REPORT_VERSION=1.1.3 bash
 ```
 
 手工下载、checksum 和 attestation 校验方式见 README。生产主机不从公共 Registry 拉取镜像，部署用户不持有发布私钥；bundle 内只包含用于验签的公钥。

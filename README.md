@@ -70,7 +70,7 @@ curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/b
 
 | 参数 | 默认值 | 作用 |
 | --- | --- | --- |
-| `SUB2API_REPORT_VERSION` | `latest` | 固定安装指定正式版本，例如 `1.1.2` |
+| `SUB2API_REPORT_VERSION` | `latest` | 固定安装指定正式版本，例如 `1.1.3` |
 | `SUB2API_REPORT_INSTALL_DIR` | `/opt/sub2api-report` | 安装 Compose、`.env` 和发布元数据的目录 |
 | `SUB2API_REPORT_PORT` | 新安装为 `8081` | 设置 Report 主机端口；更新时省略则保留现有端口 |
 | `SUB2API_REPORT_BIND_ADDRESS` | 新安装为 `0.0.0.0` | 设置监听地址；更新时省略则保留现有地址 |

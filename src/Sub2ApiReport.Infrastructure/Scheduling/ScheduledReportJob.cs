@@ -17,26 +17,29 @@ internal sealed class ScheduledReportJob(
     public async Task Execute(IJobExecutionContext context)
     {
         var cancellationToken = context.CancellationToken;
-        var configuredRunId = context.MergedJobDataMap.GetString(
-            QuartzReportScheduleCoordinator.RunIdKey);
+        var configuredRunId = GetConfiguredRunId(context.MergedJobDataMap);
         ReportRun? run = null;
-        if (Guid.TryParse(configuredRunId, out var runId))
+        if (configuredRunId is Guid runId)
         {
             run = await dbContext.ReportRuns
-                .SingleOrDefaultAsync(item => item.Id == runId, cancellationToken);
+                .SingleOrDefaultAsync(item => item.Id == runId, cancellationToken)
+                ?? throw new JobExecutionException($"Report run {runId:D} does not exist.");
         }
-        else if (context.Recovering)
+        else
         {
-            run = await dbContext.ReportRuns
-                .Where(item => item.Trigger != ReportRunTrigger.ManualDelivery
-                    && item.Status != ReportRunStatus.Succeeded
-                    && item.Status != ReportRunStatus.PartialFailed
-                    && item.Status != ReportRunStatus.Failed)
-                .OrderBy(item => item.StartedAt)
-                .FirstOrDefaultAsync(cancellationToken);
-        }
+            if (context.Recovering)
+            {
+                run = await dbContext.ReportRuns
+                    .Where(item => item.Trigger != ReportRunTrigger.ManualDelivery
+                        && item.Status != ReportRunStatus.Succeeded
+                        && item.Status != ReportRunStatus.PartialFailed
+                        && item.Status != ReportRunStatus.Failed)
+                    .OrderBy(item => item.StartedAt)
+                    .FirstOrDefaultAsync(cancellationToken);
+            }
 
-        run ??= await CreateScheduledRunAsync(context, cancellationToken);
+            run ??= await CreateScheduledRunAsync(context, cancellationToken);
+        }
         if (run is null || run.IsTerminal)
         {
             return;
@@ -44,6 +47,20 @@ internal sealed class ScheduledReportJob(
 
         ScheduleLog.Executing(logger, run.Id, context.Trigger.Key);
         await executor.ExecuteAsync(run.Id, context.Recovering, cancellationToken);
+    }
+
+    internal static Guid? GetConfiguredRunId(JobDataMap dataMap)
+    {
+        ArgumentNullException.ThrowIfNull(dataMap);
+        if (!dataMap.ContainsKey(QuartzReportScheduleCoordinator.RunIdKey))
+        {
+            return null;
+        }
+
+        var value = dataMap.GetString(QuartzReportScheduleCoordinator.RunIdKey);
+        return Guid.TryParse(value, out var runId)
+            ? runId
+            : throw new JobExecutionException("The configured report run identifier is invalid.");
     }
 
     private async Task<ReportRun?> CreateScheduledRunAsync(

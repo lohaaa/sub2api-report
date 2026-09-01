@@ -11,7 +11,7 @@ on:
       previous_version:
         description: Published release used for update and rollback tests
         required: true
-        default: 1.1.1
+        default: 1.1.2
         type: string
       release_notes_section:
         description: Changelog section used for candidate release notes

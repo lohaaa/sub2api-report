@@ -187,7 +187,7 @@ jobs:
             "$previous_dir/.env.example"
           sed -i \
             -e 's/interval: 15s/interval: 1s/g' \
-            -e 's/start_period: [0-9][0-9]*s/start_period: 0s/g' \
+            -e 's/start_period: [0-9][0-9]*s/start_period: 10s/g' \
             "$previous_dir/compose.yaml" "$target_dir/compose.yaml"
 
           sudo env SUB2API_REPORT_INSTALL_DIR="$install_dir" "$previous_dir/install.sh"

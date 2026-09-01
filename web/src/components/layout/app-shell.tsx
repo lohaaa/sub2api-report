@@ -12,8 +12,6 @@ const pageNames: Record<string, string> = {
   '/channels': '发送渠道',
   '/schedule': '计划任务',
   '/settings': '系统设置',
-  '/updates': '系统更新',
-  '/audit': '审计日志',
 }
 
 export function AppShell() {

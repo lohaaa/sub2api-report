@@ -1,28 +1,21 @@
 {
-  "schemaVersion": 1,
-  "deploymentContractVersion": 1,
+  "schemaVersion": 2,
+  "deploymentContractVersion": 2,
   "architecture": "linux/amd64",
   "distribution": {
     "type": "github-release-assets",
     "registryPullEnabled": false,
-    "appImageTag": "sub2api-report-app:current",
-    "updaterImageTag": "sub2api-report-updater:bootstrap"
+    "appImageTag": "sub2api-report-app:current"
   },
   "app": {
     "internalPort": 8080,
     "dataPath": "/data",
     "livenessPath": "/health/live",
-    "readinessPath": "/health/ready",
-    "updaterTokenPath": "/run/secrets/updater-token"
+    "readinessPath": "/health/ready"
   },
-  "updater": {
-    "internalPort": 8081,
-    "statePath": "/update-state",
-    "tokenPath": "/run/secrets/updater-token",
-    "installationEnabled": true,
-    "publicKeyPath": "/run/secrets/update-public-key.pem",
-    "managedDatabasePath": "/managed-data/db/sub2api-report.db",
-    "dockerEndpoint": "unix:///var/run/docker.sock",
-    "selfUpdateEnabled": false
+  "update": {
+    "method": "host-bootstrap",
+    "databaseBackupRequired": true,
+    "automaticRollbackRequired": true
   }
 }

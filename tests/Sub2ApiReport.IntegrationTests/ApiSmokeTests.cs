@@ -30,7 +30,7 @@ public sealed class ApiSmokeTests(ApiWebApplicationFactory factory)
 
         Assert.NotNull(response);
         Assert.NotEmpty(response.Version);
-        Assert.Equal("stable", response.ReleaseChannel);
+        Assert.NotEmpty(response.Environment);
     }
 
     [Fact]
@@ -44,7 +44,6 @@ public sealed class ApiSmokeTests(ApiWebApplicationFactory factory)
             updated = await settingsService.UpdateAsync(
                 new UpdateSystemSettingsCommand(
                     current.Timezone,
-                    current.ReleaseChannel,
                     "Warning",
                     current.ReportConcurrency,
                     current.ReportRetentionMonths,

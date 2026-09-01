@@ -11,10 +11,10 @@ Sub2API Codex 用量，并定时发送报告。
 - 前端使用 React、TypeScript、Vite 和 shadcn/ui
 - ASP.NET Core 在同一个应用容器中提供 SPA 和 API
 - 使用 SQLite 持久化数据，使用 Quartz.NET 执行计划任务
-- 使用 Docker Compose 部署，目标平台为 linux/amd64
-- 使用独立的内部 Updater 实现签名在线升级和失败回滚
+- 使用 Docker Compose 部署，目标平台为 linux/amd64，生产拓扑只包含 App
+- Docker 首次安装和后续更新只允许通过宿主机 `bootstrap.sh` 命令执行
 - 可在运行期修改的业务和运维配置必须存入 SQLite 并动态生效；环境变量和
-  配置文件只允许承载数据库连接、监听端口、进程间 Secret 等启动闭环配置
+  配置文件只允许承载数据库连接、监听端口等启动闭环配置
 
 进行架构变更前必须先阅读 `docs/README.md`。文档存在冲突时，按照其中定义的
 文档权威顺序执行。
@@ -33,19 +33,19 @@ Sub2API Codex 用量，并定时发送报告。
 替代官方维护流程。EF migration 只能由 `dotnet ef migrations add/remove` 创建或删除，
 禁止手工编辑 migration 和 model snapshot。
 
-## 升级兼容
+## 部署升级
 
-- `deploy/release-compatibility.json` 是 Release 升级策略的唯一权威文件。修改 Updater、
-  App 维护协议、UpdateContracts、容器标签/名称/挂载、Compose、migration 或发布脚本时
-  必须同步审查该文件及升级测试
-- 宿主机 `release-manifest.json` 只表示上次完整 bundle，不得用于推断在线升级后的实际
-  App 或 Updater 版本；运行时真值必须来自 App 握手和实际容器镜像标签
-- 只有 `onlineUpgradeFrom` 明确列出且由 Candidate 使用真实已发布源 bundle 验证过的
-  精确版本才允许 `onlineInstallSupported=true`；禁止用范围、最低版本或当前源码重建物
-  代替兼容证据
-- 兼容文件、manifest schema 或升级状态机变化时，必须同时更新 C#/Shell 校验、
-  Problem Details/页面指引、完整 bundle 回滚路径和 N-1 真实 Docker 验收；未通过前
-  禁止创建版本 Tag
+- `deploy/upgrade-contract.json` 是当前 Docker deployment contract 的权威文件；修改
+  Compose、容器标签/名称/挂载、migration、发布 manifest 或安装更新脚本时必须同步
+  审查该文件和升级测试
+- Docker 更新唯一入口是无参数 bootstrap 命令；禁止重新引入应用内更新 API、页面、
+  常驻 Updater、Docker Socket 挂载或进程间更新 Secret
+- deployment contract 变化必须使用真实上一公开 Release bundle 验证成功迁移和失败
+  回滚。v1 App+Updater 到 v2 App-only 时，新 App 健康前必须保留旧 Updater；失败必须
+  恢复旧 Compose、App/Updater 镜像标签和数据库；成功后只移除旧 Updater 容器，不得
+  自动删除旧状态卷、token 文件或备份
+- 兼容契约、manifest schema 或更新状态机变化时，必须同时更新 Shell 校验、完整 bundle
+  回滚路径和 N-1 真实 Docker 验收；未通过前禁止创建版本 Tag
 
 ## 公开仓库安全
 
@@ -91,15 +91,15 @@ Release notes 必须从该章节生成，禁止仅依赖自动提交摘要。
 
 ## 当前开发状态
 
-项目当前版本为 1.1.3：报告统计主体是 Sub2API 用户 → API Key（稳定标识
+项目当前版本为 1.2.0：报告统计主体是 Sub2API 用户 → API Key（稳定标识
 user_id + api_key_id，Key 名称仅保存快照），人员/Key 归属功能已移除。已实现安全初始化、
 用户与 Key 自动刷新、动态完整自然日窗口、schema v4 不可变快照、多工作表 XLSX 导出
 （报告概览、Key 明细、用户汇总、条件采集异常、数据说明）、邮件/钉钉/飞书投递（含
 XLSX 附件和限时下载）、Quartz 持久化计划（每月 1–31 日，短月取月末或跳过）、规范化执行记录、任务级重试和失败补发。正式发行
 提供无需 Docker/.NET Runtime 的 self-contained systemd 服务器包，以及不依赖公共 Registry
-的 Docker Compose 离线镜像 bundle。Docker 部署支持 App-only 在线升级、SQLite 一致性备份、
-连续健康验证和自动回滚；systemd 部署通过 server bootstrap 更新和回滚。前端依赖统一使用
-pnpm，禁止生成 npm 或 Yarn 锁文件。
+的 App-only Docker Compose 离线镜像 bundle。Docker 和 systemd 部署均通过宿主机 bootstrap
+命令更新，并在更新前备份数据库、健康验证失败时自动回滚。前端依赖统一使用 pnpm，
+禁止生成 npm 或 Yarn 锁文件。
 
 ## 文件维护
 

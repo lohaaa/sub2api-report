@@ -16,7 +16,6 @@ using Serilog.Formatting.Compact;
 using Sub2ApiReport.Api.Endpoints;
 using Sub2ApiReport.Api.Middleware;
 using Sub2ApiReport.Api.Services;
-using Sub2ApiReport.Api.Updates;
 using Sub2ApiReport.Application.Security;
 using Sub2ApiReport.Application.System;
 using Sub2ApiReport.Infrastructure;
@@ -71,33 +70,6 @@ Directory.CreateDirectory(dataProtectionKeysPath);
 builder.Services.AddDataProtection()
     .SetApplicationName("Sub2ApiReport")
     .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysPath));
-var updaterClientOptions = builder.Configuration
-    .GetSection(UpdaterClientOptions.SectionName)
-    .Get<UpdaterClientOptions>() ?? new UpdaterClientOptions();
-updaterClientOptions.TokenFile = Path.IsPathRooted(updaterClientOptions.TokenFile)
-    ? updaterClientOptions.TokenFile
-    : Path.Combine(builder.Environment.ContentRootPath, updaterClientOptions.TokenFile);
-if (!Uri.TryCreate(updaterClientOptions.BaseUrl, UriKind.Absolute, out var updaterBaseUri)
-    || updaterBaseUri.Scheme != Uri.UriSchemeHttp)
-{
-    throw new InvalidOperationException("Updater:BaseUrl must be an absolute internal HTTP URL.");
-}
-builder.Services.AddSingleton(updaterClientOptions);
-builder.Services.AddSingleton(_ => new UpdaterSharedTokenProvider(updaterClientOptions.TokenFile));
-builder.Services.AddScoped<InternalUpdaterTokenFilter>();
-builder.Services.AddSingleton<MaintenanceState>();
-builder.Services.AddScoped<MaintenanceCoordinator>();
-builder.Services.AddHostedService<CandidateMaintenanceStartupService>();
-builder.Services.AddHttpClient<IUpdaterClient, UpdaterClient>(client =>
-    {
-        client.BaseAddress = updaterBaseUri;
-        client.Timeout = TimeSpan.FromSeconds(30);
-    })
-    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
-    {
-        AllowAutoRedirect = false,
-    })
-    .RedactLoggedHeaders(["Authorization"]);
 
 builder.Services.AddQuartz(options =>
 {
@@ -205,8 +177,6 @@ builder.Services.AddRateLimiter(options =>
     AddRateLimitPolicy(options, "configuration", 20, TimeSpan.FromMinutes(1));
     AddRateLimitPolicy(options, "external", 6, TimeSpan.FromMinutes(1));
     AddRateLimitPolicy(options, "report-download", 60, TimeSpan.FromMinutes(1));
-    AddRateLimitPolicy(options, "updates", 10, TimeSpan.FromMinutes(1));
-    AddRateLimitPolicy(options, "update-install", 3, TimeSpan.FromMinutes(10));
 });
 builder.Services.AddScoped<ISystemInfoService, SystemInfoService>();
 builder.Services.AddHostedService<DatabaseSettingsSynchronizer>();
@@ -214,8 +184,7 @@ builder.Services.AddHostedService<SetupCodeBootstrapService>();
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy(),
         tags: ["live", "ready"])
-    .AddDbContextCheck<ReportDbContext>("database", tags: ["ready"])
-    .AddCheck<MaintenanceReadinessHealthCheck>("maintenance", tags: ["ready"]);
+    .AddDbContextCheck<ReportDbContext>("database", tags: ["ready"]);
 
 var app = builder.Build();
 
@@ -225,7 +194,6 @@ app.UseMiddleware<SecurityHeadersMiddleware>();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 app.UseSerilogRequestLogging();
-app.UseMiddleware<MaintenanceMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
@@ -249,7 +217,6 @@ _ = app.MapSecurityEndpoints()
     .MapSetupEndpoints()
     .MapAuthEndpoints()
     .MapSystemEndpoints()
-    .MapUpdateEndpoints()
     .MapReportDownloadEndpoints()
     .MapSub2ApiEndpoints()
     .MapReportEndpoints()

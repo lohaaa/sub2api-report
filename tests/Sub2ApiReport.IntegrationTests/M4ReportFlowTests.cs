@@ -281,7 +281,6 @@ public sealed class M4ReportFlowTests
             new
             {
                 settings.Timezone,
-                settings.ReleaseChannel,
                 settings.LogLevel,
                 reportConcurrency = 2,
                 settings.ReportRetentionMonths,

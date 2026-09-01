@@ -3,7 +3,6 @@ const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "";
 export type SystemVersion = {
   version: string;
   environment: string;
-  releaseChannel: string;
 };
 
 export type SetupStatus = {
@@ -20,7 +19,6 @@ export type CurrentAdministrator = {
 
 export type SystemSettings = {
   timezone: string;
-  releaseChannel: string;
   logLevel: string;
   reportConcurrency: number;
   reportRetentionMonths: number;
@@ -962,90 +960,5 @@ export function revokeReportDownloadGrant(reportId: string, grantId: string) {
   return apiRequest<void>(
     `/api/v1/reports/${encodeURIComponent(reportId)}/download-grants/${encodeURIComponent(grantId)}/revoke`,
     { method: "POST" },
-  );
-}
-
-export type UpdaterStatus = {
-  version: string;
-  installationEnabled: boolean;
-  state: string;
-  lastCheckedAt: string | null;
-  availableVersion: string | null;
-  lastOperationId: string | null;
-  lastOperationState: string | null;
-};
-
-export type UpdateCheck = {
-  updateAvailable: boolean;
-  currentVersion: string;
-  availableVersion: string | null;
-  publishedAt: string | null;
-  manualUpgradeRequired: boolean;
-  upgradeMessage: string;
-};
-
-export type UpdatePlanStep = {
-  order: number;
-  name: string;
-  description: string;
-};
-
-export type UpdatePlan = {
-  currentVersion: string;
-  targetVersion: string | null;
-  installationEnabled: boolean;
-  manualUpgradeRequired: boolean;
-  upgradeMessage: string;
-  steps: UpdatePlanStep[];
-};
-
-export type UpdateStage = {
-  stage: string;
-  startedAt: string;
-  completedAt: string | null;
-  error: string | null;
-};
-
-export type UpdateOperation = {
-  operationId: string;
-  state: string;
-  stage: string | null;
-  currentVersion: string;
-  targetVersion: string;
-  createdAt: string;
-  updatedAt: string;
-  completedAt: string | null;
-  lastError: string | null;
-  stages: UpdateStage[];
-};
-
-export type InstallUpdateAccepted = {
-  operationId: string;
-  state: string;
-};
-
-export function getUpdateStatus(signal?: AbortSignal) {
-  return apiRequest<UpdaterStatus>("/api/v1/updates/status", { signal });
-}
-
-export function checkForUpdates() {
-  return apiRequest<UpdateCheck>("/api/v1/updates/check", { method: "POST" });
-}
-
-export function getUpdatePlan(signal?: AbortSignal) {
-  return apiRequest<UpdatePlan>("/api/v1/updates/plan", { signal });
-}
-
-export function installUpdate(targetVersion: string | null) {
-  return apiRequest<InstallUpdateAccepted>("/api/v1/updates/install", {
-    method: "POST",
-    body: { confirm: true, targetVersion },
-  });
-}
-
-export function getUpdateOperation(operationId: string, signal?: AbortSignal) {
-  return apiRequest<UpdateOperation>(
-    `/api/v1/updates/operations/${encodeURIComponent(operationId)}`,
-    { signal },
   );
 }

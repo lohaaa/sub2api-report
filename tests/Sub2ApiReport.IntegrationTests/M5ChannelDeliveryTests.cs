@@ -319,7 +319,6 @@ public sealed class M5ChannelDeliveryTests
         _ = await settingsService.UpdateAsync(
             new UpdateSystemSettingsCommand(
                 current.Timezone,
-                current.ReleaseChannel,
                 current.LogLevel,
                 current.ReportConcurrency,
                 current.ReportRetentionMonths,

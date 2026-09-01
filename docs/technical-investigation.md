@@ -2,7 +2,7 @@
 
 调查日期：2026-08-26
 
-本文只记录数据源与报告渠道调查。最终工程方案以 [系统架构](architecture.md)、[Docker 部署](deployment.md) 和 [在线升级](online-update.md) 为准。
+本文只记录数据源与报告渠道调查。最终工程方案以 [系统架构](architecture.md) 和 [Docker 部署](deployment.md) 为准。
 
 ## 1. 结论
 
@@ -195,7 +195,7 @@ ASP.NET Core App
   +-- SQLite snapshots and delivery records
 ```
 
-前后端由同一个 App 容器提供，Quartz 在应用内持久化调度。Docker Compose 另带一个不暴露端口的 updater sidecar，用于页面一键升级和失败回滚；App 本身不挂载 Docker Socket。
+前后端由同一个 App 提供，Quartz 在应用内持久化调度。Docker Compose 生产拓扑只有 App，不挂载 Docker Socket；安装和更新由宿主机 bootstrap 处理。
 
 详细模块、数据模型和安全边界见 [系统架构](architecture.md)。
 
@@ -332,10 +332,10 @@ report_id, channel, payload_hash, status, attempts, sent_at, error
 
 ### 阶段三：上线
 
-1. 发布 App 和 Updater amd64 镜像及 Docker Compose 安装包。
+1. 发布 App amd64 离线镜像、self-contained server package 及 Docker Compose 安装包。
 2. 启用 Quartz 月报计划，默认每月 1 日 09:00 `Asia/Shanghai`。
 3. 首月并行人工核对。
-4. 增加任务失败告警、12 个月快照留档和在线升级回滚验证。
+4. 增加任务失败告警、12 个月快照留档和宿主机更新回滚验证。
 
 ## 9. 开发前待确认信息
 
@@ -371,4 +371,3 @@ Sub2API：
 - [飞书自定义机器人指南](https://open.feishu.cn/document/client-docs/bot-v3/add-custom-bot?lang=zh-CN)
 - [项目系统架构](architecture.md)
 - [Docker 部署方案](deployment.md)
-- [在线升级方案](online-update.md)

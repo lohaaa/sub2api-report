@@ -11,7 +11,6 @@ public sealed class SystemSettingTests
 
         Assert.Equal(SystemSetting.SingletonId, setting.Id);
         Assert.Equal("Asia/Shanghai", setting.Timezone);
-        Assert.Equal("stable", setting.ReleaseChannel);
         Assert.Equal("Information", setting.LogLevel);
         Assert.Equal(4, setting.ReportConcurrency);
         Assert.Equal(12, setting.ReportRetentionMonths);
@@ -32,7 +31,6 @@ public sealed class SystemSettingTests
 
         setting.Update(
             "UTC",
-            "preview",
             "Warning",
             6,
             24,
@@ -43,7 +41,6 @@ public sealed class SystemSettingTests
             updatedAt);
 
         Assert.Equal("UTC", setting.Timezone);
-        Assert.Equal("preview", setting.ReleaseChannel);
         Assert.Equal("Warning", setting.LogLevel);
         Assert.Equal(6, setting.ReportConcurrency);
         Assert.Equal(24, setting.ReportRetentionMonths);
@@ -63,7 +60,6 @@ public sealed class SystemSettingTests
         var exception = Assert.Throws<ArgumentException>(() =>
             setting.Update(
                 "UTC",
-                "stable",
                 "Everything",
                 4,
                 12,
@@ -88,7 +84,6 @@ public sealed class SystemSettingTests
         var exception = Assert.Throws<ArgumentException>(() =>
             setting.Update(
                 "UTC",
-                "stable",
                 "Information",
                 4,
                 12,

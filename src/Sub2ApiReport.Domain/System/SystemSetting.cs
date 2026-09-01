@@ -4,7 +4,6 @@ public sealed class SystemSetting
 {
     public const int SingletonId = 1;
     public const string DefaultTimezone = "Asia/Shanghai";
-    public const string DefaultReleaseChannel = "stable";
     public const string DefaultLogLevel = "Information";
     public const int DefaultReportConcurrency = 4;
     public const int DefaultReportRetentionMonths = 12;
@@ -26,7 +25,6 @@ public sealed class SystemSetting
 
     public string Timezone { get; private set; } = DefaultTimezone;
 
-    public string ReleaseChannel { get; private set; } = DefaultReleaseChannel;
 
     public string LogLevel { get; private set; } = DefaultLogLevel;
 
@@ -62,7 +60,6 @@ public sealed class SystemSetting
 
     public void Update(
         string timezone,
-        string releaseChannel,
         string logLevel,
         int reportConcurrency,
         int reportRetentionMonths,
@@ -73,7 +70,6 @@ public sealed class SystemSetting
         DateTimeOffset updatedAt)
     {
         var validatedTimezone = ValidateText(timezone, 100, nameof(timezone));
-        var validatedReleaseChannel = ValidateText(releaseChannel, 32, nameof(releaseChannel));
         var validatedLogLevel = AllowedLogLevels.FirstOrDefault(level =>
             level.Equals(logLevel, StringComparison.OrdinalIgnoreCase))
             ?? throw new ArgumentException("Unsupported log level.", nameof(logLevel));
@@ -118,7 +114,6 @@ public sealed class SystemSetting
             nameof(reportExternalBaseUrl));
 
         Timezone = validatedTimezone;
-        ReleaseChannel = validatedReleaseChannel;
         LogLevel = validatedLogLevel;
         ReportConcurrency = reportConcurrency;
         ReportRetentionMonths = reportRetentionMonths;

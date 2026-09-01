@@ -19,7 +19,5 @@
     <ProjectReference Include="..\..\src\Sub2ApiReport.Application\Sub2ApiReport.Application.csproj" />
     <ProjectReference Include="..\..\src\Sub2ApiReport.Domain\Sub2ApiReport.Domain.csproj" />
     <ProjectReference Include="..\..\src\Sub2ApiReport.Infrastructure\Sub2ApiReport.Infrastructure.csproj" />
-    <ProjectReference Include="..\..\src\Sub2ApiReport.UpdateContracts\Sub2ApiReport.UpdateContracts.csproj" />
-    <ProjectReference Include="..\..\src\Sub2ApiReport.Updater\Sub2ApiReport.Updater.csproj" />
   </ItemGroup>
 </Project>

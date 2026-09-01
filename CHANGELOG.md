@@ -8,6 +8,30 @@
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-01
+
+### Changed
+
+- Docker deployment contract 升级到 v2：生产 Compose 只运行 App，不再挂载 Docker Socket，也不再使用 control network、共享 token 或独立更新状态卷。新 Release manifest 使用 schema v4，只签名 App 镜像、数据库迁移目标和 Release notes；完整 bundle 只携带单个 App 离线镜像。
+- Docker 首次安装和后续更新统一为无参数 `bootstrap.sh` 命令。更新事务使用宿主机互斥锁，从实际运行容器确定旧 App，停服后创建 SQLite 一致性备份，加载并验证签名 App 镜像，连续健康验证失败时恢复旧控制文件、镜像标签和数据库。
+- Release workflow 精简为一次质量门、单 App 构建/扫描/SBOM、签名 bundle、server 与安装 smoke、v1.1.3 到 v1.2.0 的真实迁移/回滚验证以及 provenance；删除重复构建和验证的 Candidate workflow。
+
+### Removed
+
+- 完全移除管理页面“系统更新”、`/api/v1/updates/*`、App 维护模式与内部更新客户端、`Sub2ApiReport.UpdateContracts`、独立 `Sub2ApiReport.Updater`、Updater Dockerfile 及其测试。在线升级不再是产品能力。
+- 移除 `deploy/release-compatibility.json`、Updater 镜像归档、Updater SBOM 和所有运行期 Docker Engine 控制面配置。
+- 移除不再有行为用途的 Release channel 动态配置、系统版本/API 字段和前端表单；数据库 migration 删除 `SystemSettings.ReleaseChannel` 列。
+- 隐藏并删除未接入读取 API、始终显示空表的“审计日志”前端入口；后端 `AuditEvents` 写入和安全审计数据保留。
+
+### Security
+
+- App-only 部署没有任何容器挂载 `/var/run/docker.sock`，应用进程也不再持有 Updater 共享凭证或访问高权限 sidecar，从运行时架构中消除 Docker Socket 信任边界。
+
+### Upgrade
+
+- 现有 deployment contract v1（包括 v1.1.2 和 v1.1.3）通过同一条无参数 bootstrap 命令迁移。脚本在迁移前停止但保留旧 Updater 容器，迁移失败时恢复旧 Compose、App/Updater 镜像标签、数据库和双服务；新 App 健康后才移除旧 Updater 容器。历史 `updater-state` 卷、token 文件和备份不会自动删除。
+- Docker 更新唯一入口：`curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/bootstrap.sh | bash`。systemd 服务器部署继续使用 `server-bootstrap.sh`。
+
 ## [1.1.3] - 2026-09-01
 
 ### Fixed
@@ -181,7 +205,8 @@
 - App 容器不挂载 Docker Socket；Updater 通过 instance/container allowlist、固定 API 和 non-root Socket group 隔离高权限操作。
 - 增加公开安全政策，并将未修复漏洞引导至 GitHub Private Vulnerability Reporting。
 
-[Unreleased]: https://github.com/lohaaa/sub2api-report/compare/v1.1.3...HEAD
+[Unreleased]: https://github.com/lohaaa/sub2api-report/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/lohaaa/sub2api-report/compare/v1.1.3...v1.2.0
 [1.1.3]: https://github.com/lohaaa/sub2api-report/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/lohaaa/sub2api-report/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/lohaaa/sub2api-report/compare/v1.1.0...v1.1.1

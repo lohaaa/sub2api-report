@@ -42,8 +42,10 @@ jobs:
 
       - name: Validate deployment scripts
         run: |
-          bash -n deploy/*.sh
-          shellcheck -x deploy/*.sh
+          for script in deploy/*.sh deploy/appctl; do
+            bash -n "$script"
+          done
+          shellcheck -x deploy/*.sh deploy/appctl
           deploy/documentation-test.sh
           deploy/docker-bootstrap-test.sh
           deploy/release-lib-test.sh
@@ -51,7 +53,7 @@ jobs:
           deploy/server-install-test.sh
           version=$(sed -n 's:.*<VersionPrefix>\(.*\)</VersionPrefix>.*:\1:p' Directory.Build.props)
           deploy/extract-release-notes.sh CHANGELOG.md "$version" "$RUNNER_TEMP/release-notes.md"
-          INSTANCE_ID=ci DOCKER_GID=999 docker compose -f deploy/compose.yaml config --quiet
+          docker compose -f deploy/compose.yaml config --quiet
 
   container-builds:
     needs: quality
@@ -75,17 +77,3 @@ jobs:
             SOURCE_URL=https://github.com/${{ github.repository }}
           cache-from: type=gha,scope=app
           cache-to: type=gha,mode=max,scope=app
-
-      - name: Build Updater image
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
-        with:
-          context: .
-          file: Dockerfile.updater
-          platforms: linux/amd64
-          push: false
-          build-args: |
-            VERSION=0.0.0-ci
-            REVISION=${{ github.sha }}
-            SOURCE_URL=https://github.com/${{ github.repository }}
-          cache-from: type=gha,scope=updater
-          cache-to: type=gha,mode=max,scope=updater

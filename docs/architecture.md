@@ -1,7 +1,7 @@
 # Sub2API Report 系统架构与技术方案
 
 - 状态：设计基线
-- 日期：2026-08-26
+- 日期：2026-09-01
 
 ## 1. 产品定位
 
@@ -12,7 +12,6 @@ Sub2API Report 是一个单管理员、单实例的内部运营工具，用于�
 - 每次生成报告前自动刷新 Sub2API 用户与 Key，刷新失败则终止并记录错误；
 - 通过邮箱、钉钉、飞书任意组合发送；
 - 留存报告、发送结果和操作审计；
-- 在管理页面检查并一键升级系统。
 
 系统不是多租户 SaaS，不承担 Sub2API 的代理流量，也不保存 API 请求内容。
 
@@ -27,8 +26,8 @@ Sub2API Report 是一个单管理员、单实例的内部运营工具，用于�
 | 调度 | 应用内 Quartz.NET 持久化调度 | 可在页面配置、查看执行记录和手工补跑 |
 | 认证 | ASP.NET Core Identity + Cookie | 前后端同源，避免在浏览器保存 JWT |
 | 首次初始化 | 服务日志一次性初始化码 | 防止公网首访者抢注管理员 |
-| 部署 | self-contained systemd 或 Docker Compose | 服务器可无 Docker 直接运行；容器部署带内部 Updater |
-| 更新 | systemd bootstrap 或页面 App-only 更新 | systemd 部署重跑安装命令；Docker 部署可健康检查和自动回滚 |
+| 部署 | self-contained systemd 或 App-only Docker Compose | 服务器可无 Docker 直接运行；容器拓扑只包含 App |
+| 更新 | systemd 或 Docker 宿主机 bootstrap | 两种部署都在替换前备份数据库、健康验证失败时回滚，不提供应用内更新 |
 | 配置管理 | SQLite typed settings + 运行期刷新 | 可变配置通过页面修改并动态生效，部署配置只负责启动闭环 |
 | 镜像架构 | linux/amd64 | 用户确认当前只需要 amd64 |
 | 发布 | GitHub Release Assets | 公开仓库统一管理源码、发行说明、离线镜像包、校验和与证明，不发布公共镜像 |
@@ -50,7 +49,7 @@ Browser
 |  | Identity       |  | Setup / Admin / Audit      |  |
 |  | Report Engine  |  | Quartz Scheduler           |  |
 |  | Sub2API Client |  | Email/DingTalk/Feishu      |  |
-|  | Update Client  |  | Static file host           |  |
+|  | Static host    |                               |  |
 |  +------------------------------------------------+  |
 |             | SQLite + files on /data               |
 +-------------+----------------------------------------+
@@ -58,21 +57,9 @@ Browser
               +---- HTTPS ----> Sub2API
               +---- SMTP  ----> Mail server
               +---- HTTPS ----> DingTalk / Feishu
-              |
-              | private Docker network + shared token
-              v
-+------------------------------------------------------+
-| sub2api-report-updater                               |
-|  fixed operation allowlist                          |
-|  release verification / pull / replace / rollback   |
-|  only component with Docker Engine socket           |
-+--------------------------+---------------------------+
-                           |
-                           v
-                 Docker Engine / Release Assets
 ```
 
-只有主应用暴露 Web 端口。Updater 不映射主机端口，也不提供通用 Docker 代理能力。
+Docker 宿主机上的 `bootstrap.sh` 独立访问 GitHub Release Assets，验签并加载 App 离线镜像，再通过固定 Compose 控制 App。App 不接触 Docker Engine，也不提供更新 API。
 
 ## 4. 代码仓库结构
 
@@ -85,9 +72,8 @@ Browser
 │  ├─ Sub2ApiReport.Application/     # 用例、命令查询、端口接口
 │  ├─ Sub2ApiReport.Domain/          # 实体、值对象、领域规则
 │  ├─ Sub2ApiReport.Infrastructure/  # EF Core、外部客户端、渠道实现
-│  ├─ Sub2ApiReport.Migrator/        # 启动和升级时执行数据库迁移
-│  ├─ Sub2ApiReport.UpdateContracts/ # App 与 Updater 的最小协议
-│  └─ Sub2ApiReport.Updater/         # 独立升级控制器
+│  ├─ Sub2ApiReport.Migrator/        # 安装和升级时显式执行数据库迁移
+│  └─ Sub2ApiReport.Cli/             # 宿主机管理员恢复命令
 ├─ web/
 │  ├─ src/
 │  │  ├─ app/                        # Router、QueryClient、全局 Provider
@@ -112,8 +98,7 @@ Browser
 ├─ Directory.Build.props
 ├─ Directory.Packages.props
 ├─ Sub2ApiReport.slnx
-├─ Dockerfile
-└─ Dockerfile.updater
+└─ Dockerfile
 ```
 
 依赖方向：
@@ -123,12 +108,9 @@ Domain <- Application <- Api
    ^          ^           |
    +----------+-----------+
        Infrastructure
-
-UpdateContracts <- Api
-UpdateContracts <- Updater
 ```
 
-Updater 不引用业务 Infrastructure，不读取业务实体，也不能调用任意 Docker 操作。
+Api 和 Infrastructure 依赖 Application；Application 只依赖 Domain 和抽象接口。CLI 只通过 Application/Infrastructure 公开的恢复能力工作，不绕过领域边界。
 
 ## 5. 后端设计
 
@@ -144,7 +126,6 @@ Updater 不引用业务 Infrastructure，不读取业务实体，也不能调用
 | Reports | 日期窗口、自动刷新、采集、聚合、快照、XLSX/HTML 渲染 |
 | Scheduling | 月报计划、Quartz Trigger、手工运行、补跑 |
 | Notifications | 邮件、钉钉、飞书配置、测试和投递 |
-| Updates | 版本检查、升级授权、状态查询、历史记录 |
 | Audit | 管理操作、安全事件和关键配置变更 |
 | System | 健康检查、版本、备份、运行状态 |
 
@@ -237,19 +218,19 @@ Pending -> Sending -> Succeeded
 
 ### 5.6 配置管理
 
-遵循 [配置管理策略](configuration.md)：时区、发布通道、日志级别、数据保留、外部连接、通知渠道、计划任务和升级策略均写入 SQLite，并通过受认证管理 API 在运行期更新。业务模块在操作开始时读取 typed settings snapshot，不直接从 `IConfiguration` 读取业务配置。
+遵循 [配置管理策略](configuration.md)：时区、日志级别、数据保留、外部连接、通知渠道和计划任务均写入 SQLite，并通过受认证管理 API 在运行期更新。业务模块在操作开始时读取 typed settings snapshot，不直接从 `IConfiguration` 读取业务配置。
 
-数据库连接字符串、监听地址、运行环境、Updater 内部 token 文件和外部主密钥入口属于启动闭环例外。新增部署配置必须说明为什么无法在数据库加载后动态管理。
+数据库连接字符串、监听地址、运行环境和外部主密钥入口属于启动闭环例外。新增部署配置必须说明为什么无法在数据库加载后动态管理。
 
 配置更新使用 revision 乐观并发并写审计；秘密字段加密存储。进行中的报告使用启动时快照，后续任务使用新 revision，避免同一运行中途改变统计和投递语义。
 
-### 5.7 升级兼容契约
+### 5.7 发布与宿主机更新契约
 
-`deploy/release-compatibility.json` 是每个 Release 的唯一升级兼容策略，生成签名 manifest 中的 schema、deployment contract、最低 Updater、手工/在线模式、精确源 App 版本列表和用户提示。CI 禁止通过环境变量覆盖兼容结论。
+`deploy/upgrade-contract.json` 是 Docker deployment contract 的权威文件。v2 固定为 App-only、linux/amd64、本地离线镜像和宿主机 bootstrap 更新。Release manifest schema v4 只签名 App 归档、数据库迁移目标和 Release notes。
 
-在线安装只允许 `onlineUpgradeFrom` 明确列出且由 Candidate 使用对应公开 Release bundle 验证过的精确源版本。Updater 在下载 App 归档前同时校验当前 App 版本、当前 Updater 版本、manifest schema、deployment contract 和 App 维护资格；任一条件不满足时只提供完整 bundle 路径。
+Docker 更新脚本必须从实际容器识别旧 App image ID，停止 App 后创建独立 SQLite 备份，验证新镜像签名与标签，并在 readiness 失败时恢复旧控制文件、镜像标签和数据库。Contract 变化必须使用真实上一公开 Release bundle 验证成功迁移与失败回滚，禁止用当前源码重建“上一版”。
 
-宿主机发布文件是上次完整 bundle 的历史记录，App-only 更新后可能落后，不属于运行时真值。App/Updater 当前版本和回滚 image ID 必须来自内部握手与实际容器镜像；完整更新必须支持历史 manifest 落后、`current` 标签污染和候选容器残留。Candidate 必须下载并验签真实上一正式版，禁止用当前源码重建“上一版”。
+v1 到 v2 的一次性迁移在新 App 健康前保留旧 Updater，成功后只移除旧容器；旧状态卷、token 文件和备份不自动删除。该兼容分支只存在于宿主机迁移脚本，不属于运行时产品架构。
 
 ## 6. 数据设计
 
@@ -257,16 +238,16 @@ Pending -> Sending -> Succeeded
 
 - 数据文件：`/data/db/sub2api-report.db`。
 - 开启 WAL、foreign keys 和 busy timeout。
-- 单应用实例写入；Updater 只在维护模式和应用停止后恢复备份。
+- 单应用实例写入；宿主机更新脚本只在 App 停止后备份或恢复数据库。
 - EF Core migration 由独立 Migrator 执行，主 Web 进程不隐式迁移。
-- 升级前使用 SQLite backup API 生成一致性备份，不直接复制活动中的数据库文件。
+- 更新前归档停止状态下的 `/data/db`，不直接复制活动中的数据库文件。
 
 ### 6.2 核心表
 
 | 表 | 关键字段 | 说明 |
 | --- | --- | --- |
 | `AdminUsers` + Identity tables | `Id`, `UserName`, `PasswordHash` | 唯一管理员；数据库约束只允许一个活动管理员 |
-| `SystemSettings` | `InitializedAt`, `Timezone`, `ReleaseChannel`, `LogLevel`, retention fields, report download base URL/policy, `Revision` | 可动态更新的单例系统设置 |
+| `SystemSettings` | `InitializedAt`, `Timezone`, `LogLevel`, retention fields, report download base URL/policy, `Revision` | 可动态更新的单例系统设置 |
 | `SetupChallenges` | `CodeHash`, `ExpiresAt`, `ConsumedAt` | 只保存初始化码哈希 |
 | `Sub2ApiConnections` | `BaseUrl`, `AdminKeyCiphertext`, `LegacyUserId`, `UserScopeMode`, `CodexGroupId` | 当前只允许一个活动连接 |
 | `Sub2ApiUsers` | `ExternalId`, `EmailSnapshot`, `Status`, `IsSelected` | 同步的上游用户快照与报告范围 |
@@ -279,7 +260,6 @@ Pending -> Sending -> Succeeded
 | `DeliveryRecords` | `RunId`, `ChannelId`, `PayloadHash`, `Status`, `Attempts` | M5 手工投递逐渠道状态；M6 计划投递复用同一状态机 |
 | `DeliveryParts` | `DeliveryId`, `PartIndex`, `PayloadHash`, `Status`, `Attempts` | M5 分片消息逐片状态，补发只重试失败分片 |
 | `ReportDownloadGrants` | `DeliveryId`, `ReportSnapshotId`, token hash/ciphertext, expiry/revocation/download fields | 钉钉/飞书限时 XLSX 下载授权；策略按投递冻结 |
-| `UpdateRecords` | `FromVersion`, `ToVersion`, `Status`, timestamps | 升级历史 |
 | `AuditEvents` | `Actor`, `Action`, `Target`, `Result`, `MetadataJson` | 不保存密钥和密码 |
 
 关键约束：
@@ -339,12 +319,12 @@ Open: http://<host>:8080/setup
 - Cookie 名称使用 `__Host-` 前缀（HTTPS 部署）。
 - `HttpOnly`、`Secure`、`SameSite=Lax`、`Path=/`。
 - 滑动过期 8 小时，绝对上限 24 小时。
-- 登录、修改密码和升级操作分别限流。
+- 登录和修改密码分别限流。
 - 所有状态变更 API 使用 antiforgery token header。
 - 登录成功后轮换会话；登出清除 Cookie 和站点认证数据。
 - .NET 10 API 对未认证请求返回 `401`，前端统一跳转登录页。
 
-在线升级、修改 Sub2API 密钥、恢复备份等高风险操作要求重新输入当前密码，产生短时 step-up 授权。
+修改 Sub2API 密钥、恢复备份等高风险操作要求重新输入当前密码，产生短时 step-up 授权。
 
 ### 7.3 管理员恢复
 
@@ -405,9 +385,6 @@ GET  /api/v1/report-downloads/xlsx?token=...
 GET  /api/v1/system/version
 GET  /api/v1/system/settings
 PUT  /api/v1/system/settings
-GET  /api/v1/updates/check
-POST /api/v1/updates/install
-GET  /api/v1/updates/status
 
 GET  /health/live
 GET  /health/ready
@@ -442,9 +419,7 @@ API Keys
 系统设置
   ├─ Sub2API
   ├─ 安全
-  ├─ 备份
-  └─ 在线升级
-审计日志
+  └─ 备份
 ```
 
 工作台优先展示：
@@ -454,7 +429,7 @@ API Keys
 - 30 天总费用和总 Token；
 - 当前统计范围内的用户与 Key 数量；
 - 失败渠道和可重试操作；
-- 当前版本和可用更新。
+- 当前应用版本和运行环境。
 
 界面采用安静、紧凑的运营工具风格：固定侧栏、清晰页面标题、数据表和行内操作。页面区块保持无框或全宽，不把每个区块都做成浮动卡片，也不嵌套卡片。
 
@@ -493,8 +468,7 @@ API Keys
 - Fetch Metadata 拒绝跨站非导航 API 请求。
 - 所有 URL 配置禁止凭证出现在 query 日志中，HttpClient 禁止把 secret 写入诊断日志。
 - Sub2API 可配置内网地址；钉钉、飞书 webhook 默认校验官方 HTTPS host，显式高级开关才允许代理地址。
-- 主应用容器不挂载 Docker Socket。
-- Updater 的 Docker Socket 权限视为宿主机 root 权限，按独立高风险组件审计。
+- 生产 Compose 中没有容器挂载 Docker Socket，也没有应用内 Docker 控制面。
 
 ## 11. 可观测性与运维
 
@@ -504,13 +478,13 @@ API Keys
 - 计划任务触发和完成；
 - Sub2API 请求耗时、状态码、重试次数，不记录 Key；
 - 每个渠道的投递结果，不记录 webhook；
-- 登录失败、初始化、step-up、升级和恢复操作；
+- 登录失败、初始化、step-up 和管理员恢复操作；
 - correlation ID、report run ID、delivery ID。
 
 健康检查：
 
 - `/health/live`：进程事件循环可响应。
-- `/health/ready`：数据库可用、迁移完成、非升级维护状态。
+- `/health/ready`：数据库可用且迁移完成。
 - 外部 Sub2API/SMTP/webhook 不纳入 readiness，避免第三方故障导致容器重启风暴。
 
 MVP 不强制引入 Prometheus；保留 OpenTelemetry 接入点。
@@ -526,7 +500,7 @@ MVP 不强制引入 Prometheus；保留 OpenTelemetry 接入点。
 - 费用精度和 XLSX 文本化存储格式（超 15 位整数与特殊前缀文本）；
 - 渠道签名；
 - 幂等键和状态机；
-- Release 版本比较和升级策略。
+- Release manifest、镜像 digest 和部署契约校验。
 
 ### 集成测试
 
@@ -544,7 +518,7 @@ MVP 不强制引入 Prometheus；保留 OpenTelemetry 接入点。
 - 配置 Sub2API、同步并映射 Key；
 - dry-run 生成报告；
 - 三渠道组合和失败补发；
-- 更新检查和升级确认流程。
+- Docker bootstrap 全新安装、v1→v2 迁移和失败回滚。
 
 ## 13. 非功能目标
 
@@ -571,6 +545,7 @@ MVP 不包含：
 - 通用 Docker 管理面板；
 - 任意脚本插件；
 - 自动无确认升级；
+- 应用内或管理页面在线升级；
 - 使用量实时监控。
 
 这些边界用于控制首版复杂度，不妨碍后续以模块方式扩展。
@@ -584,7 +559,7 @@ MVP 不包含：
 5. 实现邮箱、钉钉、飞书及组合发送。
 6. 接入 Quartz 月报计划、幂等和补发。
 7. 完成 self-contained systemd、Docker Compose、离线制品、备份和 GitHub Release CI。
-8. 实现 updater、签名验证、App 健康检查和自动回滚；Updater 或 Compose 变更使用手工 bundle 升级。
+8. 实现签名 Release、宿主机 bootstrap、App 健康检查、数据库备份和自动回滚。
 9. 完成安全加固、发布文档和首个稳定版本。
 
-在线升级安排在业务闭环之后。systemd 部署使用 self-contained server package 和 bootstrap 更新；Docker 部署的发布契约、数据目录和本地镜像标签从第一阶段即保持稳定。生产服务器不依赖公共 Registry。
+系统部署使用 self-contained server package 或 App-only Docker bundle。两种方式都由宿主机 bootstrap 更新；Docker 部署的发布契约、数据目录和本地镜像标签保持稳定，生产服务器不依赖公共 Registry。

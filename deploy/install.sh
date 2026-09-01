@@ -1,43 +1,40 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-bundle_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+# shellcheck source=deploy/release-lib.sh
+source "$script_dir/release-lib.sh"
+
+for command_name in docker gzip jq openssl sed sha256sum stat tar uname; do
+  require_command "$command_name"
+done
+require_release_host
+docker compose version >/dev/null 2>&1 || {
+  echo "Docker Compose v2 is required." >&2
+  exit 1
+}
+
 install_dir=${SUB2API_REPORT_INSTALL_DIR:-/opt/sub2api-report}
 start_services=${SUB2API_REPORT_START:-true}
-if [[ $start_services != true && $start_services != false ]]; then
+[[ $start_services == true || $start_services == false ]] || {
   echo "SUB2API_REPORT_START must be true or false." >&2
   exit 2
-fi
-
+}
 if [[ $(id -u) -ne 0 ]]; then
   echo "Run this installer as root (for example: sudo ./install.sh)." >&2
   exit 2
 fi
-
-# shellcheck source=deploy/release-lib.sh
-source "$bundle_dir/release-lib.sh"
-for command_name in docker gzip jq openssl sha256sum sort stat; do
-  require_command "$command_name"
-done
-require_release_host
-docker compose version >/dev/null
-
-if [[ -e $install_dir/compose.yaml ]]; then
-  echo "$install_dir is already installed; use update.sh for a release update." >&2
+if [[ -e $install_dir/compose.yaml || -e $install_dir/.env ]]; then
+  echo "An installation already exists in $install_dir; run bootstrap.sh to update it." >&2
   exit 1
 fi
 
-verify_release_bundle "$bundle_dir"
-load_release_images "$bundle_dir"
-validate_loaded_images "$bundle_dir"
-activate_loaded_images "$bundle_dir"
-
-install_release_files "$bundle_dir" "$install_dir"
-install -m 0755 "$bundle_dir/release-lib.sh" "$install_dir/release-lib.sh"
-install -m 0755 "$bundle_dir/update.sh" "$install_dir/update.sh"
+verify_release_bundle "$script_dir"
+load_release_images "$script_dir"
+validate_loaded_images "$script_dir"
+activate_loaded_images "$script_dir"
+install_release_files "$script_dir" "$install_dir"
 write_instance_env "$install_dir"
-write_updater_token "$install_dir"
-
 docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml" config --quiet
 if [[ $start_services == false ]]; then
   version=$(jq -r '.version' "$install_dir/release-manifest.json")
@@ -45,22 +42,16 @@ if [[ $start_services == false ]]; then
   echo "Start it with: cd $install_dir && sudo docker compose up -d"
   exit 0
 fi
-docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml" up --detach --no-build
 
-if ! wait_for_service_health "$install_dir" app 120; then
-  docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml" logs --tail 100 app >&2 || true
-  docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml" down || true
-  echo "App did not become healthy. Inspect the logs in $install_dir." >&2
-  exit 1
-fi
-if ! wait_for_service_health "$install_dir" updater 60; then
-  docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml" logs --tail 100 updater >&2 || true
-  docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml" down || true
-  echo "Updater did not become healthy. Inspect the logs in $install_dir." >&2
+echo "Starting Sub2API Report..."
+docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml" up -d app
+if ! wait_for_service_health "$install_dir" app 180; then
+  docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml" logs --no-color app >&2 || true
+  docker compose --project-directory "$install_dir" -f "$install_dir/compose.yaml" down --remove-orphans || true
+  echo "Sub2API Report failed to become healthy; the installation was stopped." >&2
   exit 1
 fi
 
-version=$(jq -r '.version' "$install_dir/release-manifest.json")
-echo "Sub2API Report $version is running on port $(grep '^APP_PORT=' "$install_dir/.env" | cut -d= -f2)."
-echo "Installation directory: $install_dir"
-echo "Read the one-time initialization code with: cd $install_dir && docker compose logs app"
+app_port=$(sed -n 's/^APP_PORT=//p' "$install_dir/.env" | head -n 1)
+echo "Sub2API Report is healthy at http://localhost:${app_port}"
+echo "Manage it with $install_dir/appctl."

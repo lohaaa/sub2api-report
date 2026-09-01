@@ -43,7 +43,6 @@ function useAuthenticatedHandlers() {
       HttpResponse.json({
         version: "0.7.0",
         environment: "Test",
-        releaseChannel: "stable",
       }),
     ),
     http.get("/api/v1/schedule", () =>
@@ -367,6 +366,7 @@ describe("application authentication gate", () => {
     expect((await screen.findAllByText("42.50")).length).toBeGreaterThan(0);
     expect(screen.getByText("滚动 30 天费用（USD）")).toBeInTheDocument();
     expect(screen.queryByText("人员与 Key")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "审计日志" })).not.toBeInTheDocument();
   });
 
   it("identifies one failed dashboard status without retrying or hiding other data", async () => {
@@ -572,7 +572,6 @@ describe("application authentication gate", () => {
       http.get("/api/v1/system/settings", () =>
         HttpResponse.json({
           timezone: "Asia/Shanghai",
-          releaseChannel: "stable",
           logLevel: "Information",
           reportConcurrency: 4,
           reportRetentionMonths: 12,
@@ -864,7 +863,6 @@ describe("application authentication gate", () => {
       http.get("/api/v1/system/settings", () =>
         HttpResponse.json({
           timezone: "Asia/Shanghai",
-          releaseChannel: "stable",
           logLevel: "Information",
           reportConcurrency: 4,
           reportRetentionMonths: 12,
@@ -1322,7 +1320,6 @@ describe("application authentication gate", () => {
         expect(retriedToken).not.toBe(firstToken);
         return HttpResponse.json({
           timezone: "Asia/Shanghai",
-          releaseChannel: "stable",
           logLevel: "Information",
           reportConcurrency: 4,
           reportRetentionMonths: 12,
@@ -1339,7 +1336,6 @@ describe("application authentication gate", () => {
     await expect(
       updateSystemSettings({
         timezone: "Asia/Shanghai",
-        releaseChannel: "stable",
         logLevel: "Information",
         reportConcurrency: 4,
         reportRetentionMonths: 12,
@@ -1352,79 +1348,5 @@ describe("application authentication gate", () => {
     ).resolves.toMatchObject({ revision: 2 });
     expect(tokenRequests).toBeGreaterThanOrEqual(1);
     expect(updateRequests).toBe(2);
-  });
-});
-
-describe("system updates", () => {
-  it("renders the signed update plan and step-up dialog", async () => {
-    useAuthenticatedHandlers();
-    server.use(
-      http.get("/api/v1/updates/status", () =>
-        HttpResponse.json({
-          version: "0.9.0",
-          installationEnabled: true,
-          state: "update_available",
-          lastCheckedAt: "2026-08-28T10:00:00Z",
-          availableVersion: "1.0.0",
-          lastOperationId: null,
-          lastOperationState: null,
-        }),
-      ),
-      http.get("/api/v1/updates/plan", () =>
-        HttpResponse.json({
-          currentVersion: "0.9.0",
-          targetVersion: "1.0.0",
-          installationEnabled: true,
-          manualUpgradeRequired: false,
-          upgradeMessage: "支持在线升级。",
-          steps: [
-            { order: 1, name: "preflight", description: "校验签名和部署契约。" },
-            { order: 2, name: "backup", description: "备份 SQLite。" },
-          ],
-        }),
-      ),
-    );
-
-    const user = userEvent.setup();
-    renderApp("/updates");
-
-    expect(await screen.findByRole("heading", { level: 1, name: "系统更新" })).toBeInTheDocument();
-    expect(await screen.findByText("v1.0.0")).toBeInTheDocument();
-    expect(await screen.findByText("校验签名和部署契约。")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "安装更新" }));
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByLabelText("当前密码")).toHaveAttribute("autocomplete", "current-password");
-  });
-
-  it("requires a host upgrade when the deployment contract changes", async () => {
-    useAuthenticatedHandlers();
-    server.use(
-      http.get("/api/v1/updates/status", () =>
-        HttpResponse.json({
-          version: "0.9.0",
-          installationEnabled: true,
-          state: "update_available",
-          lastCheckedAt: "2026-08-28T10:00:00Z",
-          availableVersion: "1.0.0",
-          lastOperationId: null,
-          lastOperationState: null,
-        }),
-      ),
-      http.get("/api/v1/updates/plan", () =>
-        HttpResponse.json({
-          currentVersion: "0.9.0",
-          targetVersion: "1.0.0",
-          installationEnabled: false,
-          manualUpgradeRequired: true,
-          upgradeMessage: "请使用完整 Release bundle。",
-          steps: [],
-        }),
-      ),
-    );
-
-    renderApp("/updates");
-
-    expect(await screen.findByText("需要主机升级")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "安装更新" })).not.toBeInTheDocument();
   });
 });

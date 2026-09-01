@@ -1,11 +1,8 @@
 using System.Reflection;
-using ApiAssembly = Sub2ApiReport.Api.AssemblyReference;
 using ApplicationAssembly = Sub2ApiReport.Application.AssemblyReference;
 using CliAssembly = Sub2ApiReport.Cli.AssemblyReference;
 using DomainAssembly = Sub2ApiReport.Domain.AssemblyReference;
 using InfrastructureAssembly = Sub2ApiReport.Infrastructure.AssemblyReference;
-using UpdateContractsAssembly = Sub2ApiReport.UpdateContracts.AssemblyReference;
-using UpdaterAssembly = Sub2ApiReport.Updater.AssemblyReference;
 
 namespace Sub2ApiReport.ArchitectureTests;
 
@@ -17,56 +14,25 @@ public sealed class DependencyDirectionTests
             typeof(DomainAssembly).Assembly,
             "Sub2ApiReport.Application",
             "Sub2ApiReport.Infrastructure",
-            "Sub2ApiReport.Api",
-            "Sub2ApiReport.UpdateContracts",
-            "Sub2ApiReport.Updater");
+            "Sub2ApiReport.Api");
 
     [Fact]
     public void ApplicationDoesNotReferenceOuterLayers() =>
         AssertDoesNotReference(
             typeof(ApplicationAssembly).Assembly,
             "Sub2ApiReport.Infrastructure",
-            "Sub2ApiReport.Api",
-            "Sub2ApiReport.UpdateContracts",
-            "Sub2ApiReport.Updater");
+            "Sub2ApiReport.Api");
 
     [Fact]
     public void InfrastructureDoesNotReferenceHosts() =>
         AssertDoesNotReference(
             typeof(InfrastructureAssembly).Assembly,
-            "Sub2ApiReport.Api",
-            "Sub2ApiReport.UpdateContracts",
-            "Sub2ApiReport.Updater");
+            "Sub2ApiReport.Api");
 
     [Fact]
-    public void ApiDoesNotReferenceUpdaterHost() =>
-        AssertDoesNotReference(typeof(ApiAssembly).Assembly, "Sub2ApiReport.Updater");
-
-    [Fact]
-    public void CliDoesNotReferenceWebOrUpdaterHosts() =>
+    public void CliDoesNotReferenceWebHost() =>
         AssertDoesNotReference(
             typeof(CliAssembly).Assembly,
-            "Sub2ApiReport.Api",
-            "Sub2ApiReport.UpdateContracts",
-            "Sub2ApiReport.Updater");
-
-    [Fact]
-    public void UpdateContractsAreIsolatedFromHostsAndBusinessLayers() =>
-        AssertDoesNotReference(
-            typeof(UpdateContractsAssembly).Assembly,
-            "Sub2ApiReport.Domain",
-            "Sub2ApiReport.Application",
-            "Sub2ApiReport.Infrastructure",
-            "Sub2ApiReport.Api",
-            "Sub2ApiReport.Updater");
-
-    [Fact]
-    public void UpdaterDoesNotReferenceBusinessLayers() =>
-        AssertDoesNotReference(
-            typeof(UpdaterAssembly).Assembly,
-            "Sub2ApiReport.Domain",
-            "Sub2ApiReport.Application",
-            "Sub2ApiReport.Infrastructure",
             "Sub2ApiReport.Api");
 
     private static void AssertDoesNotReference(Assembly assembly, params string[] forbiddenAssemblies)

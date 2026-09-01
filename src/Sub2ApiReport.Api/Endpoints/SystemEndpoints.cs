@@ -18,7 +18,7 @@ internal static class SystemEndpoints
             .AllowAnonymous()
             .WithName("GetSystemVersion")
             .WithSummary("获取系统版本")
-            .WithDescription("返回当前应用版本、运行环境和发布通道。")
+            .WithDescription("返回当前应用版本和运行环境。")
             .Produces<SystemVersionResponse>();
 
         group.MapGet("/settings", GetSettingsAsync)
@@ -48,8 +48,7 @@ internal static class SystemEndpoints
         var version = await systemInfoService.GetVersionAsync(cancellationToken);
         return TypedResults.Ok(new SystemVersionResponse(
             version.Version,
-            version.Environment,
-            version.ReleaseChannel));
+            version.Environment));
     }
 
     private static async Task<Ok<SystemSettingsResponse>> GetSettingsAsync(
@@ -73,7 +72,6 @@ internal static class SystemEndpoints
             var settings = await settingsService.UpdateAsync(
                 new UpdateSystemSettingsCommand(
                     request.Timezone,
-                    request.ReleaseChannel,
                     request.LogLevel,
                     request.ReportConcurrency,
                     request.ReportRetentionMonths,
@@ -111,7 +109,6 @@ internal static class SystemEndpoints
 
     private static SystemSettingsResponse Map(SystemSettingsSnapshot settings) => new(
         settings.Timezone,
-        settings.ReleaseChannel,
         settings.LogLevel,
         settings.ReportConcurrency,
         settings.ReportRetentionMonths,

@@ -151,26 +151,27 @@ pnpm quality:web
 
 面向用户的重要变更先记录在根目录 `CHANGELOG.md` 的 `Unreleased` 章节。首次公开版本固定为 `v1.0.0`；在此之前不创建 `0.x` Tag 或 GitHub Release。
 
-M7/M8 验收可在隔离的 linux/amd64 环境生成内部候选 bundle：
+发布前可在隔离的 linux/amd64 环境使用测试密钥生成本地 bundle；该操作不创建 Candidate workflow 或 GitHub Release：
 
 ```bash
 RELEASE_SIGNING_KEY_FILE=/absolute/path/to/test-release-key.pem \
 RELEASE_NOTES_SECTION=Unreleased \
-deploy/build-release-assets.sh 0.8.0-internal /tmp/sub2api-report-candidate
+deploy/build-release-assets.sh 1.2.1-internal.1 /tmp/sub2api-report-release-test
 ```
 
-该模式只复用 `Unreleased` 内容生成候选说明，不改变 changelog，也不发布 GitHub Release。准备 `v1.0.0` 时：
+准备正式版本时：
 
-1. 将 `Unreleased` 条目整理到 `## [1.0.0] - YYYY-MM-DD` 章节；
-2. 将 .NET 和 Node 项目版本统一更新为 `1.0.0`；
-3. 运行 `deploy/extract-release-notes.sh CHANGELOG.md 1.0.0 /tmp/release-notes.md`；
-4. M7、M8、M9 验收全部通过后创建并推送 `v1.0.0` Tag。
+1. 将 `Unreleased` 条目整理到 `## [X.Y.Z] - YYYY-MM-DD` 章节；
+2. 统一更新 .NET 和根/前端 Node 项目版本；
+3. 运行 `deploy/extract-release-notes.sh CHANGELOG.md X.Y.Z /tmp/release-notes.md`；
+4. 完成本地质量、签名 bundle、全新安装和适用的 N-1 迁移/回滚验收；
+5. 仅在全部门通过后创建并推送 `vX.Y.Z` Tag。
 
-Release workflow 不自动拼接 Git 提交信息。首次 Tag 不是 `v1.0.0`、对应版本章节缺失或没有条目时，发布会在构建镜像前失败。
+Release workflow 不自动拼接 Git 提交信息。对应版本章节缺失、为空或版本不一致时，发布会在构建镜像前失败。
 
 ## Docker Compose
 
-源码仓库使用开发 override 本地构建 App 和无安装权限的 Updater 骨架：
+源码仓库使用开发 override 本地构建 App：
 
 ```bash
 cd deploy
@@ -180,4 +181,4 @@ cp .env.example .env
 
 正式 `install.sh` 只接受 GitHub Release bundle 中已经校验的离线镜像归档，不从源码构建，也不访问公共 Registry。
 
-官方 Compose 中只有 Updater 挂载 Docker Socket；App 永远不挂载。`dev-up.sh` 会读取 Socket GID 并生成本地 `.env`。当前开发机没有 Docker 时，仍可完成全部非容器构建和测试。
+正式和开发 Compose 都只有 App，任何容器都不挂载 Docker Socket。`dev-up.sh` 只生成端口和监听地址等本地 `.env` 并启动 App；当前开发机没有 Docker 时，仍可完成全部非容器构建和测试。

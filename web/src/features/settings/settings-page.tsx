@@ -4,7 +4,6 @@ import {
   CheckCircle2Icon,
   DatabaseIcon,
   PlugZapIcon,
-  RefreshCwIcon,
   ServerIcon,
   ShieldCheckIcon,
   SlidersHorizontalIcon,
@@ -123,11 +122,6 @@ export function SettingsPage() {
                 icon={ServerIcon}
                 label="应用版本"
                 value={versionQuery.data?.version ?? "未连接"}
-              />
-              <SettingRow
-                icon={RefreshCwIcon}
-                label="发布通道"
-                value={versionQuery.data?.releaseChannel ?? "stable"}
               />
               <SettingRow icon={DatabaseIcon} label="数据库" value="SQLite" />
             </div>

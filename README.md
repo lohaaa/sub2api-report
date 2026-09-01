@@ -64,13 +64,12 @@ sudo systemctl restart sub2api-report
 curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/bootstrap.sh | bash
 ```
 
-脚本会下载并校验签名完整 bundle，默认安装到 `/opt/sub2api-report`、监听 `0.0.0.0:8081` 并启动服务。更新时会保留现有端口、监听地址、实例 ID、内部 token 和数据卷；替换前备份 SQLite，验证失败时恢复旧镜像、配置和数据库。
-
+脚本会下载并校验签名完整 bundle，默认安装到 `/opt/sub2api-report`、监听 `0.0.0.0:8081` 并启动 App。更新时会保留现有端口、监听地址和数据卷；替换前备份 SQLite，验证失败时恢复旧镜像、Compose、配置和数据库。现有 v1 App+Updater 部署会自动迁移为 App-only，成功后移除旧 Updater 容器，但不会自动删除历史状态卷、token 文件或备份。
 常用可选参数：
 
 | 参数 | 默认值 | 作用 |
 | --- | --- | --- |
-| `SUB2API_REPORT_VERSION` | `latest` | 固定安装指定正式版本，例如 `1.1.3` |
+| `SUB2API_REPORT_VERSION` | `latest` | 固定安装指定正式版本，例如 `1.2.0` |
 | `SUB2API_REPORT_INSTALL_DIR` | `/opt/sub2api-report` | 安装 Compose、`.env` 和发布元数据的目录 |
 | `SUB2API_REPORT_PORT` | 新安装为 `8081` | 设置 Report 主机端口；更新时省略则保留现有端口 |
 | `SUB2API_REPORT_BIND_ADDRESS` | 新安装为 `0.0.0.0` | 设置监听地址；更新时省略则保留现有地址 |
@@ -94,7 +93,7 @@ sudo docker compose logs -f app
 sudo docker compose down
 ```
 
-管理页面只会为兼容文件明确验证过的源版本显示“安装更新”。页面提示“需要主机升级”时，重新执行上面的无参数 bootstrap 命令即可完成 App、Updater 和部署文件的完整更新。
+Docker 部署没有应用内更新入口。首次安装和后续更新都只执行上面的无参数 bootstrap 命令。
 
 ## 首次初始化
 

@@ -230,7 +230,6 @@ public sealed class AuthenticationFlowTests
         var update = new
         {
             timezone = "UTC",
-            releaseChannel = "preview",
             logLevel = "Warning",
             reportConcurrency = 6,
             reportRetentionMonths = 24,

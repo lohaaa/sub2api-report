@@ -5,7 +5,6 @@ namespace Sub2ApiReport.Api.Models;
 /// <summary>Represents the mutable system settings stored in SQLite.</summary>
 public sealed record SystemSettingsResponse(
     string Timezone,
-    string ReleaseChannel,
     string LogLevel,
     int ReportConcurrency,
     int ReportRetentionMonths,
@@ -21,9 +20,6 @@ public sealed record UpdateSystemSettingsRequest
 {
     [Required, StringLength(100, MinimumLength = 1)]
     public required string Timezone { get; init; }
-
-    [Required, StringLength(32, MinimumLength = 1)]
-    public required string ReleaseChannel { get; init; }
 
     [Required, StringLength(16, MinimumLength = 3)]
     public required string LogLevel { get; init; }

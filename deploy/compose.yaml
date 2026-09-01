@@ -13,14 +13,10 @@ services:
       Security__SecureCookies: ${SECURE_COOKIES:-false}
       ConnectionStrings__Database: Data Source=/data/db/sub2api-report.db;Foreign Keys=True;Default Timeout=5;Pooling=True
       DataProtection__KeysPath: /data/keys
-      Updater__BaseUrl: http://updater:8081
-      Updater__TokenFile: /run/secrets/updater-token
     volumes:
       - app-data:/data
-      - ./secrets/updater-token:/run/secrets/updater-token:ro
     networks:
       - frontend
-      - control
     read_only: true
     tmpfs:
       - /tmp:size=64m,mode=1777
@@ -32,7 +28,14 @@ services:
     mem_limit: 768m
     cpus: 2.0
     healthcheck:
-      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8080/health/live"]
+      test:
+        [
+          "CMD",
+          "curl",
+          "--fail",
+          "--silent",
+          "http://127.0.0.1:8080/health/live",
+        ]
       interval: 15s
       timeout: 3s
       retries: 4
@@ -44,67 +47,10 @@ services:
         max-file: "5"
     labels:
       io.sub2api-report.role: app
-      io.sub2api-report.contract: "1"
-      io.sub2api-report.instance: "${INSTANCE_ID:?INSTANCE_ID is required}"
-
-  updater:
-    image: sub2api-report-updater:bootstrap
-    pull_policy: never
-    platform: linux/amd64
-    restart: unless-stopped
-    environment:
-      ASPNETCORE_ENVIRONMENT: Production
-      Updater__StatePath: /update-state
-      Updater__TokenFile: /run/secrets/updater-token
-      Updater__InstallationEnabled: "true"
-      Updater__AppInstanceId: "${INSTANCE_ID:?INSTANCE_ID is required}"
-      Updater__DockerEndpoint: unix:///var/run/docker.sock
-      Updater__AppInternalBaseUrl: http://app:8080
-      Updater__DatabasePath: /managed-data/db/sub2api-report.db
-      Updater__PublicKeyPath: /run/secrets/update-public-key.pem
-    group_add:
-      - "${DOCKER_GID:?DOCKER_GID is required}"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - app-data:/managed-data
-      - updater-state:/update-state
-      - ./secrets/updater-token:/run/secrets/updater-token:ro
-      - ./update-public-key.pem:/run/secrets/update-public-key.pem:ro
-    networks:
-      - control
-      - updater-egress
-    read_only: true
-    tmpfs:
-      - /tmp:size=32m,mode=1777
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
-    pids_limit: 128
-    mem_limit: 256m
-    cpus: 1.0
-    healthcheck:
-      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8081/health/live"]
-      interval: 15s
-      timeout: 3s
-      retries: 4
-      start_period: 15s
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "5"
-    labels:
-      io.sub2api-report.role: updater
-      io.sub2api-report.contract: "1"
-      io.sub2api-report.instance: "${INSTANCE_ID:?INSTANCE_ID is required}"
+      io.sub2api-report.contract: "2"
 
 networks:
   frontend:
-  control:
-    internal: true
-  updater-egress:
 
 volumes:
   app-data:
-  updater-state:

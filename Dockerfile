@@ -38,7 +38,7 @@ LABEL org.opencontainers.image.title="Sub2API Report App" \
       org.opencontainers.image.source="${SOURCE_URL}" \
       org.opencontainers.image.licenses="Apache-2.0" \
       io.sub2api-report.role="app" \
-      io.sub2api-report.contract="1"
+      io.sub2api-report.contract="2"
 # hadolint ignore=DL3008
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends curl tar \

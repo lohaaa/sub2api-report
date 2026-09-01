@@ -1,4 +1,3 @@
-import { ScrollTextIcon } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
@@ -8,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DashboardPage } from "@/features/dashboard/dashboard-page";
 import { AuthLayout } from "@/features/auth/auth-layout";
-import { EmptySectionPage } from "@/features/shared/empty-section-page";
 import {
   ApiError,
   getCurrentAdministrator,
@@ -58,11 +56,6 @@ const SetupPage = lazy(() =>
 const SettingsPage = lazy(() =>
   import("@/features/settings/settings-page").then((module) => ({
     default: module.SettingsPage,
-  })),
-);
-const UpdatesPage = lazy(() =>
-  import("@/features/updates/updates-page").then((module) => ({
-    default: module.UpdatesPage,
   })),
 );
 
@@ -139,19 +132,6 @@ function AuthenticatedRoutes() {
         <Route path="channels" element={<ChannelsPage />} />
         <Route path="schedule" element={<SchedulePage />} />
         <Route path="settings" element={<SettingsPage />} />
-        <Route path="updates" element={<UpdatesPage />} />
-        <Route
-          path="audit"
-          element={
-            <EmptySectionPage
-              title="审计日志"
-              description="管理操作和安全事件"
-              icon={ScrollTextIcon}
-              columns={["时间", "操作", "目标", "结果"]}
-              emptyText="暂无审计事件"
-            />
-          }
-        />
       </Route>
       <Route path="/login" element={<Navigate to="/" replace />} />
       <Route path="/recover" element={<Navigate to="/" replace />} />

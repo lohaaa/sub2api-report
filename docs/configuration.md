@@ -12,14 +12,13 @@
 当前 `SystemSettings` 单例保存：
 
 - 默认时区；
-- Release 通道；
 - 应用日志级别；
 - 报告采集并发数（1-10，默认 4）；
 - 报告保留月数；
 - 备份保留数量；
 - revision 和最后更新时间。
 
-`Sub2ApiConnections` 单例保存 Base URL、用户范围模式、可选 Codex Group ID、revision、连接测试和同步状态；`Sub2ApiUsers` 保存同步的用户快照与指定用户选择。Admin API Key 使用 ASP.NET Core Data Protection 加密，读取 API 只返回末四位掩码。通知渠道、报告计划、备份策略和升级策略由后续模块分别使用自己的数据库实体保存。
+`Sub2ApiConnections` 单例保存 Base URL、用户范围模式、可选 Codex Group ID、revision、连接测试和同步状态；`Sub2ApiUsers` 保存同步的用户快照与指定用户选择。Admin API Key 使用 ASP.NET Core Data Protection 加密，读取 API 只返回末四位掩码。通知渠道、报告计划和备份策略由各自模块使用明确的数据库实体保存。
 
 ## 2. 启动配置例外
 
@@ -30,9 +29,7 @@
 | 数据库连接字符串 | 连接数据库自身所必需；生产固定指向 `/data` |
 | HTTP 监听地址和端口 | 由容器和宿主网络在进程启动前分配 |
 | ASP.NET Core 运行环境 | 决定宿主启动行为和开发功能暴露 |
-| Updater 内部地址和 token 文件 | 属于两个进程之间的部署契约和启动认证 |
 | 外部主密钥或主密钥文件路径 | 用于解密数据库内秘密，不能和密文存放在同一信任边界 |
-| Updater 状态目录和安装能力安全闸 | 在业务数据库不可用或升级中断时仍需工作 |
 
 新增环境变量或配置文件项时，必须先证明它属于上述启动闭环。不能仅因为实现方便就绕过数据库配置。
 
@@ -50,7 +47,7 @@
 
 Sub2API Admin API Key、SMTP 密码、钉钉和飞书 secret 等秘密通过页面录入后加密保存。API 不返回明文，日志、Problem Details 和审计 metadata 不得包含秘密。
 
-所有配置写接口都要求登录、antiforgery 和统一输入校验；修改 Sub2API 密钥、升级策略和恢复策略等高风险设置还要求 step-up。每次更新记录操作者、配置类别、旧新 revision 和结果，不记录秘密值。Sub2API 上游响应中的完整业务 Key 不进入本地 DTO、数据库或审计。
+所有配置写接口都要求登录、antiforgery 和统一输入校验；修改 Sub2API 密钥和恢复策略等高风险设置还要求 step-up。每次更新记录操作者、配置类别、旧新 revision 和结果，不记录秘密值。Sub2API 上游响应中的完整业务 Key 不进入本地 DTO、数据库或审计。
 
 ## 5. 代码约束
 

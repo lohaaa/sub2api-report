@@ -11,7 +11,6 @@ public interface ISystemSettingsService
 
 public sealed record SystemSettingsSnapshot(
     string Timezone,
-    string ReleaseChannel,
     string LogLevel,
     int ReportConcurrency,
     int ReportRetentionMonths,
@@ -24,7 +23,6 @@ public sealed record SystemSettingsSnapshot(
 
 public sealed record UpdateSystemSettingsCommand(
     string Timezone,
-    string ReleaseChannel,
     string LogLevel,
     int ReportConcurrency,
     int ReportRetentionMonths,

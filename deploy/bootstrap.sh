@@ -41,7 +41,7 @@ run_as_root() {
 }
 install_host_dependencies() {
   local missing=()
-  for command_name in curl gzip jq openssl sha256sum stat tar; do
+  for command_name in curl flock gzip jq openssl sha256sum stat tar; do
     command -v "$command_name" >/dev/null 2>&1 || missing+=("$command_name")
   done
   (( ${#missing[@]} == 0 )) && return
@@ -50,15 +50,15 @@ install_host_dependencies() {
   if command -v apt-get >/dev/null 2>&1; then
     run_as_root apt-get update
     run_as_root env DEBIAN_FRONTEND=noninteractive \
-      apt-get install --yes curl gzip jq openssl coreutils tar
+      apt-get install --yes curl gzip jq openssl coreutils tar util-linux
   elif command -v dnf >/dev/null 2>&1; then
-    run_as_root dnf install --assumeyes curl gzip jq openssl coreutils tar
+    run_as_root dnf install --assumeyes curl gzip jq openssl coreutils tar util-linux
   elif command -v yum >/dev/null 2>&1; then
-    run_as_root yum install --assumeyes curl gzip jq openssl coreutils tar
+    run_as_root yum install --assumeyes curl gzip jq openssl coreutils tar util-linux
   elif command -v apk >/dev/null 2>&1; then
-    run_as_root apk add --no-cache curl gzip jq openssl coreutils tar
+    run_as_root apk add --no-cache curl gzip jq openssl coreutils tar util-linux
   else
-    echo "Install curl, gzip, jq, openssl, coreutils, and tar, then retry." >&2
+    echo "Install curl, flock, gzip, jq, openssl, coreutils, and tar, then retry." >&2
     exit 2
   fi
 }

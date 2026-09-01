@@ -6,15 +6,5 @@ services:
       context: ..
       dockerfile: Dockerfile
       args:
-        VERSION: 1.1.3-dev
-        REVISION: local
-
-  updater:
-    image: sub2api-report-updater:dev
-    pull_policy: build
-    build:
-      context: ..
-      dockerfile: Dockerfile.updater
-      args:
-        VERSION: 1.1.3-dev
+        VERSION: 1.2.0-dev
         REVISION: local

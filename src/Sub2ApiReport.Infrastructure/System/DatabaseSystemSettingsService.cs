@@ -33,7 +33,6 @@ internal sealed class DatabaseSystemSettingsService(
 
         setting.Update(
             command.Timezone,
-            command.ReleaseChannel,
             command.LogLevel,
             command.ReportConcurrency,
             command.ReportRetentionMonths,
@@ -59,7 +58,6 @@ internal sealed class DatabaseSystemSettingsService(
 
     private static SystemSettingsSnapshot Map(Domain.System.SystemSetting setting) => new(
         setting.Timezone,
-        setting.ReleaseChannel,
         setting.LogLevel,
         setting.ReportConcurrency,
         setting.ReportRetentionMonths,

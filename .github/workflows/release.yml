@@ -35,8 +35,6 @@ jobs:
           fi
           project_version=$(sed -n 's:.*<VersionPrefix>\(.*\)</VersionPrefix>.*:\1:p' Directory.Build.props)
           test "$version" = "$project_version"
-          compatibility_version=$(jq -r '.releaseVersion' deploy/release-compatibility.json)
-          test "$version" = "$compatibility_version"
           deploy/extract-release-notes.sh CHANGELOG.md "$version" "$RUNNER_TEMP/release-notes.md"
           printf 'value=%s\n' "$version" >> "$GITHUB_OUTPUT"
 
@@ -60,8 +58,10 @@ jobs:
       - run: dotnet restore Sub2ApiReport.slnx
       - run: pnpm quality
       - run: |
-          bash -n deploy/*.sh
-          shellcheck -x deploy/*.sh
+          for script in deploy/*.sh deploy/appctl; do
+            bash -n "$script"
+          done
+          shellcheck -x deploy/*.sh deploy/appctl
           deploy/documentation-test.sh
           deploy/docker-bootstrap-test.sh
           deploy/release-lib-test.sh
@@ -141,20 +141,112 @@ jobs:
           trap cleanup EXIT
           sudo env SUB2API_REPORT_INSTALL_DIR="$install_dir" "$bundle_dir/install.sh"
           curl --fail --silent http://127.0.0.1:18080/health/ready >/dev/null
+          sudo env SUB2API_REPORT_INSTALL_DIR="$install_dir" "$bundle_dir/update.sh"
+          test "$(sudo docker compose --project-directory "$install_dir" \
+            -f "$install_dir/compose.yaml" config --services)" = app
+          curl --fail --silent http://127.0.0.1:18080/health/ready >/dev/null
 
+
+      - name: Test v1 to v2 migration and rollback
+        if: steps.version.outputs.value == '1.2.0'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREVIOUS_VERSION: 1.1.3
+        run: |
+          smoke_root=$(mktemp -d "$RUNNER_TEMP/contract-v2-smoke.XXXXXX")
+          previous_dir="$smoke_root/previous"
+          target_dir="$smoke_root/target"
+          failure_dir="$smoke_root/failure"
+          install_dir="$smoke_root/install"
+          legacy_volume=
+          mkdir -p "$previous_dir" "$target_dir"
+          cleanup() {
+            if [[ -f $install_dir/compose.yaml ]]; then
+              sudo docker compose --project-directory "$install_dir" \
+                -f "$install_dir/compose.yaml" down --volumes --remove-orphans >/dev/null 2>&1 || true
+            fi
+            sudo docker ps -aq --filter label=com.docker.compose.project=sub2api-report \
+              | xargs -r sudo docker rm --force >/dev/null 2>&1 || true
+            [[ -z $legacy_volume ]] || sudo docker volume rm "$legacy_volume" >/dev/null 2>&1 || true
+            sudo rm -rf "$smoke_root"
+          }
+          trap cleanup EXIT
+
+          previous_bundle="sub2api-report-v${PREVIOUS_VERSION}-linux-amd64.tar.gz"
+          gh release download "v$PREVIOUS_VERSION" --dir "$smoke_root" \
+            --pattern "$previous_bundle" --pattern checksums.txt
+          grep -F "  $previous_bundle" "$smoke_root/checksums.txt" \
+            > "$smoke_root/previous-checksum.txt"
+          (cd "$smoke_root" && sha256sum --check --strict previous-checksum.txt)
+          tar -xzf "$smoke_root/$previous_bundle" -C "$previous_dir"
+          tar -xzf "release/sub2api-report-v${{ steps.version.outputs.value }}-linux-amd64.tar.gz" \
+            -C "$target_dir"
+          cmp "$previous_dir/update-public-key.pem" "$target_dir/update-public-key.pem"
+          sed -i 's/^APP_PORT=.*/APP_PORT=18082/; s/^BIND_ADDRESS=.*/BIND_ADDRESS=127.0.0.1/' \
+            "$previous_dir/.env.example"
+          sed -i \
+            -e 's/interval: 15s/interval: 1s/g' \
+            -e 's/start_period: [0-9][0-9]*s/start_period: 0s/g' \
+            "$previous_dir/compose.yaml" "$target_dir/compose.yaml"
+
+          sudo env SUB2API_REPORT_INSTALL_DIR="$install_dir" "$previous_dir/install.sh"
+          test "$(sudo docker compose --project-directory "$install_dir" \
+            -f "$install_dir/compose.yaml" config --services | sort | tr '\n' ' ')" = "app updater "
+          curl --fail --silent http://127.0.0.1:18082/health/ready >/dev/null
+
+          cp -a "$target_dir" "$failure_dir"
+          sed -i 's#health/live#health/never#' "$failure_dir/compose.yaml"
+          if sudo env SUB2API_REPORT_INSTALL_DIR="$install_dir" \
+            SUB2API_REPORT_APP_HEALTH_TIMEOUT=20 "$failure_dir/update.sh"; then
+            echo "The injected v2 health failure unexpectedly succeeded." >&2
+            exit 1
+          fi
+          test "$(sudo jq -r '.version' "$install_dir/release-manifest.json")" = "$PREVIOUS_VERSION"
+          test "$(sudo docker compose --project-directory "$install_dir" \
+            -f "$install_dir/compose.yaml" config --services | sort | tr '\n' ' ')" = "app updater "
+          previous_app_container=$(sudo docker compose --project-directory "$install_dir" \
+            -f "$install_dir/compose.yaml" ps -q app)
+          previous_updater_container=$(sudo docker compose --project-directory "$install_dir" \
+            -f "$install_dir/compose.yaml" ps -q updater)
+          previous_app_image=$(sudo docker inspect --format '{{.Image}}' "$previous_app_container")
+          test "$(sudo docker image inspect sub2api-report-app:current --format '{{.Id}}')" = \
+            "$previous_app_image"
+          test "$(sudo docker inspect "$previous_app_container" \
+            --format '{{index .Config.Labels "org.opencontainers.image.version"}}')" = "$PREVIOUS_VERSION"
+          test "$(sudo docker inspect "$previous_updater_container" \
+            --format '{{index .Config.Labels "org.opencontainers.image.version"}}')" = "$PREVIOUS_VERSION"
+          legacy_volume=$(sudo docker inspect "$previous_updater_container" \
+            --format '{{range .Mounts}}{{if eq .Destination "/update-state"}}{{.Name}}{{end}}{{end}}')
+          test -n "$legacy_volume"
+          curl --fail --silent http://127.0.0.1:18082/health/ready >/dev/null
+
+          sudo env SUB2API_REPORT_INSTALL_DIR="$install_dir" "$target_dir/update.sh"
+          test "$(sudo jq -r '.version' "$install_dir/release-manifest.json")" = \
+            '${{ steps.version.outputs.value }}'
+          test "$(sudo docker compose --project-directory "$install_dir" \
+            -f "$install_dir/compose.yaml" config --services)" = app
+          if sudo docker container inspect "$previous_updater_container" >/dev/null 2>&1; then
+            echo "The legacy Updater container still exists after successful migration." >&2
+            exit 1
+          fi
+          sudo docker volume inspect "$legacy_volume" >/dev/null
+          sudo test -s "$install_dir/secrets/updater-token"
+          if sudo grep -Eq '^(INSTANCE_ID|DOCKER_GID)=' "$install_dir/.env"; then
+            echo "Legacy deployment environment values remain active." >&2
+            exit 1
+          fi
+          current_app=$(sudo docker compose --project-directory "$install_dir" \
+            -f "$install_dir/compose.yaml" ps -q app)
+          test "$(sudo docker inspect "$current_app" \
+            --format '{{index .Config.Labels "io.sub2api-report.contract"}}')" = 2
+          test -z "$(sudo docker inspect "$current_app" \
+            --format '{{range .Mounts}}{{if eq .Source "/var/run/docker.sock"}}{{.Source}}{{end}}{{end}}')"
+          curl --fail --silent http://127.0.0.1:18082/health/ready >/dev/null
       - name: Scan App image
         uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
         with:
           image-ref: sub2api-report-app:${{ steps.version.outputs.value }}
-          format: table
-          exit-code: 1
-          ignore-unfixed: false
-          severity: CRITICAL
-
-      - name: Scan Updater image
-        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
-        with:
-          image-ref: sub2api-report-updater:${{ steps.version.outputs.value }}
           format: table
           exit-code: 1
           ignore-unfixed: false
@@ -167,13 +259,6 @@ jobs:
           format: spdx-json
           output-file: release/sub2api-report-app-v${{ steps.version.outputs.value }}.spdx.json
 
-      - name: Generate Updater SBOM
-        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
-        with:
-          image: sub2api-report-updater:${{ steps.version.outputs.value }}
-          format: spdx-json
-          output-file: release/sub2api-report-updater-v${{ steps.version.outputs.value }}.spdx.json
-
       - name: Add SBOM checksums
         working-directory: release
         run: sha256sum *.spdx.json >> checksums.txt
@@ -184,7 +269,7 @@ jobs:
           subject-path: |
             release/*.tar.gz
             release/release-manifest.json
-            release/release-compatibility.json
+            release/upgrade-contract.json
             release/release-manifest.sig
             release/checksums.txt
             release/LICENSE

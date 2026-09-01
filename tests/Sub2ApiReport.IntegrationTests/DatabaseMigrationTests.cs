@@ -27,7 +27,6 @@ public sealed class DatabaseMigrationTests
 
         Assert.Equal(1, setting.Id);
         Assert.Equal("Asia/Shanghai", setting.Timezone);
-        Assert.Equal("stable", setting.ReleaseChannel);
         Assert.Equal("Information", setting.LogLevel);
         Assert.Equal(4, setting.ReportConcurrency);
         Assert.Equal(12, setting.ReportRetentionMonths);
@@ -37,6 +36,9 @@ public sealed class DatabaseMigrationTests
         Assert.Null(setting.ReportDownloadMaxDownloads);
         Assert.Empty(await dbContext.ReportDownloadGrants.ToListAsync(CancellationToken.None));
         Assert.Equal(1, setting.Revision);
+
+        var systemSettingColumns = await GetColumnTypesAsync(dbContext, "SystemSettings");
+        Assert.DoesNotContain("ReleaseChannel", systemSettingColumns.Keys);
 
         var schedule = await dbContext.ReportSchedules.SingleAsync(CancellationToken.None);
         Assert.False(schedule.Enabled);
@@ -344,7 +346,6 @@ public sealed class DatabaseMigrationTests
                 var updated = await settingsService.UpdateAsync(
                     new UpdateSystemSettingsCommand(
                         "UTC",
-                        "preview",
                         "Warning",
                         6,
                         24,
@@ -364,7 +365,6 @@ public sealed class DatabaseMigrationTests
                 var updated = await settingsService.GetAsync(CancellationToken.None);
 
                 Assert.Equal("UTC", updated.Timezone);
-                Assert.Equal("preview", updated.ReleaseChannel);
                 Assert.Equal("Warning", updated.LogLevel);
                 Assert.Equal(6, updated.ReportConcurrency);
                 Assert.Equal(24, updated.ReportRetentionMonths);

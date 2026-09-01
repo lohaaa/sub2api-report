@@ -7,5 +7,4 @@ public interface ISystemInfoService
 
 public sealed record SystemVersionInfo(
     string Version,
-    string Environment,
-    string ReleaseChannel);
+    string Environment);

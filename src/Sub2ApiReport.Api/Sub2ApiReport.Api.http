@@ -64,7 +64,6 @@ X-CSRF-TOKEN: {{authenticatedAntiforgery.response.body.$.token}}
 
 {
   "timezone": "{{systemSettings.response.body.$.timezone}}",
-  "releaseChannel": "{{systemSettings.response.body.$.releaseChannel}}",
   "logLevel": "{{systemSettings.response.body.$.logLevel}}",
   "reportConcurrency": {{systemSettings.response.body.$.reportConcurrency}},
   "reportRetentionMonths": {{systemSettings.response.body.$.reportRetentionMonths}},

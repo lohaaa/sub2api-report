@@ -117,4 +117,4 @@ sudo sub2api-reportctl admin create-reset-code
 curl -fsSL https://raw.githubusercontent.com/lohaaa/sub2api-report/main/deploy/server-bootstrap.sh | bash
 ```
 
-服务器直接部署不运行 Docker Updater，管理页面的 App-only Docker 在线更新不可用；更新由 systemd bootstrap 完成，并包含停服、数据库备份、健康检查和失败回滚。
+服务器直接部署不运行 Docker，也没有应用内更新入口；更新只由 systemd bootstrap 完成，并包含停服、数据库备份、健康检查和失败回滚。

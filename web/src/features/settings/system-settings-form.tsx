@@ -52,7 +52,6 @@ function isValidReportExternalBaseUrl(value: string) {
 const schema = z
   .object({
     timezone: z.string().trim().min(1, "请输入 IANA 时区").max(100),
-    releaseChannel: z.string().trim().min(1, "请输入发布通道").max(32),
     logLevel: z.enum([
       "Verbose",
       "Debug",
@@ -111,7 +110,6 @@ export function SystemSettingsForm() {
     resolver: zodResolver(schema),
     defaultValues: {
       timezone: "",
-      releaseChannel: "",
       logLevel: "Information",
       reportConcurrency: 4,
       reportRetentionMonths: 12,
@@ -133,7 +131,6 @@ export function SystemSettingsForm() {
       const useDays = hours % 24 === 0;
       form.reset({
         timezone: settingsQuery.data.timezone,
-        releaseChannel: settingsQuery.data.releaseChannel,
         logLevel: settingsQuery.data.logLevel as Values["logLevel"],
         reportConcurrency: settingsQuery.data.reportConcurrency,
         reportRetentionMonths: settingsQuery.data.reportRetentionMonths,
@@ -163,7 +160,6 @@ export function SystemSettingsForm() {
     mutationFn: (values: Values) =>
       updateSystemSettings({
         timezone: values.timezone,
-        releaseChannel: values.releaseChannel,
         logLevel: values.logLevel,
         reportConcurrency: values.reportConcurrency,
         reportRetentionMonths: values.reportRetentionMonths,
@@ -177,9 +173,8 @@ export function SystemSettingsForm() {
           : values.downloadMaxDownloads,
         revision: settingsQuery.data?.revision ?? 0,
       }),
-    onSuccess: async (settings) => {
+    onSuccess: (settings) => {
       queryClient.setQueryData(["system-settings"], settings);
-      await queryClient.invalidateQueries({ queryKey: ["system-version"] });
     },
   });
 
@@ -224,17 +219,6 @@ export function SystemSettingsForm() {
             {...form.register("timezone")}
           />
           <FieldError errors={[form.formState.errors.timezone]} />
-        </Field>
-        <Field data-invalid={Boolean(form.formState.errors.releaseChannel)}>
-          <FieldLabel htmlFor="release-channel">发布通道</FieldLabel>
-          <Input
-            id="release-channel"
-            autoComplete="off"
-            required
-            aria-invalid={Boolean(form.formState.errors.releaseChannel)}
-            {...form.register("releaseChannel")}
-          />
-          <FieldError errors={[form.formState.errors.releaseChannel]} />
         </Field>
         <Controller
           control={form.control}

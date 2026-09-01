@@ -46,14 +46,20 @@ version=$(sed -n 's:.*<VersionPrefix>\(.*\)</VersionPrefix>.*:\1:p' "$repo_root/
 grep -Fq "VERSION: ${version}-dev" "$repo_root/deploy/compose.dev.yaml"
 "$repo_root/deploy/extract-release-notes.sh" \
   "$repo_root/CHANGELOG.md" "$version" "$test_root/release-notes.md"
-# shellcheck source=deploy/release-lib.sh
-source "$repo_root/deploy/release-lib.sh"
-validate_release_compatibility_file "$repo_root/deploy/release-compatibility.json" "$version"
-manifest_schema=$(jq -r '.manifestSchemaVersion' "$repo_root/deploy/release-compatibility.json")
-deployment_contract=$(jq -r '.deploymentContractVersion' "$repo_root/deploy/release-compatibility.json")
-grep -Fq "ManifestSchemaVersion = $manifest_schema;" \
-  "$repo_root/src/Sub2ApiReport.UpdateContracts/UpdateContractConstants.cs"
-grep -Fq "DeploymentContractVersion = $deployment_contract;" \
-  "$repo_root/src/Sub2ApiReport.UpdateContracts/UpdateContractConstants.cs"
+deployment_contract=$(jq -r '.deploymentContractVersion' "$repo_root/deploy/upgrade-contract.json")
+[[ $deployment_contract == 2 ]]
+jq -e '
+  .schemaVersion == 2
+  and .deploymentContractVersion == 2
+  and .distribution.registryPullEnabled == false
+  and .distribution.appImageTag == "sub2api-report-app:current"
+  and .update.method == "host-bootstrap"
+' "$repo_root/deploy/upgrade-contract.json" >/dev/null
+grep -Fq 'io.sub2api-report.contract: "2"' "$repo_root/deploy/compose.yaml"
+if grep -Eqi 'updater|docker\.sock|updater-token' \
+  "$repo_root/deploy/compose.yaml" "$repo_root/deploy/.env.example"; then
+  echo "App-only deployment files still reference the removed Updater." >&2
+  exit 1
+fi
 
 echo "deployment documentation tests passed"
